@@ -12,6 +12,8 @@ public class SJewlsDbContext : DbContext
     public DbSet<Branch> Branches => Set<Branch>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<CustomerContact> CustomerContacts => Set<CustomerContact>();
+    public DbSet<RegistrationSession> RegistrationSessions => Set<RegistrationSession>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Staff> StaffMembers => Set<Staff>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<StaffRole> StaffRoles => Set<StaffRole>();
@@ -50,7 +52,6 @@ public class SJewlsDbContext : DbContext
                      .SelectMany(t => t.GetProperties())
                      .Where(p => p.ClrType == typeof(decimal) || p.ClrType == typeof(decimal?)))
         {
-            // Standard financial and high-precision gold weights: 18 digits, 4 decimal places
             property.SetColumnType("decimal(18, 4)");
         }
 
@@ -60,10 +61,48 @@ public class SJewlsDbContext : DbContext
             entity.HasIndex(e => e.Code).IsUnique();
         });
 
-        // Customer & Contacts
+        // Customer configuration
+        modelBuilder.Entity<Customer>(entity =>
+        {
+            // Mandatory unique NIC constraint when NIC is provided
+            entity.HasIndex(e => e.Nic)
+                  .IsUnique()
+                  .HasFilter("\"Nic\" IS NOT NULL");
+        });
+
+        // Customer Contacts: Unique verified contacts across system
         modelBuilder.Entity<CustomerContact>(entity =>
         {
-            entity.HasIndex(e => new { e.Type, e.Value, e.IsVerified });
+            entity.HasIndex(e => new { e.Type, e.Value })
+                  .IsUnique()
+                  .HasFilter("\"IsVerified\" = true");
+
+            entity.HasOne(c => c.Customer)
+                  .WithMany(cust => cust.Contacts)
+                  .HasForeignKey(c => c.CustomerId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Registration sessions
+        modelBuilder.Entity<RegistrationSession>(entity =>
+        {
+            entity.HasIndex(e => e.RegistrationToken).IsUnique();
+        });
+
+        // Refresh tokens
+        modelBuilder.Entity<RefreshToken>(entity =>
+        {
+            entity.HasIndex(e => e.Token).IsUnique();
+            entity.HasOne(r => r.Customer)
+                  .WithMany(c => c.RefreshTokens)
+                  .HasForeignKey(r => r.CustomerId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // OTP challenges
+        modelBuilder.Entity<OtpChallenge>(entity =>
+        {
+            entity.HasIndex(e => new { e.ContactValue, e.Purpose, e.IsConsumed });
         });
 
         // Staff

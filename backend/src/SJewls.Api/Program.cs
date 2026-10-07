@@ -1,11 +1,17 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using Scalar.AspNetCore;
+using SJewls.Api.Endpoints;
+using SJewls.Application.Interfaces;
 using SJewls.Infrastructure.Data;
-using SJewls.Domain.Entities;
+using SJewls.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Database Configuration (Supabase / PostgreSQL)
+// 1. Database Configuration (Supabase PostgreSQL)
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
     ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
 
@@ -21,19 +27,81 @@ builder.Services.AddDbContext<SJewlsDbContext>(options =>
     }
 });
 
-// 2. OpenAPI & Swagger Generation
+// 2. Register Application & Infrastructure Services
+builder.Services.AddScoped<ISmsSender, MockSmsSender>();
+builder.Services.AddScoped<IEmailSender, MockEmailSender>();
+builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IOtpService, OtpService>();
+builder.Services.AddScoped<ICustomerAuthService, CustomerAuthService>();
+builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+
+// 3. Configure JWT Authentication
+var jwtSecret = builder.Configuration["Jwt:Secret"] ?? "super-secret-key-that-must-be-at-least-32-characters-long-sjewls-dev";
+var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "SJewls.Api";
+var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "SJewls.App";
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.RequireHttpsMetadata = false;
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwtIssuer,
+        ValidAudience = jwtAudience,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+        ClockSkew = TimeSpan.FromSeconds(30)
+    };
+});
+
+builder.Services.AddAuthorization();
+
+// 4. OpenAPI & Swagger with JWT Security Definitions
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+    options.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "SJewls API",
         Version = "v1",
-        Description = "API backend for SJewls Jewellery and Chitu Plans"
+        Description = "API backend for SJewls Jewellery and Chitu Plans — Customer Authentication & Registration Flow"
+    });
+
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Enter your JWT Bearer token (e.g., Bearer eyJhbGci...)"
+    });
+
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
     });
 });
 
-// 3. CORS for Next.js Admin & React Native Mobile
+// 5. CORS for Next.js Admin & React Native Mobile
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAllOrigins", policy =>
@@ -44,13 +112,12 @@ builder.Services.AddCors(options =>
     });
 });
 
-// 4. Controllers & Authorization
-builder.Services.AddControllers();
-builder.Services.AddAuthorization();
-
 var app = builder.Build();
 
 app.UseCors("AllowAllOrigins");
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 // Serve OpenAPI JSON at /openapi/v1.json as required by spec Section 14
 app.UseSwagger(options =>
@@ -101,7 +168,7 @@ app.MapGet("/api/v1/health", async (SJewlsDbContext? db) =>
 .WithSummary("System and database health status")
 .WithTags("System");
 
-// Quick Branches endpoint for testing
+// Quick Branches endpoint
 app.MapGet("/api/v1/branches", async (SJewlsDbContext db) =>
 {
     var branches = await db.Branches.Where(b => b.IsActive).ToListAsync();
@@ -110,5 +177,9 @@ app.MapGet("/api/v1/branches", async (SJewlsDbContext db) =>
 .WithName("GetBranches")
 .WithSummary("List active branches")
 .WithTags("Branches");
+
+// Map Customer Authentication & Registration Endpoints
+app.MapAuthEndpoints();
+app.MapCustomerEndpoints();
 
 app.Run();
