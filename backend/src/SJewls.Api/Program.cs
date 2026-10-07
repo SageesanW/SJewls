@@ -75,6 +75,17 @@ builder.Services.AddSwaggerGen(options =>
         Description = "API backend for SJewls Jewellery and Chitu Plans — Customer Authentication & Registration Flow"
     });
 
+    options.AddServer(new OpenApiServer
+    {
+        Url = "http://localhost:5230",
+        Description = "Local Development Server"
+    });
+    options.AddServer(new OpenApiServer
+    {
+        Url = "/",
+        Description = "Current Origin Server"
+    });
+
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -123,6 +134,14 @@ app.UseAuthorization();
 app.UseSwagger(options =>
 {
     options.RouteTemplate = "openapi/{documentName}.json";
+    options.PreSerializeFilters.Add((swaggerDoc, httpReq) =>
+    {
+        swaggerDoc.Servers = new List<OpenApiServer>
+        {
+            new() { Url = $"{httpReq.Scheme}://{httpReq.Host.Value}", Description = "Current Host" },
+            new() { Url = "http://localhost:5230", Description = "Local Server" }
+        };
+    });
 });
 
 // Serve Scalar API reference at /scalar/v1
