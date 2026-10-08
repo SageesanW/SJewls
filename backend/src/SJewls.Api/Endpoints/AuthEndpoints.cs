@@ -12,6 +12,32 @@ public static class AuthEndpoints
         var group = app.MapGroup("/api/v1/auth")
             .WithTags("Customer Authentication");
 
+        // 0. POST /api/v1/auth/check
+        group.MapPost("/check", async (
+            [FromBody] CheckContactRequest request,
+            ICustomerAuthService authService) =>
+        {
+            if (string.IsNullOrWhiteSpace(request.Contact))
+            {
+                return Results.BadRequest(new { message = "Phone number or email address is required." });
+            }
+
+            try
+            {
+                var result = await authService.CheckContactAsync(request.Contact);
+                return Results.Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(new { message = ex.Message });
+            }
+        })
+        .WithName("CheckContact")
+        .WithSummary("Check if contact exists in database and determine next step (Login or Register)")
+        .WithDescription("Verifies the phone number or email address against existing customers in the database. Returns whether the customer exists, profile completion state, and recommended next action ('Login' or 'Register').")
+        .Produces<CheckContactResponse>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status400BadRequest);
+
         // 1. POST /api/v1/auth/otp/request
         group.MapPost("/otp/request", async (
             [FromBody] RequestOtpRequest request,
@@ -31,8 +57,15 @@ public static class AuthEndpoints
             return Results.Ok(result);
         })
         .WithName("RequestOtp")
-        .WithSummary("Request verification OTP via Phone or Email")
-        .WithDescription("Sends a 6-digit OTP to the provided Sri Lankan mobile number (e.g. +94771234567 or 0771234567) or email address. In development, the code is returned in devOtp.")
+        .WithSummary("Request verification OTP via Phone (Text.lk SMS) or Email (Gmail SMTP)")
+        .WithDescription(
+            "Generates and dispatches a 6-digit verification code to the specified contact.\n\n" +
+            "**Delivery Modes:**\n" +
+            "• **Email Address**: Dispatched via real Gmail SMTP (`smtp.gmail.com:587`, STARTTLS) from `w.sageesan@gmail.com` with subject 'Your SJewls verification code'. Returns 200 OK only after the SMTP server explicitly accepts the message. If delivery fails (e.g., SMTP auth/network failure), the challenge is immediately invalidated and a safe 400 error is returned (no fallback to mock).\n" +
+            "• **Phone Number**: Dispatched via real Text.lk SMS Gateway (`https://app.text.lk/api/v3/sms/send`, Bearer auth) with sender ID `TextLKDemo`. Returns 200 OK only after the SMS gateway accepts delivery. On failure, the challenge is immediately invalidated and a safe 400 error is returned.\n\n" +
+            "**Outcomes & Error Responses:**\n" +
+            "• `200 OK`: Verification code successfully accepted by delivery provider. Valid for 5 minutes (resend cooldown 60 seconds).\n" +
+            "• `400 Bad Request`: Active resend cooldown in effect, invalid phone/email format, or provider delivery failure.")
         .Produces<RequestOtpResponse>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status400BadRequest);
 
@@ -59,8 +92,13 @@ public static class AuthEndpoints
             }
         })
         .WithName("VerifyOtp")
-        .WithSummary("Verify submitted OTP code")
-        .WithDescription("Verifies the submitted code. If profile is complete, returns nextAction='Dashboard' with JWT and refresh token. If new/incomplete, returns nextAction='CompleteProfile' with a registrationToken.")
+        .WithSummary("Verify submitted OTP code and authenticate or continue registration")
+        .WithDescription(
+            "Verifies the submitted 6-digit OTP against active challenges.\n\n" +
+            "**Outcomes & Responses:**\n" +
+            "• `200 OK (nextAction: 'Dashboard')`: Customer exists and profile is complete. Returns JWT access token, refresh token, and customer details.\n" +
+            "• `200 OK (nextAction: 'CompleteProfile')`: Customer is new or profile is incomplete. Returns temporary 1-hour `registrationToken`.\n" +
+            "• `400 Bad Request`: Verification code incorrect (attempts decremented, max 5 allowed), challenge expired (after 5 minutes), or challenge already consumed.")
         .Produces<VerifyOtpResponse>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status400BadRequest);
 
@@ -83,7 +121,7 @@ public static class AuthEndpoints
         })
         .WithName("CompleteRegistration")
         .WithSummary("Complete customer profile registration")
-        .WithDescription("Finalizes registration using the registrationToken. Requires FullName, DateOfBirth (18+), Sri Lankan NIC, and the required additional contact. Returns JWT access and refresh tokens.")
+        .WithDescription("Finalizes customer registration using the registrationToken. Automatically preserves the initially entered OTP-verified contact and saves any provided secondary email/phone number. Requires FullName, DateOfBirth (18+), and valid Sri Lankan NIC. Returns JWT access and refresh tokens.")
         .Produces<VerifyOtpResponse>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status400BadRequest);
 

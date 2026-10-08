@@ -3,6 +3,22 @@ using SJewls.Domain.Enums;
 
 namespace SJewls.Application.DTOs;
 
+public record CheckContactRequest
+{
+    [Required]
+    public string Contact { get; init; } = string.Empty; // Phone (+94...) or Email
+}
+
+public record CheckContactResponse
+{
+    public bool Exists { get; init; }
+    public bool IsProfileComplete { get; init; }
+    public string NormalizedContact { get; init; } = string.Empty;
+    public ContactType ContactType { get; init; }
+    public string NextAction { get; init; } = string.Empty; // "Login" or "Register"
+    public string Message { get; init; } = string.Empty;
+}
+
 public record RequestOtpRequest
 {
     [Required]
@@ -18,6 +34,8 @@ public record RequestOtpResponse
     public int ExpiresInSeconds { get; init; }
     public int CooldownSeconds { get; init; }
     public string? DevOtp { get; init; } // Only populated in non-production environments
+    public bool IsExistingCustomer { get; init; }
+    public string NextAction { get; init; } = "Login"; // "Login" or "Register"
 }
 
 public record VerifyOtpRequest
@@ -63,14 +81,20 @@ public record CompleteRegistrationRequest
     [Required]
     public string Nic { get; init; } = string.Empty; // Sri Lankan NIC (9 digits + V/X or 12 digits)
 
-    [Required]
-    public string AdditionalContact { get; init; } = string.Empty; // Email if initial was Phone, or Phone if initial was Email
+    public string? Email { get; init; } // Optional email if registering or supplementing
+
+    public string? PhoneNumber { get; init; } // Optional phone if registering or supplementing
+
+    public string? AdditionalContact { get; init; } // Backward-compatible contact field
 }
 
 public record CustomerSummaryDto
 {
     public Guid Id { get; init; }
     public string FullName { get; init; } = string.Empty;
+    public string? Nic { get; init; }
+    public string? PhoneNumber { get; init; }
+    public string? Email { get; init; }
     public string PrimaryContact { get; init; } = string.Empty;
     public string PrimaryBranchCode { get; init; } = "JAF-01";
     public bool IsProfileComplete { get; init; }
@@ -82,11 +106,16 @@ public record CustomerProfileDto
     public string FullName { get; init; } = string.Empty;
     public DateOnly? DateOfBirth { get; init; }
     public string? Nic { get; init; }
+    public string? PhoneNumber { get; init; }
+    public string? Email { get; init; }
+    public bool IsPhoneVerified { get; init; }
+    public bool IsEmailVerified { get; init; }
+    public DateTimeOffset? PhoneVerifiedAtUtc { get; init; }
+    public DateTimeOffset? EmailVerifiedAtUtc { get; init; }
     public Guid PrimaryBranchId { get; init; }
     public string PrimaryBranchCode { get; init; } = string.Empty;
     public string PrimaryBranchName { get; init; } = string.Empty;
     public bool IsProfileComplete { get; init; }
-    public List<CustomerContactDto> Contacts { get; init; } = new();
     public DateTimeOffset CreatedAtUtc { get; init; }
 }
 

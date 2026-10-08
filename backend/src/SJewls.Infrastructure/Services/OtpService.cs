@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -54,7 +55,7 @@ public class OtpService : IOtpService
 {
     private readonly SJewlsDbContext _db;
     private readonly ISmsSender _smsSender;
-    private readonly IEmailSender _emailSender;
+    private readonly IEmailOtpProvider _emailOtpProvider;
     private readonly IConfiguration _config;
     private readonly ILogger<OtpService> _logger;
 
@@ -65,13 +66,13 @@ public class OtpService : IOtpService
     public OtpService(
         SJewlsDbContext db,
         ISmsSender smsSender,
-        IEmailSender emailSender,
+        IEmailOtpProvider emailOtpProvider,
         IConfiguration config,
         ILogger<OtpService> logger)
     {
         _db = db;
         _smsSender = smsSender;
-        _emailSender = emailSender;
+        _emailOtpProvider = emailOtpProvider;
         _config = config;
         _logger = logger;
     }
@@ -109,18 +110,27 @@ public class OtpService : IOtpService
             };
         }
 
-        // Determine OTP code: In Dev/Demo use configured TestOtp if set, else crypto random
+        // Determine OTP code: In Dev/Demo use configured TestOtp if set, else cryptographically secure 6-digit random code
         var isDevOrDemo = _config["ASPNETCORE_ENVIRONMENT"] == "Development" || _config["App:Environment"] == "Development";
         string otpCode;
 
         if (isDevOrDemo && !string.IsNullOrWhiteSpace(_config["App:TestOtp"]))
         {
-            otpCode = _config["App:TestOtp"]!;
+            otpCode = _config["App:TestOtp"]!.Trim();
         }
         else
         {
-            otpCode = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
+            // Preserve leading zeros by generating as formatted string
+            otpCode = RandomNumberGenerator.GetInt32(0, 1000000).ToString("D6");
         }
+
+        if (string.IsNullOrWhiteSpace(otpCode))
+        {
+            throw new InvalidOperationException("Generated OTP code cannot be null or empty.");
+        }
+
+        // Store ONLY the secure cryptographic hash in the database
+        var otpHash = HashOtp(otpCode);
 
         // Invalidate any older unused challenges for this contact and purpose
         var olderChallenges = await _db.OtpChallenges
@@ -132,12 +142,29 @@ public class OtpService : IOtpService
             old.IsConsumed = true;
         }
 
+        // Check if customer already exists in database
+        Customer? existingCustomer = null;
+        if (!customerId.HasValue)
+        {
+            existingCustomer = await _db.Customers
+                .FirstOrDefaultAsync(c => (contactType == ContactType.Phone && c.PhoneNumber == normalizedContact) ||
+                                          (contactType == ContactType.Email && c.Email == normalizedContact));
+            customerId = existingCustomer?.Id;
+        }
+        else
+        {
+            existingCustomer = await _db.Customers.FindAsync(customerId.Value);
+        }
+
+        var isExistingCustomer = existingCustomer != null && existingCustomer.IsActive && existingCustomer.IsProfileComplete;
+        var nextAction = isExistingCustomer ? "Login" : "Register";
+
         var challenge = new OtpChallenge
         {
             ContactValue = normalizedContact,
             ContactType = contactType,
             Purpose = purpose,
-            Code = otpCode,
+            Code = otpHash, // Secure hash only; plaintext OTP is never persisted
             ExpiresAtUtc = now.AddMinutes(OtpExpiryMinutes),
             ResendCooldownUntilUtc = now.AddSeconds(ResendCooldownSeconds),
             AttemptCount = 0,
@@ -145,33 +172,77 @@ public class OtpService : IOtpService
             IsConsumed = false,
             CustomerId = customerId
         };
-
         _db.OtpChallenges.Add(challenge);
         await _db.SaveChangesAsync();
 
-        // Dispatch via appropriate channel
-        var messageText = $"Your SJewls verification code is {otpCode}. Valid for {OtpExpiryMinutes} minutes. Never share this code with anyone.";
-
+        // Dispatch via the specific selected channel
+        string responseMessage;
         if (contactType == ContactType.Phone)
         {
-            await _smsSender.SendSmsAsync(normalizedContact, messageText);
+            try
+            {
+                var messageText = $"Your SJewls verification code is {otpCode}. Valid for {OtpExpiryMinutes} minutes. Never share this code with anyone.";
+                await _smsSender.SendSmsAsync(normalizedContact, messageText);
+                responseMessage = "Verification code sent to your phone number.";
+            }
+            catch (Exception ex)
+            {
+                // Invalidate the failed challenge so an undelivered OTP cannot be used
+                challenge.IsConsumed = true;
+                await _db.SaveChangesAsync();
+
+                _logger.LogError(ex, "Failed to deliver OTP SMS to {Phone}. Challenge invalidated.", MaskContact(normalizedContact));
+
+                return new RequestOtpResponse
+                {
+                    Success = false,
+                    Message = "Unable to send verification SMS. Please check your SMS provider configuration or try again later.",
+                    NormalizedContact = normalizedContact,
+                    ContactType = contactType
+                };
+            }
         }
         else
         {
-            await _emailSender.SendEmailAsync(normalizedContact, "SJewls Verification Code", messageText);
+            try
+            {
+                // Real Gmail SMTP delivery via EmailOtpProvider using STARTTLS
+                await _emailOtpProvider.SendOtpEmailAsync(normalizedContact, otpCode, OtpExpiryMinutes);
+                responseMessage = "Verification code sent to your email address.";
+            }
+            catch (Exception ex)
+            {
+                // Invalidate the failed challenge so an undelivered OTP cannot be used
+                challenge.IsConsumed = true;
+                await _db.SaveChangesAsync();
+
+                _logger.LogError(ex, "Failed to deliver OTP email to {Email}. Challenge invalidated.", MaskContact(normalizedContact));
+
+                return new RequestOtpResponse
+                {
+                    Success = false,
+                    Message = "Unable to send verification email. Please check your email configuration or try again later.",
+                    NormalizedContact = normalizedContact,
+                    ContactType = contactType
+                };
+            }
         }
 
-        _logger.LogInformation("Generated OTP {Code} for contact {Contact} ({Type}) with purpose {Purpose}", otpCode, normalizedContact, contactType, purpose);
+        // Never log the raw OTP code!
+        _logger.LogInformation("Dispatched OTP challenge for contact {Contact} ({Type}) with purpose {Purpose}",
+            MaskContact(normalizedContact), contactType, purpose);
 
         return new RequestOtpResponse
         {
             Success = true,
-            Message = "Verification code sent successfully.",
+            Message = responseMessage,
             NormalizedContact = normalizedContact,
             ContactType = contactType,
             ExpiresInSeconds = OtpExpiryMinutes * 60,
             CooldownSeconds = ResendCooldownSeconds,
-            DevOtp = isDevOrDemo ? otpCode : null
+            DevOtp = isDevOrDemo ? otpCode : null,
+            IsExistingCustomer = isExistingCustomer,
+            NextAction = nextAction
         };
     }
 
@@ -222,7 +293,11 @@ public class OtpService : IOtpService
             return (false, "Maximum verification attempts exceeded. Please request a new code.", normalizedContact, contactType, null);
         }
 
-        if (!string.Equals(challenge.Code.Trim(), code.Trim(), StringComparison.Ordinal))
+        var plainCode = code.Trim();
+        var isHashMatch = VerifyOtpHash(plainCode, challenge.Code);
+        var isLegacyMatch = string.Equals(challenge.Code.Trim(), plainCode, StringComparison.Ordinal);
+
+        if (!isHashMatch && !isLegacyMatch)
         {
             await _db.SaveChangesAsync();
             var remainingAttempts = challenge.MaxAttempts - challenge.AttemptCount;
@@ -234,5 +309,52 @@ public class OtpService : IOtpService
         await _db.SaveChangesAsync();
 
         return (true, "Verified successfully.", normalizedContact, contactType, challenge.CustomerId);
+    }
+
+    public static string HashOtp(string otp)
+    {
+        if (string.IsNullOrWhiteSpace(otp))
+        {
+            throw new ArgumentException("OTP code cannot be empty.", nameof(otp));
+        }
+
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(otp.Trim()));
+        return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    public static bool VerifyOtpHash(string plainOtp, string storedHash)
+    {
+        if (string.IsNullOrWhiteSpace(plainOtp) || string.IsNullOrWhiteSpace(storedHash))
+        {
+            return false;
+        }
+
+        var computedHash = HashOtp(plainOtp);
+        var computedBytes = Encoding.UTF8.GetBytes(computedHash);
+        var storedBytes = Encoding.UTF8.GetBytes(storedHash.Trim().ToLowerInvariant());
+        return CryptographicOperations.FixedTimeEquals(computedBytes, storedBytes);
+    }
+
+    private static string MaskContact(string contact)
+    {
+        if (string.IsNullOrWhiteSpace(contact))
+        {
+            return "***";
+        }
+
+        if (contact.Contains('@'))
+        {
+            var parts = contact.Split('@');
+            var name = parts[0];
+            var maskedName = name.Length <= 2 ? name : $"{name[0]}***{name[^1]}";
+            return $"{maskedName}@{parts[1]}";
+        }
+
+        if (contact.Length > 6)
+        {
+            return $"{contact[..4]}***{contact[^3..]}";
+        }
+
+        return "***";
     }
 }

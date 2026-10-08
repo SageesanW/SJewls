@@ -14,6 +14,11 @@ public interface IEmailSender
     Task SendEmailAsync(string toEmail, string subject, string body, CancellationToken cancellationToken = default);
 }
 
+public interface IEmailOtpProvider
+{
+    Task SendOtpEmailAsync(string toEmail, string otpCode, int expiryMinutes, CancellationToken cancellationToken = default);
+}
+
 public interface ITokenService
 {
     string GenerateAccessToken(Customer customer, string branchCode);
@@ -29,6 +34,7 @@ public interface IOtpService
 
 public interface ICustomerAuthService
 {
+    Task<CheckContactResponse> CheckContactAsync(string contact);
     Task<VerifyOtpResponse> ProcessOtpVerificationAsync(string contact, string code, string? ipAddress);
     Task<VerifyOtpResponse> CompleteRegistrationAsync(CompleteRegistrationRequest request, string? ipAddress);
     Task<RefreshTokenResponse> RefreshTokenAsync(string refreshToken, string? ipAddress);

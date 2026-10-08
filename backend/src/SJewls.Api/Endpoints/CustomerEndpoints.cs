@@ -37,8 +37,8 @@ public static class CustomerEndpoints
             }
         })
         .WithName("GetCurrentCustomerProfile")
-        .WithSummary("Get authenticated customer profile and contacts")
-        .WithDescription("Retrieves customer full name, date of birth, NIC, primary branch, and all primary/secondary contacts.")
+        .WithSummary("Get authenticated customer profile")
+        .WithDescription("Retrieves customer full name, date of birth, NIC, phone number, email address, verification statuses, and primary branch.")
         .Produces<CustomerProfileDto>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status401Unauthorized)
         .ProducesProblem(StatusCodes.Status404NotFound);
@@ -76,8 +76,17 @@ public static class CustomerEndpoints
             }
         })
         .WithName("RequestSecondaryContactOtp")
-        .WithSummary("Request OTP to verify secondary profile contact")
-        .WithDescription("Sends a 6-digit OTP to the customer's unverified additional contact (email or phone).")
+        .WithSummary("Request OTP to verify secondary profile contact (Email or Phone)")
+        .WithDescription(
+            "Sends a 6-digit OTP to the customer's unverified secondary contact (email or phone).\n\n" +
+            "**Delivery Modes:**\n" +
+            "• **Email Address**: Dispatched via real Gmail SMTP (`smtp.gmail.com:587`, STARTTLS) from `w.sageesan@gmail.com`. Invalidates challenge and returns safe 400 error on delivery failure.\n" +
+            "• **Phone Number**: Dispatched via real Text.lk SMS Gateway (`https://app.text.lk/api/v3/sms/send`, Bearer auth) with sender ID `TextLKDemo`. Invalidates challenge and returns safe 400 error on delivery failure.\n\n" +
+            "**Outcomes & Error Responses:**\n" +
+            "• `200 OK`: Verification code successfully dispatched.\n" +
+            "• `400 Bad Request`: Delivery failure or invalid contact.\n" +
+            "• `404 Not Found`: Customer or pending contact not found.\n" +
+            "• `409 Conflict`: Contact already verified.")
         .Produces<RequestOtpResponse>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status404NotFound)

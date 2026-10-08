@@ -7,7 +7,7 @@ namespace SJewls.Application.Common;
 public static class ValidationHelper
 {
     // Sri Lanka phone regex or generic E.164
-    private static readonly Regex SriLankaPhoneRegex = new(@"^(?:\+94|0)?(7[0-9]{8})$", RegexOptions.Compiled);
+    private static readonly Regex SriLankaPhoneRegex = new(@"^(?:\+94|94|0)?(7[0-9]{8})$", RegexOptions.Compiled);
     
     // Sri Lanka NIC: 9 digits + V/X (Old) OR 12 digits (New)
     private static readonly Regex NicOldRegex = new(@"^[0-9]{9}[vVxX]$", RegexOptions.Compiled);

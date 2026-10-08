@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using SJewls.Infrastructure.Data;
@@ -11,9 +12,11 @@ using SJewls.Infrastructure.Data;
 namespace SJewls.Infrastructure.Migrations
 {
     [DbContext(typeof(SJewlsDbContext))]
-    partial class SJewlsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261007065110_AddCustomerPhoneAndEmail")]
+    partial class AddCustomerPhoneAndEmail
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -366,20 +369,11 @@ namespace SJewls.Infrastructure.Migrations
                     b.Property<string>("Email")
                         .HasColumnType("text");
 
-                    b.Property<DateTimeOffset?>("EmailVerifiedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsEmailVerified")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsPhoneVerified")
                         .HasColumnType("boolean");
 
                     b.Property<bool>("IsProfileComplete")
@@ -393,9 +387,6 @@ namespace SJewls.Infrastructure.Migrations
 
                     b.Property<string>("PhoneNumber")
                         .HasColumnType("text");
-
-                    b.Property<DateTimeOffset?>("PhoneVerifiedAtUtc")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("PrimaryBranchId")
                         .HasColumnType("uuid");
@@ -420,6 +411,48 @@ namespace SJewls.Infrastructure.Migrations
                     b.HasIndex("PrimaryBranchId");
 
                     b.ToTable("Customers");
+                });
+
+            modelBuilder.Entity("SJewls.Domain.Entities.CustomerContact", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsVerified")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("VerifiedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("Type", "Value")
+                        .IsUnique()
+                        .HasFilter("\"IsVerified\" = true");
+
+                    b.ToTable("CustomerContacts");
                 });
 
             modelBuilder.Entity("SJewls.Domain.Entities.ExtensionRequest", b =>
@@ -1341,6 +1374,17 @@ namespace SJewls.Infrastructure.Migrations
                     b.Navigation("PrimaryBranch");
                 });
 
+            modelBuilder.Entity("SJewls.Domain.Entities.CustomerContact", b =>
+                {
+                    b.HasOne("SJewls.Domain.Entities.Customer", "Customer")
+                        .WithMany("Contacts")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+                });
+
             modelBuilder.Entity("SJewls.Domain.Entities.ExtensionRequest", b =>
                 {
                     b.HasOne("SJewls.Domain.Entities.Staff", "DecidedByStaff")
@@ -1642,6 +1686,8 @@ namespace SJewls.Infrastructure.Migrations
             modelBuilder.Entity("SJewls.Domain.Entities.Customer", b =>
                 {
                     b.Navigation("ChituSlots");
+
+                    b.Navigation("Contacts");
 
                     b.Navigation("JewelleryEnrolments");
 

@@ -11,7 +11,6 @@ public class SJewlsDbContext : DbContext
 
     public DbSet<Branch> Branches => Set<Branch>();
     public DbSet<Customer> Customers => Set<Customer>();
-    public DbSet<CustomerContact> CustomerContacts => Set<CustomerContact>();
     public DbSet<RegistrationSession> RegistrationSessions => Set<RegistrationSession>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Staff> StaffMembers => Set<Staff>();
@@ -68,19 +67,14 @@ public class SJewlsDbContext : DbContext
             entity.HasIndex(e => e.Nic)
                   .IsUnique()
                   .HasFilter("\"Nic\" IS NOT NULL");
-        });
 
-        // Customer Contacts: Unique verified contacts across system
-        modelBuilder.Entity<CustomerContact>(entity =>
-        {
-            entity.HasIndex(e => new { e.Type, e.Value })
+            entity.HasIndex(e => e.PhoneNumber)
                   .IsUnique()
-                  .HasFilter("\"IsVerified\" = true");
+                  .HasFilter("\"PhoneNumber\" IS NOT NULL");
 
-            entity.HasOne(c => c.Customer)
-                  .WithMany(cust => cust.Contacts)
-                  .HasForeignKey(c => c.CustomerId)
-                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => e.Email)
+                  .IsUnique()
+                  .HasFilter("\"Email\" IS NOT NULL");
         });
 
         // Registration sessions
