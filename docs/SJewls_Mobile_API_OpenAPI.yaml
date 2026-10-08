@@ -1,0 +1,801 @@
+openapi: 3.0.1
+info:
+  title: SJewls Customer Mobile API
+  description: "API endpoints for the SJewls Customer Mobile Application \u2014 Contact\
+    \ Verification, OTP Request & Verification, Profile Completion, Self-Service Account\
+    \ Closure, and Active Branches."
+  version: v1
+servers:
+- url: http://localhost:5230
+  description: Current Host
+- url: http://localhost:5230
+  description: Local Server
+paths:
+  /api/v1/branches:
+    get:
+      tags:
+      - Branches
+      summary: List Active Branches
+      description: Retrieves all currently active branches for customer registration,
+        store location selection, and mobile lookups.
+      operationId: GetBranches
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BranchDto'
+  /api/v1/auth/check:
+    post:
+      tags:
+      - Customer Authentication
+      summary: Check if contact exists in database and determine next step (Login
+        or Register)
+      description: Verifies the phone number or email address against existing customers
+        in the database. Returns whether the customer exists, profile completion state,
+        and recommended next action ('Login' or 'Register').
+      operationId: CheckContact
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckContactRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckContactResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/auth/otp/request:
+    post:
+      tags:
+      - Customer Authentication
+      summary: Request verification OTP via Phone (Text.lk SMS) or Email (Gmail SMTP)
+      description: "Generates and dispatches a 6-digit verification code to the specified\
+        \ contact.\n\n**Delivery Modes:**\n\u2022 **Email Address**: Dispatched via\
+        \ real Gmail SMTP (`smtp.gmail.com:587`, STARTTLS) from `w.sageesan@gmail.com`\
+        \ with subject 'Your SJewls verification code'. Returns 200 OK only after\
+        \ the SMTP server explicitly accepts the message. If delivery fails (e.g.,\
+        \ SMTP auth/network failure), the challenge is immediately invalidated and\
+        \ a safe 400 error is returned (no fallback to mock).\n\u2022 **Phone Number**:\
+        \ Dispatched via real Text.lk SMS Gateway (`https://app.text.lk/api/v3/sms/send`,\
+        \ Bearer auth) with sender ID `TextLKDemo`. Returns 200 OK only after the\
+        \ SMS gateway accepts delivery. On failure, the challenge is immediately invalidated\
+        \ and a safe 400 error is returned.\n\n**Outcomes & Error Responses:**\n\u2022\
+        \ `200 OK`: Verification code successfully accepted by delivery provider.\
+        \ Valid for 5 minutes (resend cooldown 60 seconds).\n\u2022 `400 Bad Request`:\
+        \ Active resend cooldown in effect, invalid phone/email format, or provider\
+        \ delivery failure."
+      operationId: RequestOtp
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestOtpRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestOtpResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/auth/otp/verify:
+    post:
+      tags:
+      - Customer Authentication
+      summary: Verify submitted OTP code and authenticate or continue registration
+      description: "Verifies the submitted 6-digit OTP against active challenges.\n\
+        \n**Outcomes & Responses:**\n\u2022 `200 OK (nextAction: 'Dashboard')`: Customer\
+        \ exists and profile is complete. Returns JWT access token, refresh token,\
+        \ and customer details.\n\u2022 `200 OK (nextAction: 'CompleteProfile')`:\
+        \ Customer is new or profile is incomplete. Returns temporary 1-hour `registrationToken`.\n\
+        \u2022 `400 Bad Request`: Verification code incorrect (attempts decremented,\
+        \ max 5 allowed), challenge expired (after 5 minutes), or challenge already\
+        \ consumed.\n\u2022 `401 Unauthorized`: Customer account is deactivated or\
+        \ closed."
+      operationId: VerifyOtp
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyOtpRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyOtpResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/auth/registration/complete:
+    post:
+      tags:
+      - Customer Authentication
+      summary: Complete customer profile registration
+      description: Finalizes customer registration using the registrationToken. Automatically
+        preserves the initially entered OTP-verified contact and saves any provided
+        secondary email/phone number. Requires FullName, DateOfBirth (18+), and valid
+        Sri Lankan NIC. Returns JWT access and refresh tokens.
+      operationId: CompleteRegistration
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteRegistrationRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyOtpResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/auth/token/refresh:
+    post:
+      tags:
+      - Customer Authentication
+      summary: Exchange refresh token for a new access token
+      description: Rotates the refresh token and returns a new active access token.
+      operationId: RefreshToken
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshTokenResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/auth/logout:
+    post:
+      tags:
+      - Customer Authentication
+      summary: Revoke refresh token and log out
+      operationId: Logout
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+  /api/v1/customers/me:
+    get:
+      tags:
+      - Customer Profile & Contacts
+      summary: Get authenticated customer profile
+      description: Retrieves customer full name, date of birth, NIC, phone number,
+        email address, verification statuses, and primary branch.
+      operationId: GetCurrentCustomerProfile
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerProfileDto'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/customers/me/contacts/otp/request:
+    post:
+      tags:
+      - Customer Profile & Contacts
+      summary: Request OTP to verify secondary profile contact (Email or Phone)
+      description: "Sends a 6-digit OTP to the customer's unverified secondary contact\
+        \ (email or phone).\n\n**Delivery Modes:**\n\u2022 **Email Address**: Dispatched\
+        \ via real Gmail SMTP (`smtp.gmail.com:587`, STARTTLS) from `w.sageesan@gmail.com`.\
+        \ Invalidates challenge and returns safe 400 error on delivery failure.\n\u2022\
+        \ **Phone Number**: Dispatched via real Text.lk SMS Gateway (`https://app.text.lk/api/v3/sms/send`,\
+        \ Bearer auth) with sender ID `TextLKDemo`. Invalidates challenge and returns\
+        \ safe 400 error on delivery failure.\n\n**Outcomes & Error Responses:**\n\
+        \u2022 `200 OK`: Verification code successfully dispatched.\n\u2022 `400 Bad\
+        \ Request`: Delivery failure or invalid contact.\n\u2022 `404 Not Found`:\
+        \ Customer or pending contact not found.\n\u2022 `409 Conflict`: Contact already\
+        \ verified."
+      operationId: RequestSecondaryContactOtp
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestSecondaryContactOtpRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestOtpResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/customers/me/contacts/otp/verify:
+    post:
+      tags:
+      - Customer Profile & Contacts
+      summary: Verify and activate secondary contact for login
+      description: Submits the OTP for the additional contact. Once verified, this
+        contact is activated and can also be used for customer login.
+      operationId: VerifySecondaryContactOtp
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifySecondaryContactOtpRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/customers/me/account-closure/otp/request:
+    post:
+      tags:
+      - Customer Profile & Contacts
+      summary: Request OTP for customer self-service account closure
+      description: Initiates customer self-service account closure by dispatching
+        a fresh OTP to the customer's verified contact. The challenge is cryptographically
+        bound to the AccountClosure purpose and cannot be substituted with a login
+        OTP.
+      operationId: RequestAccountClosureOtp
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestClosureOtpResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/customers/me/account-closure/confirm:
+    post:
+      tags:
+      - Customer Profile & Contacts
+      summary: Confirm self-service account closure using OTP
+      description: Confirms soft closure of the customer account with fresh OTP verification.
+        Marks status as Inactive, records CustomerRequestedClosure timestamp, revokes
+        all active sessions/refresh tokens, and retains all financial, plan, and audit
+        histories for regulatory compliance.
+      operationId: ConfirmAccountClosure
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmAccountClosureRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountClosureResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/health:
+    get:
+      tags:
+      - System
+      summary: System and database health status
+      operationId: HealthCheck
+      responses:
+        '200':
+          description: Success
+components:
+  schemas:
+    AccountClosureResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+          nullable: true
+        closedAtUtc:
+          type: string
+          format: date-time
+        status:
+          type: string
+          nullable: true
+      additionalProperties: false
+    BranchDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        currency:
+          type: string
+          nullable: true
+        timezone:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        createdAtUtc:
+          type: string
+          format: date-time
+        updatedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+        assignedStaffCount:
+          type: integer
+          format: int32
+        customerCount:
+          type: integer
+          format: int32
+      additionalProperties: false
+    CheckContactRequest:
+      required:
+      - contact
+      type: object
+      properties:
+        contact:
+          minLength: 1
+          type: string
+      additionalProperties: false
+    CheckContactResponse:
+      type: object
+      properties:
+        exists:
+          type: boolean
+        isProfileComplete:
+          type: boolean
+        normalizedContact:
+          type: string
+          nullable: true
+        contactType:
+          $ref: '#/components/schemas/ContactType'
+        nextAction:
+          type: string
+          nullable: true
+        message:
+          type: string
+          nullable: true
+      additionalProperties: false
+    CompleteRegistrationRequest:
+      required:
+      - dateOfBirth
+      - registrationToken
+      type: object
+      properties:
+        registrationToken:
+          minLength: 1
+          type: string
+        fullName:
+          maxLength: 100
+          minLength: 2
+          type: string
+          nullable: true
+        dateOfBirth:
+          type: string
+          format: date
+        nic:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        phoneNumber:
+          type: string
+          nullable: true
+        additionalContact:
+          type: string
+          nullable: true
+      additionalProperties: false
+    ConfirmAccountClosureRequest:
+      required:
+      - code
+      type: object
+      properties:
+        code:
+          maxLength: 6
+          minLength: 6
+          type: string
+        reason:
+          type: string
+          nullable: true
+      additionalProperties: false
+    ContactType:
+      enum:
+      - 1
+      - 2
+      type: integer
+      format: int32
+    CustomerProfileDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+          nullable: true
+        dateOfBirth:
+          type: string
+          format: date
+          nullable: true
+        nic:
+          type: string
+          nullable: true
+        phoneNumber:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        isPhoneVerified:
+          type: boolean
+        isEmailVerified:
+          type: boolean
+        phoneVerifiedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+        emailVerifiedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+        primaryBranchId:
+          type: string
+          format: uuid
+        primaryBranchCode:
+          type: string
+          nullable: true
+        primaryBranchName:
+          type: string
+          nullable: true
+        isProfileComplete:
+          type: boolean
+        createdAtUtc:
+          type: string
+          format: date-time
+      additionalProperties: false
+    CustomerSummaryDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+          nullable: true
+        nic:
+          type: string
+          nullable: true
+        phoneNumber:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        primaryContact:
+          type: string
+          nullable: true
+        primaryBranchCode:
+          type: string
+          nullable: true
+        isProfileComplete:
+          type: boolean
+      additionalProperties: false
+    LogoutRequest:
+      required:
+      - refreshToken
+      type: object
+      properties:
+        refreshToken:
+          minLength: 1
+          type: string
+      additionalProperties: false
+    ProblemDetails:
+      type: object
+      properties:
+        type:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        status:
+          type: integer
+          format: int32
+          nullable: true
+        detail:
+          type: string
+          nullable: true
+        instance:
+          type: string
+          nullable: true
+      additionalProperties: {}
+    RefreshTokenRequest:
+      required:
+      - refreshToken
+      type: object
+      properties:
+        refreshToken:
+          minLength: 1
+          type: string
+      additionalProperties: false
+    RefreshTokenResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          nullable: true
+        refreshToken:
+          type: string
+          nullable: true
+        expiresInSeconds:
+          type: integer
+          format: int32
+      additionalProperties: false
+    RequestClosureOtpResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+          nullable: true
+        deliveryChannel:
+          type: string
+          nullable: true
+        maskedContact:
+          type: string
+          nullable: true
+        expiresInSeconds:
+          type: integer
+          format: int32
+        cooldownSeconds:
+          type: integer
+          format: int32
+        devOtp:
+          type: string
+          nullable: true
+      additionalProperties: false
+    RequestOtpRequest:
+      required:
+      - contact
+      type: object
+      properties:
+        contact:
+          minLength: 1
+          type: string
+      additionalProperties: false
+    RequestOtpResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+          nullable: true
+        normalizedContact:
+          type: string
+          nullable: true
+        contactType:
+          $ref: '#/components/schemas/ContactType'
+        expiresInSeconds:
+          type: integer
+          format: int32
+        cooldownSeconds:
+          type: integer
+          format: int32
+        devOtp:
+          type: string
+          nullable: true
+        isExistingCustomer:
+          type: boolean
+        nextAction:
+          type: string
+          nullable: true
+      additionalProperties: false
+    RequestSecondaryContactOtpRequest:
+      required:
+      - contact
+      type: object
+      properties:
+        contact:
+          minLength: 1
+          type: string
+      additionalProperties: false
+    VerifyOtpRequest:
+      required:
+      - code
+      - contact
+      type: object
+      properties:
+        contact:
+          minLength: 1
+          type: string
+        code:
+          maxLength: 10
+          minLength: 4
+          type: string
+      additionalProperties: false
+    VerifyOtpResponse:
+      type: object
+      properties:
+        nextAction:
+          type: string
+          nullable: true
+        accessToken:
+          type: string
+          nullable: true
+        refreshToken:
+          type: string
+          nullable: true
+        expiresInSeconds:
+          type: integer
+          format: int32
+          nullable: true
+        customer:
+          $ref: '#/components/schemas/CustomerSummaryDto'
+        registrationToken:
+          type: string
+          nullable: true
+        registrationTokenExpiresInSeconds:
+          type: integer
+          format: int32
+          nullable: true
+        verifiedContact:
+          type: string
+          nullable: true
+        verifiedContactType:
+          $ref: '#/components/schemas/ContactType'
+        requiredAdditionalContactType:
+          type: string
+          nullable: true
+      additionalProperties: false
+    VerifySecondaryContactOtpRequest:
+      required:
+      - code
+      - contact
+      type: object
+      properties:
+        contact:
+          minLength: 1
+          type: string
+        code:
+          minLength: 1
+          type: string
+      additionalProperties: false
+  securitySchemes:
+    Bearer:
+      type: http
+      description: Enter your JWT Bearer token (e.g., Bearer eyJhbGci...)
+      scheme: Bearer
+      bearerFormat: JWT
+security:
+- Bearer: []

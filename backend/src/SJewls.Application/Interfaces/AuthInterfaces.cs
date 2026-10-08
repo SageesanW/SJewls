@@ -22,6 +22,7 @@ public interface IEmailOtpProvider
 public interface ITokenService
 {
     string GenerateAccessToken(Customer customer, string branchCode);
+    string GenerateStaffAccessToken(Staff staff, IEnumerable<string> roles, IEnumerable<string> branchCodes);
     string GenerateRefreshToken();
     string GenerateRegistrationToken();
 }
@@ -42,6 +43,8 @@ public interface ICustomerAuthService
     Task<CustomerProfileDto> GetCustomerProfileAsync(Guid customerId);
     Task<RequestOtpResponse> RequestSecondaryContactOtpAsync(Guid customerId, string contact);
     Task<bool> VerifySecondaryContactOtpAsync(Guid customerId, string contact, string code);
+    Task<RequestClosureOtpResponse> RequestAccountClosureOtpAsync(Guid customerId, CancellationToken cancellationToken = default);
+    Task<AccountClosureResponse> ConfirmAccountClosureAsync(Guid customerId, ConfirmAccountClosureRequest request, string? ipAddress, CancellationToken cancellationToken = default);
 }
 
 public interface IAuditLogService

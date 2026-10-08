@@ -156,8 +156,12 @@ public class OtpService : IOtpService
             existingCustomer = await _db.Customers.FindAsync(customerId.Value);
         }
 
-        var isExistingCustomer = existingCustomer != null && existingCustomer.IsActive && existingCustomer.IsProfileComplete;
-        var nextAction = isExistingCustomer ? "Login" : "Register";
+        var exists = existingCustomer != null && existingCustomer.IsActive;
+        var isExistingCustomer = exists;
+        var isProfileComplete = exists && existingCustomer!.IsProfileComplete;
+        var nextAction = (exists && isProfileComplete)
+            ? "Login"
+            : (exists ? "CompleteProfile" : "Register");
 
         var challenge = new OtpChallenge
         {

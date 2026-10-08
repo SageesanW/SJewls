@@ -1,0 +1,1210 @@
+openapi: 3.0.1
+info:
+  title: SJewls Admin & Staff Portal API
+  description: "API endpoints for the SJewls Admin Web Portal \u2014 Staff Authentication,\
+    \ Password Recovery, Staff User Management, Customer Management with Full Unmasked\
+    \ NIC, and Branch Statistics."
+  version: v1
+servers:
+- url: http://localhost:5230
+  description: Current Host
+- url: http://localhost:5230
+  description: Local Server
+paths:
+  /api/v1/admin/auth/login:
+    post:
+      tags:
+      - Admin Auth
+      summary: Staff and Super Admin Login
+      description: Authenticates a staff member or Super Admin using their username/email
+        and password. Returns a JWT bearer token and user profile.
+      operationId: AdminLogin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffLoginRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffLoginResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+  /api/v1/admin/auth/logout:
+    post:
+      tags:
+      - Admin Auth
+      summary: Staff Logout
+      description: Invalidates current staff sessions by updating security stamp and
+        logs the logout event.
+      operationId: AdminLogout
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffLogoutResponse'
+        '401':
+          description: Unauthorized
+  /api/v1/admin/auth/me:
+    get:
+      tags:
+      - Admin Auth
+      summary: Get Current Staff Profile
+      description: Retrieves the authenticated staff member's profile, roles, and
+        branch assignments. Enforces active status and security stamp validity.
+      operationId: AdminGetMe
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffUserDto'
+        '401':
+          description: Unauthorized
+  /api/v1/admin/auth/forgot-password:
+    post:
+      tags:
+      - Admin Auth
+      summary: Staff Forgot Password
+      description: Sends an expiring single-use password reset link to the staff member's
+        email if an active account exists. Returns the same message regardless of
+        whether the email exists.
+      operationId: AdminForgotPassword
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForgotPasswordResponse'
+  /api/v1/admin/auth/reset-password:
+    post:
+      tags:
+      - Admin Auth
+      summary: Staff Reset Password
+      description: Validates the single-use reset token and password policy, updates
+        the password hash, invalidates the token and previous sessions, and logs the
+        change.
+      operationId: AdminResetPassword
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResetPasswordResponse'
+        '400':
+          description: Bad Request
+  /api/v1/admin/branches:
+    get:
+      tags:
+      - Admin Branches
+      summary: List All Branches
+      description: Retrieves all store branches with assigned staff counts and customer
+        counts. Supports keyword search and active/inactive status filtering.
+      operationId: AdminGetBranches
+      parameters:
+      - name: search
+        in: query
+        style: form
+        schema:
+          type: string
+      - name: isActive
+        in: query
+        style: form
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BranchDto'
+        '401':
+          description: Unauthorized
+    post:
+      tags:
+      - Admin Branches
+      summary: Create New Branch
+      description: Creates a new branch. Branch Code must be unique. Requires Super
+        Admin permissions.
+      operationId: AdminCreateBranch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBranchRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BranchDto'
+        '400':
+          description: Bad Request
+        '409':
+          description: Conflict
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /api/v1/admin/branches/{id}:
+    get:
+      tags:
+      - Admin Branches
+      summary: Get Branch Details
+      description: Retrieves detailed branch information including staff assignments
+        and customer statistics.
+      operationId: AdminGetBranchById
+      parameters:
+      - name: id
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BranchDto'
+        '404':
+          description: Not Found
+        '401':
+          description: Unauthorized
+    put:
+      tags:
+      - Admin Branches
+      summary: Update Branch
+      description: Updates store branch details (Name, Address, City, Country, Currency,
+        Timezone, Active status). Requires Super Admin permissions.
+      operationId: AdminUpdateBranch
+      parameters:
+      - name: id
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBranchRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BranchDto'
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    delete:
+      tags:
+      - Admin Branches
+      summary: Delete Branch
+      description: Deletes a branch that has no assigned customers, staff members,
+        or active plans. Requires Super Admin permissions.
+      operationId: AdminDeleteBranch
+      parameters:
+      - name: id
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No Content
+        '404':
+          description: Not Found
+        '409':
+          description: Conflict
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /api/v1/admin/branches/{id}/status:
+    patch:
+      tags:
+      - Admin Branches
+      summary: Activate or Deactivate Branch
+      description: Toggles branch active status. Deactivating the only remaining active
+        branch is blocked. Requires Super Admin permissions.
+      operationId: AdminUpdateBranchStatus
+      parameters:
+      - name: id
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBranchStatusRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BranchDto'
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /api/v1/admin/customers:
+    get:
+      tags:
+      - Admin Customers
+      summary: List Customers with Pagination and Filters
+      description: Retrieves a paginated list of customers. Supports search by name,
+        phone, email, or NIC, as well as filtering by branch and account status. Super
+        Admins can access all branches; Branch staff are strictly restricted to their
+        assigned branch.
+      operationId: AdminGetCustomers
+      parameters:
+      - name: page
+        in: query
+        style: form
+        schema:
+          type: integer
+          format: int32
+      - name: pageSize
+        in: query
+        style: form
+        schema:
+          type: integer
+          format: int32
+      - name: search
+        in: query
+        style: form
+        schema:
+          type: string
+      - name: branchId
+        in: query
+        style: form
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        style: form
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminCustomerPagedResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags:
+      - Admin Customers
+      summary: Create Customer by Staff
+      description: Allows authorized branch staff or Super Admin to create a customer.
+        Normalizes inputs, prevents duplicate NICs and contacts, and keeps contacts
+        unverified until customer verifies via OTP.
+      operationId: AdminCreateCustomer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCustomerRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminCustomerDetailDto'
+        '400':
+          description: Bad Request
+        '409':
+          description: Conflict
+        '403':
+          description: Forbidden
+  /api/v1/admin/customers/statistics:
+    get:
+      tags:
+      - Admin Customers
+      summary: Customer Summary Card Statistics
+      description: Calculates customer counts (Total, Active, Inactive) across matching
+        branch and search criteria prior to pagination. Status filter is not applied
+        so active and inactive counts remain independent.
+      operationId: AdminGetCustomerStatistics
+      parameters:
+      - name: search
+        in: query
+        style: form
+        schema:
+          type: string
+      - name: branchId
+        in: query
+        style: form
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerStatisticsDto'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /api/v1/admin/customers/metrics:
+    get:
+      tags:
+      - Admin Customers
+      summary: Customer and Slot Overview Metrics
+      description: Provides aggregated counts for total slots, total customers, active
+        investments, closed accounts, inactive accounts, and pending accounts according
+        to staff branch permissions.
+      operationId: AdminGetCustomerMetrics
+      parameters:
+      - name: branchId
+        in: query
+        style: form
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminCustomerMetricsDto'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /api/v1/admin/customers/{id}:
+    get:
+      tags:
+      - Admin Customers
+      summary: Get Detailed Customer Profile
+      description: Retrieves detailed profile information for an authorized customer,
+        including date of birth, unmasked NIC for authorized staff, verification flags,
+        and list of associated Chitu and Jewellery savings slots. Secrets, OTPs, and
+        password hashes are never exposed.
+      operationId: AdminGetCustomerById
+      parameters:
+      - name: id
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminCustomerDetailDto'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+  /api/v1/admin/customers/{id}/status:
+    patch:
+      tags:
+      - Admin Customers
+      summary: Activate or Deactivate Customer Account
+      description: Enables authorized staff to deactivate or reactivate a customer
+        account within permitted branch scope. Deactivation requires a reason and
+        immediately revokes all sessions/refresh tokens.
+      operationId: AdminUpdateCustomerStatus
+      parameters:
+      - name: id
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCustomerStatusRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminCustomerDetailDto'
+        '400':
+          description: Bad Request
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+  /api/v1/admin/users:
+    get:
+      tags:
+      - Admin Users
+      summary: List Staff Users
+      description: Retrieves a list of staff accounts. Super Admins view all staff;
+        Branch Admins view staff within their assigned branch. Password hashes are
+        never returned.
+      operationId: AdminGetUsers
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StaffUserDto'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags:
+      - Admin Users
+      summary: Create Staff User
+      description: Allows Super Admin to provision a new staff or admin user, assigning
+        their role and branch. Validates email, phone, and password policy, and prevents
+        duplicates.
+      operationId: AdminCreateUser
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStaffUserRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffUserDto'
+        '400':
+          description: Bad Request
+        '409':
+          description: Conflict
+        '403':
+          description: Forbidden
+  /api/v1/admin/users/{id}/status:
+    patch:
+      tags:
+      - Admin Users
+      summary: Activate or Deactivate Staff User
+      description: Allows authorized administrators to activate or deactivate a staff
+        member. Super Admin can manage all staff and admins (preventing deactivation
+        of the last Super Admin). Staff cannot deactivate themselves. Sessions are
+        immediately invalidated upon deactivation.
+      operationId: AdminUpdateUserStatus
+      parameters:
+      - name: id
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStaffStatusRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffUserDto'
+        '400':
+          description: Bad Request
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '409':
+          description: Conflict
+  /api/v1/branches:
+    get:
+      tags:
+      - Branches
+      summary: List Active Branches
+      description: Retrieves all currently active branches for customer registration,
+        store location selection, and mobile lookups.
+      operationId: GetBranches
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BranchDto'
+  /api/v1/health:
+    get:
+      tags:
+      - System
+      summary: System and database health status
+      operationId: HealthCheck
+      responses:
+        '200':
+          description: Success
+components:
+  schemas:
+    AdminCustomerDetailDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+          nullable: true
+        dateOfBirth:
+          type: string
+          format: date
+          nullable: true
+        nic:
+          type: string
+          nullable: true
+        phoneNumber:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        isPhoneVerified:
+          type: boolean
+        isEmailVerified:
+          type: boolean
+        phoneVerifiedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+        emailVerifiedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+        primaryBranchId:
+          type: string
+          format: uuid
+        primaryBranchName:
+          type: string
+          nullable: true
+        primaryBranchCode:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        isProfileComplete:
+          type: boolean
+        createdAtUtc:
+          type: string
+          format: date-time
+        deactivatedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+        deactivationReason:
+          type: string
+          nullable: true
+        closedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+        closureReason:
+          type: string
+          nullable: true
+        chituSlots:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminCustomerSlotDto'
+          nullable: true
+        jewelleryEnrolments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminCustomerEnrolmentDto'
+          nullable: true
+      additionalProperties: false
+    AdminCustomerEnrolmentDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        planName:
+          type: string
+          nullable: true
+        planCode:
+          type: string
+          nullable: true
+        targetWeightGrams:
+          type: number
+          format: double
+        totalSavedGrams:
+          type: number
+          format: double
+        totalContributedCurrency:
+          type: number
+          format: double
+        status:
+          type: string
+          nullable: true
+        startDate:
+          type: string
+          format: date
+        targetEndDate:
+          type: string
+          format: date
+      additionalProperties: false
+    AdminCustomerListItemDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+          nullable: true
+        phoneNumber:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        nic:
+          type: string
+          nullable: true
+        isPhoneVerified:
+          type: boolean
+        isEmailVerified:
+          type: boolean
+        primaryBranchId:
+          type: string
+          format: uuid
+        primaryBranchName:
+          type: string
+          nullable: true
+        primaryBranchCode:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        isProfileComplete:
+          type: boolean
+        activePlansCount:
+          type: integer
+          format: int32
+        totalSlotsCount:
+          type: integer
+          format: int32
+        createdAtUtc:
+          type: string
+          format: date-time
+        deactivatedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+        deactivationReason:
+          type: string
+          nullable: true
+        closedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+        closureReason:
+          type: string
+          nullable: true
+      additionalProperties: false
+    AdminCustomerMetricsDto:
+      type: object
+      properties:
+        totalSlots:
+          type: integer
+          format: int32
+        totalCustomers:
+          type: integer
+          format: int32
+        activeInvestment:
+          type: integer
+          format: int32
+        closedAccounts:
+          type: integer
+          format: int32
+        inactiveCustomers:
+          type: integer
+          format: int32
+        pendingAccounts:
+          type: integer
+          format: int32
+      additionalProperties: false
+    AdminCustomerPagedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminCustomerListItemDto'
+          nullable: true
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        totalCount:
+          type: integer
+          format: int32
+        totalPages:
+          type: integer
+          format: int32
+          readOnly: true
+        hasPreviousPage:
+          type: boolean
+          readOnly: true
+        hasNextPage:
+          type: boolean
+          readOnly: true
+      additionalProperties: false
+    AdminCustomerSlotDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slotNumber:
+          type: integer
+          format: int32
+        planName:
+          type: string
+          nullable: true
+        planCode:
+          type: string
+          nullable: true
+        monthlyInstalmentAmount:
+          type: number
+          format: double
+        status:
+          type: string
+          nullable: true
+        activatedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+      additionalProperties: false
+    BranchDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        currency:
+          type: string
+          nullable: true
+        timezone:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        createdAtUtc:
+          type: string
+          format: date-time
+        updatedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+        assignedStaffCount:
+          type: integer
+          format: int32
+        customerCount:
+          type: integer
+          format: int32
+      additionalProperties: false
+    CreateBranchRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        currency:
+          type: string
+          nullable: true
+        timezone:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+      additionalProperties: false
+    CreateCustomerRequest:
+      required:
+      - email
+      - fullName
+      - nic
+      - phoneNumber
+      type: object
+      properties:
+        fullName:
+          maxLength: 150
+          minLength: 2
+          type: string
+        phoneNumber:
+          minLength: 1
+          type: string
+        email:
+          minLength: 1
+          type: string
+          format: email
+        nic:
+          minLength: 1
+          type: string
+        branchId:
+          type: string
+          format: uuid
+          nullable: true
+      additionalProperties: false
+    CreateStaffUserRequest:
+      required:
+      - email
+      - fullName
+      - password
+      - phoneNumber
+      - role
+      type: object
+      properties:
+        fullName:
+          maxLength: 150
+          minLength: 2
+          type: string
+        email:
+          minLength: 1
+          type: string
+          format: email
+        phoneNumber:
+          minLength: 1
+          type: string
+        password:
+          maxLength: 100
+          minLength: 8
+          type: string
+        username:
+          type: string
+          nullable: true
+        role:
+          minLength: 1
+          type: string
+        branchId:
+          type: string
+          format: uuid
+          nullable: true
+      additionalProperties: false
+    CustomerStatisticsDto:
+      type: object
+      properties:
+        totalCustomers:
+          type: integer
+          format: int32
+        activeCustomers:
+          type: integer
+          format: int32
+        inactiveCustomers:
+          type: integer
+          format: int32
+      additionalProperties: false
+    ForgotPasswordRequest:
+      required:
+      - email
+      type: object
+      properties:
+        email:
+          minLength: 1
+          type: string
+          format: email
+      additionalProperties: false
+    ForgotPasswordResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          nullable: true
+      additionalProperties: false
+    ResetPasswordRequest:
+      required:
+      - confirmPassword
+      - email
+      - newPassword
+      - token
+      type: object
+      properties:
+        email:
+          minLength: 1
+          type: string
+          format: email
+        token:
+          minLength: 1
+          type: string
+        newPassword:
+          maxLength: 100
+          minLength: 8
+          type: string
+        confirmPassword:
+          minLength: 1
+          type: string
+      additionalProperties: false
+    ResetPasswordResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          nullable: true
+      additionalProperties: false
+    StaffBranchDto:
+      type: object
+      properties:
+        branchId:
+          type: string
+          format: uuid
+        code:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+      additionalProperties: false
+    StaffLoginRequest:
+      required:
+      - password
+      - usernameOrEmail
+      type: object
+      properties:
+        usernameOrEmail:
+          minLength: 1
+          type: string
+        password:
+          minLength: 1
+          type: string
+      additionalProperties: false
+    StaffLoginResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          nullable: true
+        tokenType:
+          type: string
+          nullable: true
+        expiresAtUtc:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/StaffUserDto'
+      additionalProperties: false
+    StaffLogoutResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          nullable: true
+      additionalProperties: false
+    StaffUserDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        username:
+          type: string
+          nullable: true
+        phoneNumber:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        roles:
+          type: array
+          items:
+            type: string
+          nullable: true
+        assignedBranches:
+          type: array
+          items:
+            $ref: '#/components/schemas/StaffBranchDto'
+          nullable: true
+        createdAtUtc:
+          type: string
+          format: date-time
+        updatedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+        deactivatedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+        deactivationReason:
+          type: string
+          nullable: true
+      additionalProperties: false
+    UpdateBranchRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        currency:
+          type: string
+          nullable: true
+        timezone:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+      additionalProperties: false
+    UpdateBranchStatusRequest:
+      type: object
+      properties:
+        isActive:
+          type: boolean
+      additionalProperties: false
+    UpdateCustomerStatusRequest:
+      required:
+      - isActive
+      type: object
+      properties:
+        isActive:
+          type: boolean
+        reason:
+          type: string
+          nullable: true
+      additionalProperties: false
+    UpdateStaffStatusRequest:
+      required:
+      - isActive
+      type: object
+      properties:
+        isActive:
+          type: boolean
+        reason:
+          type: string
+          nullable: true
+      additionalProperties: false
+  securitySchemes:
+    Bearer:
+      type: http
+      description: Enter your JWT Bearer token (e.g., Bearer eyJhbGci...)
+      scheme: Bearer
+      bearerFormat: JWT
+security:
+- Bearer: []

@@ -118,4 +118,34 @@ public static class ValidationHelper
 
         return age >= minAgeYears && age <= maxAgeYears;
     }
+
+    public static bool IsValidPassword(string? password, out string errorMessage)
+    {
+        if (string.IsNullOrWhiteSpace(password) || password.Length < 8)
+        {
+            errorMessage = "Password must be at least 8 characters long.";
+            return false;
+        }
+
+        if (!password.Any(char.IsUpper))
+        {
+            errorMessage = "Password must contain at least one uppercase letter.";
+            return false;
+        }
+
+        if (!password.Any(char.IsLower))
+        {
+            errorMessage = "Password must contain at least one lowercase letter.";
+            return false;
+        }
+
+        if (!password.Any(char.IsDigit))
+        {
+            errorMessage = "Password must contain at least one digit.";
+            return false;
+        }
+
+        errorMessage = string.Empty;
+        return true;
+    }
 }

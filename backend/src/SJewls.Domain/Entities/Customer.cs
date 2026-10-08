@@ -23,6 +23,15 @@ public class Customer : BaseEntity
     public bool IsProfileComplete { get; set; } = false;
     public Guid? MergedIntoCustomerId { get; set; }
 
+    // Deactivation & Account Closure metadata
+    public DateTimeOffset? DeactivatedAtUtc { get; set; }
+    public string? DeactivationReason { get; set; }
+    public Guid? DeactivatedByStaffId { get; set; }
+    public Staff? DeactivatedByStaff { get; set; }
+    public DateTimeOffset? ClosedAtUtc { get; set; }
+    public string? ClosureReason { get; set; }
+
+
     // Navigation properties
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
     public ICollection<ChituSlot> ChituSlots { get; set; } = new List<ChituSlot>();

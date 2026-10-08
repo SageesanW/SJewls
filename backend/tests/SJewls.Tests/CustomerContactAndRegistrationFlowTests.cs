@@ -283,4 +283,227 @@ public class CustomerContactAndRegistrationFlowTests
         Assert.Equal("+94769882118", regResult.Customer?.PhoneNumber);
         Assert.Equal("legacy@example.com", regResult.Customer?.Email);
     }
+
+    [Fact]
+    public async Task AdminCreatedCustomer_OnFirstOtpVerification_LinksExistingRecord_AndCompletesProfile()
+    {
+        var (db, authService, otpService, _, _) = CreateTestContext();
+
+        // 1. Admin creates customer (unverified contacts, profile incomplete)
+        var branch = await db.Branches.FirstAsync();
+        var adminCustomer = new Customer
+        {
+            FullName = "Admin Created Customer",
+            PhoneNumber = "+94770011223",
+            Email = "admincreated@example.com",
+            Nic = "199411223344",
+            PrimaryBranchId = branch.Id,
+            IsPhoneVerified = false,
+            IsEmailVerified = false,
+            IsActive = true,
+            IsProfileComplete = false
+        };
+        db.Customers.Add(adminCustomer);
+        await db.SaveChangesAsync();
+
+        // 2. Customer checks contact
+        var check = await authService.CheckContactAsync("+94770011223");
+        Assert.True(check.Exists);
+        Assert.False(check.IsProfileComplete);
+        Assert.Equal("CompleteProfile", check.NextAction);
+
+        // 3. Customer requests and verifies OTP
+        await otpService.RequestOtpAsync("+94770011223");
+        var verify = await authService.ProcessOtpVerificationAsync("+94770011223", "123456", "127.0.0.1");
+
+        Assert.Equal("CompleteProfile", verify.NextAction);
+        Assert.NotNull(verify.RegistrationToken);
+
+        // Verify phone marked verified on existing customer record
+        var customerAfterOtp = await db.Customers.FindAsync(adminCustomer.Id);
+        Assert.True(customerAfterOtp!.IsPhoneVerified);
+
+        // 4. Customer submits Date of Birth to complete profile
+        var complete = await authService.CompleteRegistrationAsync(new CompleteRegistrationRequest
+        {
+            RegistrationToken = verify.RegistrationToken,
+            FullName = "Admin Created Customer",
+            DateOfBirth = new DateOnly(1994, 6, 20),
+            Nic = "199411223344"
+        }, "127.0.0.1");
+
+        Assert.Equal("Dashboard", complete.NextAction);
+        Assert.NotNull(complete.AccessToken);
+
+        // 5. Assert that no duplicate customer was created!
+        var allCustomers = await db.Customers.Where(c => c.Nic == "199411223344").ToListAsync();
+        Assert.Single(allCustomers);
+        Assert.Equal(adminCustomer.Id, allCustomers[0].Id);
+        Assert.True(allCustomers[0].IsProfileComplete);
+        Assert.Equal(new DateOnly(1994, 6, 20), allCustomers[0].DateOfBirth);
+    }
+
+    [Fact]
+    public async Task DeactivatedCustomer_CannotLoginOrVerifyOtp()
+    {
+        var (db, authService, otpService, _, _) = CreateTestContext();
+
+        var branch = await db.Branches.FirstAsync();
+        var deactivatedCustomer = new Customer
+        {
+            FullName = "Deactivated Customer",
+            PhoneNumber = "+94778889999",
+            Email = "deactivated@example.com",
+            Nic = "199122334455",
+            PrimaryBranchId = branch.Id,
+            IsPhoneVerified = true,
+            IsEmailVerified = true,
+            IsActive = false, // Deactivated!
+            IsProfileComplete = true,
+            DeactivationReason = "Admin suspension"
+        };
+        db.Customers.Add(deactivatedCustomer);
+        await db.SaveChangesAsync();
+
+        // 1. CheckContact reflects deactivated status
+        var check = await authService.CheckContactAsync("+94778889999");
+        Assert.Equal("Deactivated", check.NextAction);
+
+        // 2. Request OTP and attempt verification throws UnauthorizedAccessException
+        await otpService.RequestOtpAsync("+94778889999");
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            authService.ProcessOtpVerificationAsync("+94778889999", "123456", "127.0.0.1"));
+
+        // 3. Get profile throws UnauthorizedAccessException
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            authService.GetCustomerProfileAsync(deactivatedCustomer.Id));
+    }
+
+    [Fact]
+    public async Task CustomerSelfServiceAccountClosure_RequiresClosureOtp_DeactivatesAndRevokesTokens()
+    {
+        var (db, authService, otpService, _, _) = CreateTestContext();
+
+        var branch = await db.Branches.FirstAsync();
+        var customer = new Customer
+        {
+            FullName = "Closing Customer",
+            PhoneNumber = "+94774443322",
+            Email = "closing@example.com",
+            Nic = "199655443322",
+            PrimaryBranchId = branch.Id,
+            IsPhoneVerified = true,
+            IsEmailVerified = true,
+            IsActive = true,
+            IsProfileComplete = true
+        };
+        db.Customers.Add(customer);
+
+        var token = new RefreshToken
+        {
+            CustomerId = customer.Id,
+            Token = "active-closing-refresh-token",
+            ExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(30),
+            IsRevoked = false
+        };
+        db.RefreshTokens.Add(token);
+        await db.SaveChangesAsync();
+
+        // 1. Request closure OTP
+        var reqResult = await authService.RequestAccountClosureOtpAsync(customer.Id);
+        Assert.True(reqResult.Success);
+        Assert.Equal("SMS", reqResult.DeliveryChannel);
+        Assert.NotEmpty(reqResult.MaskedContact);
+
+        // 2. A LoginOrRegister OTP cannot authorize account closure!
+        await otpService.RequestOtpAsync("+94774443322", purpose: "LoginOrRegister");
+        // Verify with closure challenge requires valid challenge created for AccountClosure
+        // Attempting with wrong code fails
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            authService.ConfirmAccountClosureAsync(customer.Id, new ConfirmAccountClosureRequest
+            {
+                Code = "999999",
+                Reason = "I want to delete my account"
+            }, "127.0.0.1"));
+
+        // 3. Confirm closure with valid OTP
+        var confirmResult = await authService.ConfirmAccountClosureAsync(customer.Id, new ConfirmAccountClosureRequest
+        {
+            Code = "123456",
+            Reason = "No longer using jewellery plans"
+        }, "127.0.0.1");
+
+        Assert.True(confirmResult.Success);
+        Assert.Equal("Inactive", confirmResult.Status);
+        Assert.Contains("retained", confirmResult.Message);
+
+        // 4. Verify DB state: soft closed, records retained
+        var dbCustomer = await db.Customers.FindAsync(customer.Id);
+        Assert.NotNull(dbCustomer);
+        Assert.False(dbCustomer.IsActive);
+        Assert.Equal("CustomerRequestedClosure", dbCustomer.ClosureReason);
+        Assert.NotNull(dbCustomer.ClosedAtUtc);
+        Assert.Equal("CustomerRequestedClosure", dbCustomer.DeactivationReason);
+
+        // Refresh tokens revoked
+        var dbToken = await db.RefreshTokens.FirstAsync(t => t.Token == "active-closing-refresh-token");
+        Assert.True(dbToken.IsRevoked);
+    }
+
+    [Fact]
+    public async Task AdminCreatedCustomer_CanCompleteProfile_ProvidingOnlyDateOfBirth()
+    {
+        var (db, authService, otpService, _, _) = CreateTestContext();
+        var branch = await db.Branches.FirstAsync();
+
+        var adminCustomer = new Customer
+        {
+            Id = Guid.NewGuid(),
+            FullName = "Admin Customer Prepopulated",
+            PhoneNumber = "+94771122334",
+            Email = "adminpre@example.com",
+            Nic = "199412345678",
+            PrimaryBranchId = branch.Id,
+            IsPhoneVerified = false,
+            IsEmailVerified = false,
+            IsActive = true,
+            IsProfileComplete = false
+        };
+        db.Customers.Add(adminCustomer);
+        await db.SaveChangesAsync();
+
+        // Check contact
+        var check = await authService.CheckContactAsync("adminpre@example.com");
+        Assert.True(check.Exists);
+        Assert.False(check.IsProfileComplete);
+        Assert.Equal("CompleteProfile", check.NextAction);
+
+        // Request and verify OTP
+        await otpService.RequestOtpAsync("adminpre@example.com");
+        var verify = await authService.ProcessOtpVerificationAsync("adminpre@example.com", "123456", "127.0.0.1");
+        Assert.Equal("CompleteProfile", verify.NextAction);
+        Assert.NotNull(verify.RegistrationToken);
+        Assert.NotNull(verify.Customer);
+        Assert.Equal("Admin Customer Prepopulated", verify.Customer.FullName);
+
+        // Complete profile providing ONLY DateOfBirth
+        var complete = await authService.CompleteRegistrationAsync(new CompleteRegistrationRequest
+        {
+            RegistrationToken = verify.RegistrationToken,
+            DateOfBirth = new DateOnly(1994, 6, 15)
+        }, "127.0.0.1");
+
+        Assert.Equal("Dashboard", complete.NextAction);
+        Assert.NotNull(complete.AccessToken);
+
+        var updated = await db.Customers.FindAsync(adminCustomer.Id);
+        Assert.True(updated!.IsProfileComplete);
+        Assert.Equal("Admin Customer Prepopulated", updated.FullName);
+        Assert.Equal("199412345678", updated.Nic);
+        Assert.Equal("+94771122334", updated.PhoneNumber);
+        Assert.Equal("adminpre@example.com", updated.Email);
+        Assert.True(updated.IsEmailVerified);
+    }
 }
+
+

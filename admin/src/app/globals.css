@@ -1,26 +1,105 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #FAF9F6;
+  --foreground: #1A1F16;
+  --sidebar-green: #0B3D0B;
+  --sidebar-green-hover: #124e12;
+  --sidebar-green-border: rgba(255, 255, 255, 0.12);
+  --gold: #FFD700;
+  --gold-hover: #e6c200;
+  --gold-soft: rgba(255, 215, 0, 0.18);
+  --card-bg: #FFFFFF;
+  --card-border: #E5E7EB;
+  --muted-text: #6B7280;
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  min-height: 100vh;
+  margin: 0;
+  overflow-x: hidden;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f0eb;
+}
+::-webkit-scrollbar-thumb {
+  background: #c5c7ce;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #0B3D0B;
+}
+
+/* Sidebar scrollbar */
+.sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+
+/* Deep Green Primary Action Button */
+.btn-primary-green {
+  background-color: #0B3D0B;
+  color: #FFFFFF;
+  font-weight: 600;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 6px rgba(11, 61, 11, 0.25);
+}
+.btn-primary-green:hover:not(:disabled) {
+  background-color: #124e12;
+  box-shadow: 0 4px 12px rgba(11, 61, 11, 0.35);
+  transform: translateY(-1px);
+}
+.btn-primary-green:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Gold Accent Button */
+.btn-gold {
+  background-color: #FFD700;
+  color: #0B3D0B;
+  font-weight: 700;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+}
+.btn-gold:hover:not(:disabled) {
+  background-color: #f5cc00;
+  box-shadow: 0 4px 14px rgba(255, 215, 0, 0.45);
+  transform: translateY(-1px);
+}
+
+/* Navigation Active Gold Pill */
+.nav-gold-active {
+  background-color: #FFD700 !important;
+  color: #0B3D0B !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Card utilities */
+.card-surface {
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.gold-gradient-text {
+  background: linear-gradient(135deg, #FFE873 0%, #FFD700 50%, #D4AF37 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }

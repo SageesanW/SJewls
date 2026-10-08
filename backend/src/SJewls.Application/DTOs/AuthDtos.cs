@@ -71,15 +71,13 @@ public record CompleteRegistrationRequest
     [Required]
     public string RegistrationToken { get; init; } = string.Empty;
 
-    [Required]
     [StringLength(100, MinimumLength = 2)]
-    public string FullName { get; init; } = string.Empty;
+    public string? FullName { get; init; }
 
     [Required]
     public DateOnly DateOfBirth { get; init; }
 
-    [Required]
-    public string Nic { get; init; } = string.Empty; // Sri Lankan NIC (9 digits + V/X or 12 digits)
+    public string? Nic { get; init; } // Sri Lankan NIC (9 digits + V/X or 12 digits)
 
     public string? Email { get; init; } // Optional email if registering or supplementing
 
@@ -162,3 +160,32 @@ public record VerifySecondaryContactOtpRequest
     [Required]
     public string Code { get; init; } = string.Empty;
 }
+
+public record RequestClosureOtpResponse
+{
+    public bool Success { get; init; }
+    public string Message { get; init; } = string.Empty;
+    public string DeliveryChannel { get; init; } = string.Empty;
+    public string MaskedContact { get; init; } = string.Empty;
+    public int ExpiresInSeconds { get; init; }
+    public int CooldownSeconds { get; init; }
+    public string? DevOtp { get; init; }
+}
+
+public record ConfirmAccountClosureRequest
+{
+    [Required(ErrorMessage = "Verification code is required.")]
+    [StringLength(6, MinimumLength = 6, ErrorMessage = "Verification code must be 6 digits.")]
+    public string Code { get; init; } = string.Empty;
+
+    public string? Reason { get; init; }
+}
+
+public record AccountClosureResponse
+{
+    public bool Success { get; init; }
+    public string Message { get; init; } = string.Empty;
+    public DateTimeOffset ClosedAtUtc { get; init; }
+    public string Status { get; init; } = "Inactive";
+}
+

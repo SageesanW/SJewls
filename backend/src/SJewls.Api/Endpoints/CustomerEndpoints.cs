@@ -127,6 +127,94 @@ public static class CustomerEndpoints
         .ProducesProblem(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status404NotFound);
 
+        // 4. POST /api/v1/customers/me/account-closure/otp/request
+        group.MapPost("/me/account-closure/otp/request", async (
+            ClaimsPrincipal user,
+            ICustomerAuthService authService,
+            CancellationToken ct) =>
+        {
+            var customerIdStr = user.FindFirstValue(ClaimTypes.NameIdentifier) 
+                ?? user.FindFirstValue("sub");
+
+            if (!Guid.TryParse(customerIdStr, out var customerId))
+            {
+                return Results.Unauthorized();
+            }
+
+            try
+            {
+                var result = await authService.RequestAccountClosureOtpAsync(customerId, ct);
+                return Results.Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.BadRequest(new { message = ex.Message });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Results.Json(new { message = ex.Message }, statusCode: StatusCodes.Status403Forbidden);
+            }
+        })
+        .WithName("RequestAccountClosureOtp")
+        .WithSummary("Request OTP for customer self-service account closure")
+        .WithDescription("Initiates customer self-service account closure by dispatching a fresh OTP to the customer's verified contact. The challenge is cryptographically bound to the AccountClosure purpose and cannot be substituted with a login OTP.")
+        .Produces<RequestClosureOtpResponse>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status401Unauthorized)
+        .ProducesProblem(StatusCodes.Status404NotFound);
+
+        // 5. POST /api/v1/customers/me/account-closure/confirm
+        group.MapPost("/me/account-closure/confirm", async (
+            ClaimsPrincipal user,
+            [FromBody] ConfirmAccountClosureRequest request,
+            ICustomerAuthService authService,
+            HttpContext httpContext,
+            CancellationToken ct) =>
+        {
+            var customerIdStr = user.FindFirstValue(ClaimTypes.NameIdentifier) 
+                ?? user.FindFirstValue("sub");
+
+            if (!Guid.TryParse(customerIdStr, out var customerId))
+            {
+                return Results.Unauthorized();
+            }
+
+            var ip = httpContext.Connection.RemoteIpAddress?.ToString();
+
+            try
+            {
+                var result = await authService.ConfirmAccountClosureAsync(customerId, request, ip, ct);
+                return Results.Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(new { message = ex.Message });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.BadRequest(new { message = ex.Message });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Results.Json(new { message = ex.Message }, statusCode: StatusCodes.Status403Forbidden);
+            }
+        })
+        .WithName("ConfirmAccountClosure")
+        .WithSummary("Confirm self-service account closure using OTP")
+        .WithDescription("Confirms soft closure of the customer account with fresh OTP verification. Marks status as Inactive, records CustomerRequestedClosure timestamp, revokes all active sessions/refresh tokens, and retains all financial, plan, and audit histories for regulatory compliance.")
+        .Produces<AccountClosureResponse>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status401Unauthorized)
+        .ProducesProblem(StatusCodes.Status404NotFound);
+
         return app;
     }
 }

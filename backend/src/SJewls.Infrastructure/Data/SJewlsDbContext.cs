@@ -75,7 +75,13 @@ public class SJewlsDbContext : DbContext
             entity.HasIndex(e => e.Email)
                   .IsUnique()
                   .HasFilter("\"Email\" IS NOT NULL");
+
+            entity.HasOne(c => c.DeactivatedByStaff)
+                  .WithMany()
+                  .HasForeignKey(c => c.DeactivatedByStaffId)
+                  .OnDelete(DeleteBehavior.SetNull);
         });
+
 
         // Registration sessions
         modelBuilder.Entity<RegistrationSession>(entity =>
@@ -103,6 +109,27 @@ public class SJewlsDbContext : DbContext
         modelBuilder.Entity<Staff>(entity =>
         {
             entity.HasIndex(e => e.Email).IsUnique();
+            entity.HasIndex(e => e.Username)
+                  .IsUnique()
+                  .HasFilter("\"Username\" IS NOT NULL");
+        });
+
+        // Role
+        modelBuilder.Entity<Role>(entity =>
+        {
+            entity.HasIndex(e => e.Name).IsUnique();
+        });
+
+        // Staff Branch uniqueness (prevents duplicate branch assignments for any user)
+        modelBuilder.Entity<StaffBranch>(entity =>
+        {
+            entity.HasIndex(e => new { e.StaffId, e.BranchId }).IsUnique();
+        });
+
+        // Staff Role uniqueness (prevents duplicate role assignments for any user)
+        modelBuilder.Entity<StaffRole>(entity =>
+        {
+            entity.HasIndex(e => new { e.StaffId, e.RoleId }).IsUnique();
         });
 
         // Chitu Slot uniqueness & concurrency

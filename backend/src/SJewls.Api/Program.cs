@@ -1,5 +1,8 @@
+using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -8,6 +11,7 @@ using Swashbuckle.AspNetCore.SwaggerGen;
 using SJewls.Api.Endpoints;
 using SJewls.Application.Common;
 using SJewls.Application.Interfaces;
+using SJewls.Domain.Entities;
 using SJewls.Infrastructure.Data;
 using SJewls.Infrastructure.Services;
 
@@ -69,6 +73,26 @@ builder.Services.AddScoped<IOtpService, OtpService>();
 builder.Services.AddScoped<ICustomerAuthService, CustomerAuthService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 
+// Staff Authentication & Password Management
+builder.Services.AddScoped<IPasswordHasher<Staff>, PasswordHasher<Staff>>();
+builder.Services.AddScoped<IStaffAuthService, StaffAuthService>();
+builder.Services.AddScoped<IAdminCustomerService, AdminCustomerService>();
+builder.Services.AddScoped<IBranchService, BranchService>();
+
+
+// Rate Limiting for Auth Endpoints
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddFixedWindowLimiter("AuthLimiter", opt =>
+    {
+        opt.PermitLimit = 15;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst;
+        opt.QueueLimit = 0;
+    });
+});
+
 // 3. Configure JWT Authentication
 var jwtSecret = builder.Configuration["Jwt:Secret"] ?? "super-secret-key-that-must-be-at-least-32-characters-long-sjewls-dev";
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "SJewls.Api";
@@ -94,19 +118,99 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
         ClockSkew = TimeSpan.FromSeconds(30)
     };
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async context =>
+        {
+            var db = context.HttpContext.RequestServices.GetRequiredService<SJewlsDbContext>();
+            var user = context.Principal;
+            if (user == null) return;
+
+            var tokenType = user.FindFirst("token_type")?.Value;
+            var subStr = user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? user.FindFirst("sub")?.Value;
+            if (!Guid.TryParse(subStr, out var id)) return;
+
+            if (tokenType == "staff")
+            {
+                var stampClaim = user.FindFirst("security_stamp")?.Value;
+                var staff = await db.StaffMembers.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id);
+                if (staff == null || !staff.IsActive || (!string.IsNullOrEmpty(stampClaim) && staff.SecurityStamp != stampClaim))
+                {
+                    context.Fail("Staff account is deactivated, invalid, or session has been revoked.");
+                }
+            }
+            else
+            {
+                var customer = await db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id);
+                if (customer == null || !customer.IsActive)
+                {
+                    context.Fail("Customer account is deactivated or closed.");
+                }
+            }
+        }
+    };
 });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("StaffOnly", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireClaim("token_type", "staff");
+    });
+    options.AddPolicy("SuperAdminOnly", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireClaim("token_type", "staff");
+        policy.RequireRole("Super Admin");
+    });
+    options.AddPolicy("BranchAdminOrSuperAdmin", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireClaim("token_type", "staff");
+        policy.RequireRole("Super Admin", "Branch Admin");
+    });
+});
 
 // 4. OpenAPI & Swagger with JWT Security Definitions
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
+    options.SwaggerDoc("mobile", new OpenApiInfo
+    {
+        Title = "SJewls Customer Mobile API",
+        Version = "v1",
+        Description = "API endpoints for the SJewls Customer Mobile Application — Contact Verification, OTP Request & Verification, Profile Completion, Self-Service Account Closure, and Active Branches."
+    });
+
+    options.SwaggerDoc("admin", new OpenApiInfo
+    {
+        Title = "SJewls Admin & Staff Portal API",
+        Version = "v1",
+        Description = "API endpoints for the SJewls Admin Web Portal — Staff Authentication, Password Recovery, Staff User Management, Customer Management with Full Unmasked NIC, and Branch Statistics."
+    });
+
     options.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = "SJewls API",
+        Title = "SJewls Complete Unified API",
         Version = "v1",
-        Description = "API backend for SJewls Jewellery and Chitu Plans — Customer Authentication & Registration Flow"
+        Description = "Unified API catalog containing all Customer Mobile and Admin Web endpoints."
+    });
+
+    options.DocInclusionPredicate((docName, apiDesc) =>
+    {
+        var path = apiDesc.RelativePath?.ToLowerInvariant() ?? "";
+        if (docName == "mobile")
+        {
+            // Exclude admin endpoints
+            return !path.Contains("api/v1/admin");
+        }
+        if (docName == "admin")
+        {
+            // Include admin endpoints plus shared public endpoints
+            return path.Contains("api/v1/admin") || path == "api/v1/health" || path == "api/v1/branches";
+        }
+        return true;
     });
 
     options.AddServer(new OpenApiServer
@@ -165,6 +269,7 @@ app.UseCors("AllowAllOrigins");
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 // Serve OpenAPI JSON at /openapi/v1.json as required by spec Section 14
 app.UseSwagger(options =>
@@ -190,7 +295,7 @@ app.MapScalarApiReference(options =>
 });
 
 // Redirect root to scalar documentation
-app.MapGet("/", () => Results.Redirect("/scalar/v1"));
+app.MapGet("/", () => Results.Redirect("/scalar/v1")).ExcludeFromDescription();
 
 // Health check endpoint
 app.MapGet("/api/v1/health", async (SJewlsDbContext? db) =>
@@ -223,19 +328,28 @@ app.MapGet("/api/v1/health", async (SJewlsDbContext? db) =>
 .WithSummary("System and database health status")
 .WithTags("System");
 
-// Quick Branches endpoint
-app.MapGet("/api/v1/branches", async (SJewlsDbContext db) =>
-{
-    var branches = await db.Branches.Where(b => b.IsActive).ToListAsync();
-    return Results.Ok(branches);
-})
-.WithName("GetBranches")
-.WithSummary("List active branches")
-.WithTags("Branches");
-
 // Map Customer Authentication & Registration Endpoints
 app.MapAuthEndpoints();
 app.MapCustomerEndpoints();
+
+// Map Admin Authentication, User, Customer & Branch Management Endpoints
+app.MapAdminAuthEndpoints();
+app.MapAdminUserEndpoints();
+app.MapAdminCustomerEndpoints();
+app.MapBranchEndpoints();
+
+
+// Seed initial roles, default branch, and initial Super Admin if configured
+try
+{
+    using var scope = app.Services.CreateScope();
+    var staffAuthService = scope.ServiceProvider.GetRequiredService<IStaffAuthService>();
+    await staffAuthService.SeedInitialSuperAdminAsync();
+}
+catch (Exception ex)
+{
+    app.Logger.LogError(ex, "Failed to run initial Super Admin and roles seeding on startup.");
+}
 
 if (app.Environment.IsDevelopment())
 {

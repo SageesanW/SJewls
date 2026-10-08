@@ -85,6 +85,47 @@ public class TokenService : ITokenService
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
+    public string GenerateStaffAccessToken(Staff staff, IEnumerable<string> roles, IEnumerable<string> branchCodes)
+    {
+        var secret = _config["Jwt:Secret"] ?? "super-secret-key-that-must-be-at-least-32-characters-long-sjewls-dev";
+        var issuer = _config["Jwt:Issuer"] ?? "SJewls.Api";
+        var audience = _config["Jwt:Audience"] ?? "SJewls.App";
+        var expiryMinutes = int.TryParse(_config["Jwt:AdminExpiryMinutes"], out var exp) ? exp : (int.TryParse(_config["Jwt:ExpiryMinutes"], out var defaultExp) ? defaultExp : 480);
+
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, staff.Id.ToString()),
+            new(JwtRegisteredClaimNames.Name, staff.FullName),
+            new(JwtRegisteredClaimNames.Email, staff.Email),
+            new("username", staff.Username ?? staff.Email),
+            new("token_type", "staff"),
+            new("security_stamp", staff.SecurityStamp),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+        };
+
+        foreach (var role in roles)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, role));
+        }
+
+        foreach (var branchCode in branchCodes)
+        {
+            claims.Add(new Claim("branch_code", branchCode));
+        }
+
+        var token = new JwtSecurityToken(
+            issuer: issuer,
+            audience: audience,
+            claims: claims,
+            expires: DateTime.UtcNow.AddMinutes(expiryMinutes),
+            signingCredentials: credentials);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
     public string GenerateRefreshToken()
     {
         var bytes = new byte[64];

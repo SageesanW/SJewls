@@ -40,12 +40,42 @@ public class CustomerAuthService : ICustomerAuthService
             .FirstOrDefaultAsync(c => (contactType == ContactType.Phone && c.PhoneNumber == normalizedContact) ||
                                       (contactType == ContactType.Email && c.Email == normalizedContact));
 
+        if (existingCustomer != null && !existingCustomer.IsActive)
+        {
+            return new CheckContactResponse
+            {
+                Exists = true,
+                IsProfileComplete = existingCustomer.IsProfileComplete,
+                NormalizedContact = normalizedContact,
+                ContactType = contactType,
+                NextAction = "Deactivated",
+                Message = "Your account has been deactivated or closed. Please contact customer support."
+            };
+        }
+
         var exists = existingCustomer != null && existingCustomer.IsActive;
         var isProfileComplete = exists && existingCustomer!.IsProfileComplete;
-        var nextAction = (exists && isProfileComplete) ? "Login" : "Register";
-        var message = (exists && isProfileComplete)
-            ? "Customer account found. Please request and verify an OTP to log in."
-            : "Customer account not found or registration incomplete. Please request an OTP to proceed with registration.";
+        string nextAction;
+        string message;
+
+        if (exists)
+        {
+            if (isProfileComplete)
+            {
+                nextAction = "Login";
+                message = "Customer account found. Please request and verify an OTP to log in.";
+            }
+            else
+            {
+                nextAction = "CompleteProfile";
+                message = "Customer account found. Please request and verify an OTP to complete your profile.";
+            }
+        }
+        else
+        {
+            nextAction = "Register";
+            message = "Customer account not found. Please request an OTP to proceed with registration.";
+        }
 
         return new CheckContactResponse
         {
@@ -72,6 +102,27 @@ public class CustomerAuthService : ICustomerAuthService
             .Include(c => c.PrimaryBranch)
             .FirstOrDefaultAsync(c => (contactType == ContactType.Phone && c.PhoneNumber == normalizedContact) ||
                                       (contactType == ContactType.Email && c.Email == normalizedContact));
+
+        if (existingCustomer != null && !existingCustomer.IsActive)
+        {
+            throw new UnauthorizedAccessException("Customer account has been deactivated or closed. Please contact customer support.");
+        }
+
+        // If an existing customer record was found (e.g. created by admin), mark the verified contact
+        if (existingCustomer != null)
+        {
+            if (contactType == ContactType.Phone)
+            {
+                existingCustomer.IsPhoneVerified = true;
+                existingCustomer.PhoneVerifiedAtUtc ??= DateTimeOffset.UtcNow;
+            }
+            else
+            {
+                existingCustomer.IsEmailVerified = true;
+                existingCustomer.EmailVerifiedAtUtc ??= DateTimeOffset.UtcNow;
+            }
+            await _db.SaveChangesAsync();
+        }
 
         // If customer exists and profile is fully complete -> Log them in!
         if (existingCustomer != null && existingCustomer.IsActive && existingCustomer.IsProfileComplete)
@@ -147,7 +198,18 @@ public class CustomerAuthService : ICustomerAuthService
             RegistrationTokenExpiresInSeconds = 3600,
             VerifiedContact = normalizedContact,
             VerifiedContactType = contactType,
-            RequiredAdditionalContactType = requiredAdditionalType
+            RequiredAdditionalContactType = requiredAdditionalType,
+            Customer = existingCustomer != null ? new CustomerSummaryDto
+            {
+                Id = existingCustomer.Id,
+                FullName = existingCustomer.FullName,
+                Nic = existingCustomer.Nic,
+                PhoneNumber = existingCustomer.PhoneNumber,
+                Email = existingCustomer.Email,
+                PrimaryContact = normalizedContact,
+                PrimaryBranchCode = existingCustomer.PrimaryBranch?.Code ?? "JAF-01",
+                IsProfileComplete = false
+            } : null
         };
     }
 
@@ -162,8 +224,18 @@ public class CustomerAuthService : ICustomerAuthService
             throw new ArgumentException("Registration session has expired or is invalid. Please verify your contact again.");
         }
 
+        Customer? existingCustomer = null;
+        if (session.CustomerId.HasValue)
+        {
+            existingCustomer = await _db.Customers.Include(c => c.PrimaryBranch).FirstOrDefaultAsync(c => c.Id == session.CustomerId.Value);
+        }
+
         // 2. Validate Full Name
-        if (string.IsNullOrWhiteSpace(request.FullName) || request.FullName.Trim().Length < 2)
+        var effectiveFullName = !string.IsNullOrWhiteSpace(request.FullName)
+            ? request.FullName.Trim()
+            : existingCustomer?.FullName?.Trim();
+
+        if (string.IsNullOrWhiteSpace(effectiveFullName) || effectiveFullName.Length < 2)
         {
             throw new ArgumentException("Full name must be at least 2 characters long.");
         }
@@ -175,7 +247,11 @@ public class CustomerAuthService : ICustomerAuthService
         }
 
         // 4. Validate NIC
-        if (!ValidationHelper.TryNormalizeNic(request.Nic, out var normalizedNic))
+        var rawNic = !string.IsNullOrWhiteSpace(request.Nic)
+            ? request.Nic
+            : existingCustomer?.Nic;
+
+        if (string.IsNullOrWhiteSpace(rawNic) || !ValidationHelper.TryNormalizeNic(rawNic, out var normalizedNic))
         {
             throw new ArgumentException("Invalid Sri Lankan NIC format. Expected 9 digits followed by V/X (e.g. 951234567V) or 12 digits (e.g. 199512345678).");
         }
@@ -297,16 +373,21 @@ public class CustomerAuthService : ICustomerAuthService
                 Customer customer;
                 if (session.CustomerId.HasValue)
                 {
-                    customer = await _db.Customers.FindAsync(session.CustomerId.Value)
-                        ?? new Customer { Id = session.CustomerId.Value };
+                    customer = await _db.Customers.Include(c => c.PrimaryBranch).FirstOrDefaultAsync(c => c.Id == session.CustomerId.Value)
+                        ?? new Customer { Id = session.CustomerId.Value, IsActive = true };
+
+                    if (!customer.IsActive && customer.CreatedAtUtc != default)
+                    {
+                        throw new UnauthorizedAccessException("Customer account is inactive and cannot be updated through registration.");
+                    }
                 }
                 else
                 {
-                    customer = new Customer();
+                    customer = new Customer { IsActive = true };
                     _db.Customers.Add(customer);
                 }
 
-                customer.FullName = request.FullName.Trim();
+                customer.FullName = effectiveFullName!;
                 customer.DateOfBirth = request.DateOfBirth;
                 customer.Nic = normalizedNic;
 
@@ -347,15 +428,18 @@ public class CustomerAuthService : ICustomerAuthService
                     }
                 }
 
-                customer.PrimaryBranchId = jaffnaBranch.Id;
-                customer.IsActive = true;
+                if (customer.PrimaryBranchId == Guid.Empty)
+                {
+                    customer.PrimaryBranchId = jaffnaBranch.Id;
+                }
                 customer.IsProfileComplete = true;
 
                 // Mark registration session completed
                 session.IsCompleted = true;
 
                 // Issue tokens
-                var accessToken = _tokenService.GenerateAccessToken(customer, jaffnaBranch.Code);
+                var branchCode = customer.PrimaryBranch?.Code ?? jaffnaBranch.Code;
+                var accessToken = _tokenService.GenerateAccessToken(customer, branchCode);
                 var refreshTokenString = _tokenService.GenerateRefreshToken();
 
                 var refreshToken = new RefreshToken
@@ -478,9 +562,9 @@ public class CustomerAuthService : ICustomerAuthService
             .Include(c => c.PrimaryBranch)
             .FirstOrDefaultAsync(c => c.Id == customerId);
 
-        if (customer == null)
+        if (customer == null || !customer.IsActive)
         {
-            throw new KeyNotFoundException("Customer profile not found.");
+            throw new UnauthorizedAccessException("Customer profile not found or account is inactive.");
         }
 
         return new CustomerProfileDto
@@ -597,5 +681,168 @@ public class CustomerAuthService : ICustomerAuthService
             ipAddress: null);
 
         return true;
+    }
+
+    public async Task<RequestClosureOtpResponse> RequestAccountClosureOtpAsync(Guid customerId, CancellationToken cancellationToken = default)
+    {
+        var customer = await _db.Customers.FindAsync(new object[] { customerId }, cancellationToken);
+        if (customer == null)
+        {
+            throw new KeyNotFoundException("Customer profile not found.");
+        }
+
+        if (!customer.IsActive)
+        {
+            throw new InvalidOperationException("Customer account is already inactive or closed.");
+        }
+
+        // Require fresh verification of an existing verified contact
+        string? contact = null;
+        if (customer.IsPhoneVerified && !string.IsNullOrWhiteSpace(customer.PhoneNumber))
+        {
+            contact = customer.PhoneNumber;
+        }
+        else if (customer.IsEmailVerified && !string.IsNullOrWhiteSpace(customer.Email))
+        {
+            contact = customer.Email;
+        }
+        else if (!string.IsNullOrWhiteSpace(customer.PhoneNumber))
+        {
+            contact = customer.PhoneNumber;
+        }
+        else if (!string.IsNullOrWhiteSpace(customer.Email))
+        {
+            contact = customer.Email;
+        }
+
+        if (string.IsNullOrWhiteSpace(contact))
+        {
+            throw new InvalidOperationException("No verified contact information available on account to send closure OTP.");
+        }
+
+        // Bind challenge to customer and AccountClosure purpose
+        var otpResult = await _otpService.RequestOtpAsync(contact, purpose: "AccountClosure", customerId: customer.Id);
+        if (!otpResult.Success)
+        {
+            throw new InvalidOperationException(otpResult.Message);
+        }
+
+        return new RequestClosureOtpResponse
+        {
+            Success = true,
+            Message = otpResult.Message,
+            DeliveryChannel = contact.Contains('@') ? "Email" : "SMS",
+            MaskedContact = MaskContact(contact),
+            ExpiresInSeconds = otpResult.ExpiresInSeconds,
+            CooldownSeconds = otpResult.CooldownSeconds,
+            DevOtp = otpResult.DevOtp
+        };
+    }
+
+    private static string MaskContact(string contact)
+    {
+        if (contact.Contains('@'))
+        {
+            var parts = contact.Split('@');
+            var name = parts[0];
+            var maskedName = name.Length <= 2 ? name : $"{name[0]}***{name[^1]}";
+            return $"{maskedName}@{parts[1]}";
+        }
+        return contact.Length <= 4 ? "***" : $"{contact[..3]}****{contact[^2..]}";
+    }
+
+    public async Task<AccountClosureResponse> ConfirmAccountClosureAsync(Guid customerId, ConfirmAccountClosureRequest request, string? ipAddress, CancellationToken cancellationToken = default)
+    {
+        var customer = await _db.Customers.FindAsync(new object[] { customerId }, cancellationToken);
+        if (customer == null)
+        {
+            throw new KeyNotFoundException("Customer profile not found.");
+        }
+
+        if (!customer.IsActive)
+        {
+            throw new InvalidOperationException("Customer account is already inactive or closed.");
+        }
+
+        string? contact = null;
+        if (customer.IsPhoneVerified && !string.IsNullOrWhiteSpace(customer.PhoneNumber))
+        {
+            contact = customer.PhoneNumber;
+        }
+        else if (customer.IsEmailVerified && !string.IsNullOrWhiteSpace(customer.Email))
+        {
+            contact = customer.Email;
+        }
+        else if (!string.IsNullOrWhiteSpace(customer.PhoneNumber))
+        {
+            contact = customer.PhoneNumber;
+        }
+        else if (!string.IsNullOrWhiteSpace(customer.Email))
+        {
+            contact = customer.Email;
+        }
+
+        if (string.IsNullOrWhiteSpace(contact))
+        {
+            throw new InvalidOperationException("No contact information available on account.");
+        }
+
+        // Verify OTP strictly bound to purpose "AccountClosure". Login OTP cannot authorize closure!
+        var (success, message, _, _, _) = await _otpService.VerifyOtpAsync(contact, request.Code, purpose: "AccountClosure", customerId: customer.Id);
+        if (!success)
+        {
+            throw new ArgumentException(message);
+        }
+
+        // Soft closure: mark status Inactive, record closure timestamp and reason
+        var closureTimestamp = DateTimeOffset.UtcNow;
+        var reason = string.IsNullOrWhiteSpace(request.Reason) ? "CustomerRequestedClosure" : request.Reason.Trim();
+
+        customer.IsActive = false;
+        customer.ClosedAtUtc = closureTimestamp;
+        customer.ClosureReason = "CustomerRequestedClosure";
+        customer.DeactivatedAtUtc = closureTimestamp;
+        customer.DeactivationReason = "CustomerRequestedClosure";
+        customer.UpdatedAtUtc = closureTimestamp;
+
+        // Revoke all customer sessions immediately
+        var activeRefreshTokens = await _db.RefreshTokens
+            .Where(r => r.CustomerId == customer.Id && !r.IsRevoked)
+            .ToListAsync(cancellationToken);
+
+        foreach (var rt in activeRefreshTokens)
+        {
+            rt.IsRevoked = true;
+            rt.RevokedAtUtc = closureTimestamp;
+            rt.RevokedByIp = ipAddress;
+        }
+
+        // Retain financial obligations and records; closure must not cancel plans, payments or refunds automatically.
+        await _auditService.LogActionAsync(
+            actorType: "Customer",
+            actorId: customer.Id,
+            action: "CUSTOMER_ACCOUNT_CLOSURE",
+            targetEntity: "Customer",
+            targetId: customer.Id.ToString(),
+            branchId: customer.PrimaryBranchId,
+            before: new { IsActive = true },
+            after: new
+            {
+                IsActive = false,
+                ClosureReason = "CustomerRequestedClosure",
+                ClosedAtUtc = closureTimestamp,
+                UserReason = reason
+            },
+            ipAddress: ipAddress);
+
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return new AccountClosureResponse
+        {
+            Success = true,
+            Message = "Your account has been deactivated. For regulatory and statutory compliance, your profile, payment records, and jewellery plan histories are safely retained. To reactivate your account in the future, please contact customer support or visit your branch.",
+            ClosedAtUtc = closureTimestamp,
+            Status = "Inactive"
+        };
     }
 }

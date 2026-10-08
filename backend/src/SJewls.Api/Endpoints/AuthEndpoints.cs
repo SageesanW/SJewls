@@ -86,6 +86,10 @@ public static class AuthEndpoints
                 var result = await authService.ProcessOtpVerificationAsync(request.Contact, request.Code, ip);
                 return Results.Ok(result);
             }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Results.Json(new { message = ex.Message }, statusCode: StatusCodes.Status401Unauthorized);
+            }
             catch (ArgumentException ex)
             {
                 return Results.BadRequest(new { message = ex.Message });
@@ -98,9 +102,11 @@ public static class AuthEndpoints
             "**Outcomes & Responses:**\n" +
             "• `200 OK (nextAction: 'Dashboard')`: Customer exists and profile is complete. Returns JWT access token, refresh token, and customer details.\n" +
             "• `200 OK (nextAction: 'CompleteProfile')`: Customer is new or profile is incomplete. Returns temporary 1-hour `registrationToken`.\n" +
-            "• `400 Bad Request`: Verification code incorrect (attempts decremented, max 5 allowed), challenge expired (after 5 minutes), or challenge already consumed.")
+            "• `400 Bad Request`: Verification code incorrect (attempts decremented, max 5 allowed), challenge expired (after 5 minutes), or challenge already consumed.\n" +
+            "• `401 Unauthorized`: Customer account is deactivated or closed.")
         .Produces<VerifyOtpResponse>(StatusCodes.Status200OK)
-        .ProducesProblem(StatusCodes.Status400BadRequest);
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status401Unauthorized);
 
         // 3. POST /api/v1/auth/registration/complete
         group.MapPost("/registration/complete", async (
@@ -113,6 +119,14 @@ public static class AuthEndpoints
                 var ip = httpContext.Connection.RemoteIpAddress?.ToString();
                 var result = await authService.CompleteRegistrationAsync(request, ip);
                 return Results.Ok(result);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Results.Json(new { message = ex.Message }, statusCode: StatusCodes.Status401Unauthorized);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.BadRequest(new { message = ex.Message });
             }
             catch (ArgumentException ex)
             {

@@ -1,278 +1,506 @@
-# SJewls — Customer Authentication & Registration Scalar Testing Guide
+# SJewls — Complete API Specification & Scalar Testing Guide
 
-This guide walks you through testing the entire Customer Registration and Authentication flow interactively using **Scalar API Explorer**, including **real Gmail Email OTP delivery** and development SMS testing.
+This documentation covers the separated API specifications for **Customer Mobile** and **Admin & Staff Portal**:
 
----
-
-## 1. Setting Up Gmail SMTP for Real Email OTPs
-
-Email verification codes are dispatched via **Gmail SMTP** (`smtp.gmail.com:587`, STARTTLS) from `w.sageesan@gmail.com`.
-
-### Setting Your Gmail App Password Locally (User Secrets)
-Run the following command from the `backend/` directory:
-```bash
-dotnet user-secrets set "Email:Password" "<your-16-character-gmail-app-password>" --project src/SJewls.Api
-```
-
-> **Note on Deployment**: In production or staging environments, supply the app password via the environment variable `Email__Password`. Never commit passwords to source control.
-
-### Delivery Channel Behavior:
-- **Email Address (`w.sageesan@gmail.com` etc.)**:
-  - Sent via real Gmail SMTP with STARTTLS (`smtp.gmail.com:587`).
-  - Returns `200 OK` **only after** Gmail SMTP accepts the message.
-  - If SMTP fails or the password is missing, returns `400 Bad Request` and immediately invalidates the challenge.
-- **Phone Number (`+947...` or `07...`)**:
-  - Sent via real **Text.lk SMS Gateway** (`https://app.text.lk/api/v3/sms/send`, Bearer auth) with sender ID `TextLKDemo`.
-  - Returns `200 OK` **only after** Text.lk accepts and delivers the SMS.
-  - If SMS delivery fails or the API token is missing, returns `400 Bad Request` and immediately invalidates the challenge.
+| Specification | OpenAPI JSON Spec | OpenAPI YAML Spec | Scalar Interactive Explorer |
+| :--- | :--- | :--- | :--- |
+| **Mobile App (Customer)** | [`SJewls_Mobile_API_OpenAPI.json`](file:///Users/sagee/Desktop/SJew/SJewls/docs/SJewls_Mobile_API_OpenAPI.json) (`/openapi/mobile.json`) | [`SJewls_Mobile_API_OpenAPI.yaml`](file:///Users/sagee/Desktop/SJew/SJewls/docs/SJewls_Mobile_API_OpenAPI.yaml) | 👉 **[http://localhost:5230/scalar/mobile](http://localhost:5230/scalar/mobile)** |
+| **Admin & Staff Portal** | [`SJewls_Admin_API_OpenAPI.json`](file:///Users/sagee/Desktop/SJew/SJewls/docs/SJewls_Admin_API_OpenAPI.json) (`/openapi/admin.json`) | [`SJewls_Admin_API_OpenAPI.yaml`](file:///Users/sagee/Desktop/SJew/SJewls/docs/SJewls_Admin_API_OpenAPI.yaml) | 👉 **[http://localhost:5230/scalar/admin](http://localhost:5230/scalar/admin)** |
+| **Full Combined (v1)** | `/openapi/v1.json` | — | 👉 **[http://localhost:5230/scalar/v1](http://localhost:5230/scalar/v1)** |
 
 ---
 
-## 2. Accessing Scalar in Your Browser
+## 1. Environment & Scalar Explorer Access
 
-1. Ensure the backend API is running (currently live at `http://localhost:5230`).
-2. Open your web browser and navigate to:  
-   👉 **[http://localhost:5230/scalar/v1](http://localhost:5230/scalar/v1)**
+- **API Base URL**: `http://localhost:5230`
+- **Mobile Scalar Explorer**: 👉 **[http://localhost:5230/scalar/mobile](http://localhost:5230/scalar/mobile)**
+- **Admin Scalar Explorer**: 👉 **[http://localhost:5230/scalar/admin](http://localhost:5230/scalar/admin)**
+- **Admin Frontend**: `http://localhost:3000`
 
-You will see the dark-themed **SJewls API Explorer** with all endpoints grouped under **Customer Authentication**, **Customer Profile & Contacts**, **Branches**, and **System**.
+### Initial Super Admin Credentials (Seeded)
+- **Username / Email**: `superadmin` / `admin@sjewls.lk`
+- **Password**: `SuperAdmin@2026!`
 
 ---
 
-## 3. Interactive Testing Flow (Step-by-Step)
+## 2. Customer Authentication & Registration Flow (Mobile)
 
-### Step 0: Check Contact (Phone or Email)
-- In the left sidebar, click **Customer Authentication** &rarr; **`POST /api/v1/auth/check`**.
-- Click the **Body** tab and enter a phone number or email:
+All customer authentication endpoints are grouped under the **Customer Authentication** tag.
+
+### Step 0: Check Contact Existence
+- **Endpoint**: `POST /api/v1/auth/check`
+- **Request Body**:
   ```json
   {
-    "contact": "0769882118"
+    "contact": "+94771234567"
   }
   ```
-- Click **Send Request**.
-- **Outcomes:**
-  - If existing in DB: `{"exists": true, "nextAction": "Login", "message": "Customer account found. Please request and verify an OTP to log in."}`
-  - If new customer: `{"exists": false, "nextAction": "Register", "message": "Customer account not found or registration incomplete. Please request an OTP to proceed with registration."}`
+- **Responses**:
+  - Existing Customer:
+    ```json
+    {
+      "exists": true,
+      "isProfileComplete": true,
+      "nextAction": "Login",
+      "message": "Customer account found. Please request and verify an OTP to log in."
+    }
+    ```
+  - Existing Customer with Incomplete Profile (e.g. Admin-Created without DOB):
+    ```json
+    {
+      "exists": true,
+      "isProfileComplete": false,
+      "normalizedContact": "+94771234567",
+      "contactType": 1,
+      "nextAction": "CompleteProfile",
+      "message": "Customer account found. Please request and verify an OTP to complete your profile."
+    }
+    ```
+  - Unregistered / New Customer:
+    ```json
+    {
+      "exists": false,
+      "isProfileComplete": false,
+      "normalizedContact": "+94771234567",
+      "contactType": 1,
+      "nextAction": "Register",
+      "message": "Customer account not found. Please request an OTP to proceed with registration."
+    }
+    ```
 
 ---
 
-### Step 1A: Request an Email OTP (Real Gmail Delivery)
-- In the left sidebar, click **Customer Authentication** &rarr; **`POST /api/v1/auth/otp/request`**.
-- Click the **Body** tab and enter your email address:
+### Step 1: Request OTP
+- **Endpoint**: `POST /api/v1/auth/otp/request`
+- **Request Body**:
   ```json
   {
-    "contact": "w.sageesan@gmail.com"
+    "contact": "+94771234567",
+    "channel": "Sms",
+    "purpose": "LoginOrRegister"
   }
   ```
-- Click **Send Request**.
-- **Delivery Outcomes:**
-  - Returns `200 OK` with `message: "Verification code sent to your email address."`. Check your Gmail inbox for the subject *"Your SJewls verification code"*.
-
-### Step 1B: Request a Phone OTP (Real Text.lk SMS Delivery)
-- Click the **Body** tab and enter your phone number:
-  ```json
-  {
-    "contact": "+94759712375"
-  }
-  ```
-- Click **Send Request**.
-- **Delivery Outcomes:**
-  - Returns `200 OK` with `message: "Verification code sent to your phone number."`.
-  - An actual SMS message from `TextLKDemo` arrives directly on your mobile phone:
-    *"Your SJewls verification code is 123456. Valid for 5 minutes. Never share this code with anyone."*
-- **Expected Response (200 OK):**
+- **Delivery Mechanisms**:
+  - **Phone (`+94...`)**: Dispatched via Text.lk SMS Gateway (`TextLKDemo` sender ID). Returns `200 OK` once accepted by the gateway.
+  - **Email (`...`)**: Dispatched via Gmail SMTP (`smtp.gmail.com:587`, STARTTLS) from `w.sageesan@gmail.com`.
+- **Response (200 OK)**:
   ```json
   {
     "success": true,
     "message": "Verification code sent to your phone number.",
-    "normalizedContact": "+94759712375",
+    "normalizedContact": "+94771234567",
     "contactType": 1,
     "expiresInSeconds": 300,
     "cooldownSeconds": 60,
-    "devOtp": null,
+    "devOtp": "123456",
     "isExistingCustomer": false,
     "nextAction": "Register"
   }
   ```
+  *(Note: `devOtp` is provided only in non-production environments to streamline automated and developer testing).*
 
 ---
 
-### Step 2: Verify the OTP (First-Time Customer)
-- In the left sidebar, click **`POST /api/v1/auth/otp/verify`**.
-- Under **Body**, enter:
+### Step 2: Verify OTP
+- **Endpoint**: `POST /api/v1/auth/otp/verify`
+- **Request Body**:
   ```json
   {
-    "contact": "0759712375",
-    "code": "YOUR_RECEIVED_OTP"
+    "contact": "+94771234567",
+    "code": "123456"
   }
   ```
-- Click **Send Request**.
-- **Expected Response (200 OK):**
-  ```json
-  {
-    "nextAction": "CompleteProfile",
-    "registrationToken": "reg_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-    "registrationTokenExpiresInSeconds": 3600,
-    "verifiedContact": "+94759712375",
-    "verifiedContactType": 1,
-    "requiredAdditionalContactType": "Email"
-  }
-  ```
-  > 📋 **Important:** Copy the `registrationToken` string from the response! You will need it for Step 3.
-
----
-
-### Step 3: Complete Profile Registration
-- In the left sidebar, click **`POST /api/v1/auth/registration/complete`**.
-- Under **Body**, paste the `registrationToken` you copied. You can provide your `email` (or `additionalContact`). The initially entered and OTP-verified phone number is automatically preserved and saved to your customer profile!
-  ```json
-  {
-    "registrationToken": "PASTE_YOUR_REGISTRATION_TOKEN_HERE",
-    "fullName": "Anojan",
-    "dateOfBirth": "2000-08-28",
-    "nic": "200012637289",
-    "email": "anojan@gmail.com"
-  }
-  ```
-  *(Sri Lankan NIC format: 9 digits + V/X like `962340567V` or 12 digits like `200012637289`)*.
-- Click **Send Request**.
-- **Expected Response (200 OK):**
-  ```json
-  {
-    "nextAction": "Dashboard",
-    "accessToken": "eyJhbGciOiJIUzI1NiIs...",
-    "refreshToken": "XN5zzrxyZytXY3...",
-    "expiresInSeconds": 86400,
-    "customer": {
-      "id": "e24a56b7-...",
-      "fullName": "Anojan",
-      "phoneNumber": "+94759712375",
-      "email": "anojan@gmail.com",
-      "primaryContact": "+94759712375",
-      "primaryBranchCode": "JAF-01",
-      "isProfileComplete": true
-    }
-  }
-  ```
-  > 📋 **Important:** Copy the `accessToken` (without quotes).
-
----
-
-### Step 4: Authorize in Scalar to Test Protected Endpoints
-1. At the top of the Scalar window (or next to the endpoint name), look for the **Auth** / **Security** / **Bearer** field.
-2. Paste the `accessToken` into the Token box.
-3. Scalar will now automatically attach the `Authorization: Bearer <token>` header to all your protected requests!
-
----
-
-### Step 5: View Customer Profile
-- In the left sidebar, click **Customer Profile & Contacts** &rarr; **`GET /api/v1/customers/me`**.
-- Click **Send Request**.
-- **Expected Response (200 OK):**
-  ```json
-  {
-    "id": "e24a56b7-...",
-    "fullName": "Kandeepan Tharmalingam",
-    "dateOfBirth": "1996-08-20",
-    "nic": "199623405678",
-    "primaryBranchCode": "JAF-01",
-    "primaryBranchName": "SJewls Jaffna Main Branch",
-    "isProfileComplete": true,
-    "contacts": [
-      {
-        "type": 1,
-        "value": "+94772223344",
-        "isVerified": true,
-        "isPrimary": true
+- **Outcomes**:
+  - **Complete Active Customer** (`nextAction: "Dashboard"`): Returns active JWT `accessToken`, `refreshToken`, and customer profile summary.
+  - **New or Incomplete Profile / Admin-Created Customer** (`nextAction: "CompleteProfile"`):
+    ```json
+    {
+      "nextAction": "CompleteProfile",
+      "accessToken": null,
+      "refreshToken": null,
+      "customer": {
+        "id": "3358ccae-e77d-415a-8c5c-5ca0b9811e9e",
+        "fullName": "sai",
+        "nic": "199928918232",
+        "phoneNumber": "+94789832243",
+        "email": "w.sageesan@gmail.com",
+        "primaryContact": "w.sageesan@gmail.com",
+        "primaryBranchCode": "JAF-01",
+        "isProfileComplete": false
       },
-      {
-        "type": 2,
-        "value": "kandeepan@example.com",
-        "isVerified": false,
-        "isPrimary": false
-      }
-    ]
+      "registrationToken": "reg_6bff9140e5a7...",
+      "registrationTokenExpiresInSeconds": 3600,
+      "verifiedContact": "w.sageesan@gmail.com",
+      "verifiedContactType": 2,
+      "requiredAdditionalContactType": "Phone"
+    }
+    ```
+  - **Inactive / Deactivated / Closed Account** (`401 Unauthorized`):
+    ```json
+    {
+      "message": "Customer account has been deactivated or closed. Please contact customer support."
+    }
+    ```
+    *Rule: Customer OTP verification or profile completion never automatically reactivates an inactive account.*
+
+---
+
+### Step 3: Complete Registration
+- **Endpoint**: `POST /api/v1/auth/registration/complete`
+- **Request Body**:
+  ```json
+  {
+    "registrationToken": "reg_6bff9140e5a7...",
+    "dateOfBirth": "1995-05-15",
+    "fullName": "Oliver Brown",
+    "nic": "199512345678",
+    "email": "oliver.brown@example.com"
   }
   ```
-  *(Notice: The initial phone number is verified, while the email is unverified)*.
+  *(Note: For admin-created customers where Full Name and NIC were already entered by admin, only `registrationToken` and `dateOfBirth` are mandatory. Full Name and NIC automatically fall back to the existing record if omitted).*
+- **Account Linking Behavior**:
+  - If an admin previously created a customer record with matching unverified contacts or NIC, the system **connects directly to the existing record** without creating a duplicate.
+  - Marks the verified contact as verified (`IsPhoneVerified = true` / `IsEmailVerified = true`), records DOB, sets `IsProfileComplete = true`, and issues active tokens.
 
 ---
 
-### Step 6: Verify the Secondary Contact (Email)
-1. **Request code for the email**:
-   - Click **`POST /api/v1/customers/me/contacts/otp/request`**.
-   - Body:
-     ```json
-     {
-       "contact": "kandeepan@example.com"
-     }
-     ```
-   - Click **Send Request** &rarr; returns `success: true`.
+## 3. Customer Self-Service Account Closure (Mobile Contract)
 
-2. **Submit code for the email**:
-   - Click **`POST /api/v1/customers/me/contacts/otp/verify`**.
-   - Body:
-     ```json
-     {
-       "contact": "kandeepan@example.com",
-       "code": "123456"
-     }
-     ```
-   - Click **Send Request** &rarr; returns:
-     ```json
-     {
-       "success": true,
-       "message": "Additional contact verified successfully. You can now use this contact to sign in."
-     }
-     ```
+This section contains the official API contract for mobile developers implementing the customer self-service "Delete Account" action.
+
+### Business & Compliance Rules
+1. **Soft Closure, Not Permanent Hard Deletion**:
+   - Deactivates the account (`IsActive = false`).
+   - Retains the customer record, financial obligations, Chitu slots, Jewellery plans, payments, and audit logs for regulatory and statutory compliance.
+   - Sets `ClosedAtUtc` to current timestamp and `ClosureReason` to `"CustomerRequestedClosure"`.
+2. **Immediate Session & Token Revocation**:
+   - Immediately revokes all active refresh tokens in the database.
+   - Real-time token validation (`OnTokenValidated`) blocks existing JWT access tokens immediately on subsequent requests (`401 Unauthorized`).
+3. **Fresh Verification Challenge**:
+   - Requires fresh verification of an existing verified contact via OTP.
+   - The OTP challenge is bound specifically to the customer and the `AccountClosure` purpose. A general login OTP cannot authorize account closure.
+4. **Reactivation Governance**:
+   - Reopening an account requires an authorized admin action after confirming customer request. Customer OTP login alone cannot reactivate an inactive account.
 
 ---
 
-### Step 7: Test Login with the Newly Verified Email
-Now that the email is verified, the customer can sign in using **either** phone or email!
-- Go to **`POST /api/v1/auth/otp/request`**:
+### Step 1: Request Account Closure OTP
+- **Endpoint**: `POST /api/v1/customers/me/account-closure/otp/request`
+- **Authentication**: `Bearer <CustomerAccessToken>`
+- **Request Headers**:
+  - `Authorization: Bearer <CustomerAccessToken>`
+  - `Content-Type: application/json`
+- **Request Body**:
   ```json
-  { "contact": "kandeepan@example.com" }
+  {
+    "channel": "Sms" 
+  }
   ```
-- Go to **`POST /api/v1/auth/otp/verify`**:
+  *(channel can be `"Sms"` or `"Email"`)*
+- **Response (200 OK)**:
   ```json
-  { "contact": "kandeepan@example.com", "code": "123456" }
+  {
+    "success": true,
+    "message": "Verification code sent to your phone number.",
+    "deliveryChannel": "SMS",
+    "maskedContact": "+94****67",
+    "expiresInSeconds": 300,
+    "cooldownSeconds": 60,
+    "devOtp": "898640"
+  }
   ```
-- **Expected Response (200 OK):**
-  Directly returns `nextAction: "Dashboard"` with fresh tokens! No profile completion needed.
+- **Error Responses**:
+  - `401 Unauthorized`: Token missing, expired, or customer is already inactive.
+  - `400 Bad Request`: Active resend cooldown in effect or delivery channel failure.
 
 ---
 
-### Step 8: Token Refresh & Logout
-- **Refresh Token**:
-  - Click **`POST /api/v1/auth/token/refresh`**.
-  - Body:
+### Step 2: Confirm Account Closure
+- **Endpoint**: `POST /api/v1/customers/me/account-closure/confirm`
+- **Authentication**: `Bearer <CustomerAccessToken>`
+- **Request Headers**:
+  - `Authorization: Bearer <CustomerAccessToken>`
+  - `Content-Type: application/json`
+- **Request Body**:
+  ```json
+  {
+    "code": "898640"
+  }
+  ```
+- **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Your account has been deactivated. For regulatory and statutory compliance, your profile, payment records, and jewellery plan histories are safely retained. To reactivate your account in the future, please contact customer support or visit your branch.",
+    "closedAtUtc": "2026-10-08T07:42:20.818625+00:00",
+    "status": "Inactive"
+  }
+  ```
+- **Error Responses**:
+  - `400 Bad Request`:
     ```json
     {
-      "refreshToken": "PASTE_REFRESH_TOKEN_HERE"
+      "message": "Incorrect verification code. 4 attempts remaining."
     }
     ```
-  - Returns a brand new access token and rotated refresh token.
-- **Logout**:
-  - Click **`POST /api/v1/auth/logout`**.
-  - Body:
+  - `400 Bad Request` (Invalid or expired challenge):
     ```json
     {
-      "refreshToken": "PASTE_REFRESH_TOKEN_HERE"
+      "message": "Invalid, expired, or already consumed closure challenge. Please request a new verification code."
     }
     ```
-  - Revokes the refresh token.
+  - `401 Unauthorized`: Customer token is invalid or account is already inactive.
 
 ---
 
-## 3. Negative / Validation Tests
+## 4. Admin Customers Directory & Lifecycle Management
 
-You can also test error handling in Scalar:
+All admin customer endpoints require `StaffOnly` authorization with a valid staff JWT Bearer token.
 
-| Scenario | Payload | Expected Outcome |
-|---|---|---|
-| **Duplicate NIC** | Use the same NIC (`199623405678`) on another registration | `400 Bad Request`: *"A customer account with this NIC is already registered. Duplicate NICs are not permitted."* |
-| **Invalid NIC Format** | `"nic": "12345"` | `400 Bad Request`: *"Invalid Sri Lankan NIC format."* |
-| **Underage Customer** | `"dateOfBirth": "2015-01-01"` | `400 Bad Request`: *"Customer must be at least 18 years of age to register."* |
-| **Invalid Code** | `"code": "999999"` | `400 Bad Request`: *"Incorrect verification code. 4 attempts remaining."* |
-| **Cooldown Resend** | Request OTP twice within 60 seconds | `400 Bad Request`: *"Please wait X seconds before requesting a new verification code."* |
-| **Expired Session** | Use an old or fake `registrationToken` | `400 Bad Request`: *"Registration session has expired or is invalid."* |
+### 1. Customer Summary Statistics
+- **Endpoint**: `GET /api/v1/admin/customers/statistics`
+- **Query Parameters**:
+  - `search` *(optional)*: Search query by name, phone, email, or NIC.
+  - `branchId` *(optional)*: Filter by branch GUID.
+- **Statistics Isolation Rule**:
+  - Calculates statistics across matching records prior to pagination.
+  - **Does NOT apply table status filter** so Active and Inactive cards maintain separate, independent counts and never display misleading zero values.
+- **Response (200 OK)**:
+  ```json
+  {
+    "totalCustomers": 12,
+    "activeCustomers": 10,
+    "inactiveCustomers": 2
+  }
+  ```
+
+---
+
+### 2. Paginated Customer Table
+- **Endpoint**: `GET /api/v1/admin/customers`
+- **Query Parameters**:
+  - `page` *(default: 1)*: Current page number.
+  - `pageSize` *(default: 10)*: Page size.
+  - `search` *(optional)*: Filter by customer full name, phone number, email, or NIC.
+  - `branchId` *(optional)*: Restrict to branch (Super Admin only; branch staff automatically restricted to assigned branch).
+  - `status` *(optional)*: Filter table by status (`"ALL"`, `"Active"`, `"Inactive"`).
+- **Verification Rule**:
+  - In all administrative responses (both table listing and customer detail), the customer NIC is returned **full and unmasked** (e.g. `199512345678` or `851234567V`) so store administrators can physically verify the customer's identity card when collecting gold jewellery or prize draws in store.
+  - Status is determined strictly by customer account status (`isActive`), not contact verification or plan activity.
+- **Response (200 OK)**:
+  ```json
+  {
+    "items": [
+      {
+        "id": "3a5d7f38-0a45-41ef-b281-6bf53a538a38",
+        "fullName": "Oliver Brown",
+        "phoneNumber": "+94771234567",
+        "email": "oliver.brown@example.com",
+        "nic": "199512345678",
+        "isPhoneVerified": true,
+        "isEmailVerified": false,
+        "primaryBranchId": "a0000000-0000-0000-0000-000000000001",
+        "primaryBranchName": "SJewls Jaffna Main Branch",
+        "primaryBranchCode": "JAF-01",
+        "isActive": true,
+        "isProfileComplete": true,
+        "activePlansCount": 0,
+        "totalSlotsCount": 0,
+        "createdAtUtc": "2026-10-08T07:33:08.207523+00:00",
+        "deactivatedAtUtc": null,
+        "deactivationReason": null,
+        "closedAtUtc": null,
+        "closureReason": null
+      }
+    ],
+    "page": 1,
+    "pageSize": 10,
+    "totalCount": 1,
+    "totalPages": 1,
+    "hasPreviousPage": false,
+    "hasNextPage": false
+  }
+  ```
+
+---
+
+### 3. Detailed Customer Profile (Full Unmasked NIC)
+- **Endpoint**: `GET /api/v1/admin/customers/{id}`
+- **Permissions**: Authorized staff within branch scope or Super Admin.
+- **Full Visibility Rule**:
+  - Returns the **full unmasked NIC** (e.g. `199512345678`), date of birth, verification timestamps, and associated Chitu / Jewellery plan slots.
+- **Response (200 OK)**:
+  ```json
+  {
+    "id": "3a5d7f38-0a45-41ef-b281-6bf53a538a38",
+    "fullName": "Oliver Brown",
+    "dateOfBirth": "1995-05-15",
+    "nic": "199512345678",
+    "phoneNumber": "+94771234567",
+    "email": "oliver.brown@example.com",
+    "isPhoneVerified": true,
+    "isEmailVerified": false,
+    "primaryBranchId": "a0000000-0000-0000-0000-000000000001",
+    "primaryBranchName": "SJewls Jaffna Main Branch",
+    "primaryBranchCode": "JAF-01",
+    "isActive": true,
+    "isProfileComplete": true,
+    "createdAtUtc": "2026-10-08T07:33:08.207523+00:00",
+    "chituSlots": [],
+    "jewelleryEnrolments": []
+  }
+  ```
+
+---
+
+### 4. Create Customer Profile by Staff
+- **Endpoint**: `POST /api/v1/admin/customers`
+- **Request Body**:
+  ```json
+  {
+    "fullName": "Amelia Clarke",
+    "phoneNumber": "+94772345678",
+    "email": "amelia.clarke@example.com",
+    "nic": "199612345678",
+    "branchId": "a0000000-0000-0000-0000-000000000001"
+  }
+  ```
+- **Validation & Duplicate Prevention Rules**:
+  - FullName: min 2 chars, max 150.
+  - Phone: normalized E.164.
+  - Email: valid email format.
+  - NIC: validated Sri Lankan NIC format (10-char old format or 12-char new format).
+  - Duplicate check: If phone, email, or NIC already exists, returns `409 Conflict`.
+  - Branch restriction: Branch staff can create customers only in their permitted branch scope. Super Admin can specify any active branch.
+  - Contact verification: Contacts entered by staff remain unverified until the customer verifies via OTP. A password is not required.
+- **Response (201 Created)**:
+  Returns full customer detail with `isPhoneVerified: false`, `isEmailVerified: false`, `isProfileComplete: false`.
+
+---
+
+### 5. Activate or Deactivate Customer Account
+- **Endpoint**: `PATCH /api/v1/admin/customers/{id}/status`
+- **Request Body**:
+  ```json
+  {
+    "isActive": false,
+    "reason": "Suspension requested pending KYC re-verification"
+  }
+  ```
+- **Rules**:
+  - `reason` is required when deactivating.
+  - Deactivation immediately revokes all customer refresh tokens and invalidates active JWT tokens in real-time.
+  - Preserves plans, payments, and audit history.
+  - Inactive customers cannot log in or make transactions.
+  - Customer OTP verification or profile completion cannot automatically reactivate an inactive account. Reactivation requires an authorized admin action (`"isActive": true`).
+
+---
+
+## 5. Staff Management & Deactivation Protection
+
+All staff management endpoints are under `Admin Users`.
+
+### 1. Update Staff Status (Activate / Deactivate)
+- **Endpoint**: `PATCH /api/v1/admin/users/{id}/status`
+- **Request Body**:
+  ```json
+  {
+    "isActive": false,
+    "reason": "Employee departure - immediate access termination"
+  }
+  ```
+- **Security Protections Enforced by Server**:
+  1. **Self-Deactivation Prevention**:
+     - Staff members cannot deactivate their own account. Attempting to deactivate self returns `409 Conflict`:
+       ```json
+       {
+         "message": "You cannot deactivate or change the status of your own staff account."
+       }
+       ```
+  2. **Last Super Admin Protection**:
+     - System protects the last active Super Admin. Attempting to deactivate the only active Super Admin returns `409 Conflict`:
+       ```json
+       {
+         "message": "Cannot deactivate the last active Super Admin on the platform."
+       }
+       ```
+  3. **Privilege Boundary**:
+     - Only Super Admin can manage Super Admin accounts. Branch Admin cannot deactivate Super Admins or grant higher roles.
+  4. **Mandatory Deactivation Reason**:
+     - Reason is mandatory for audit trail (`400 Bad Request` if blank).
+  5. **Immediate Token & Session Invalidation**:
+     - Regenerates `SecurityStamp` in database and revokes all active refresh tokens.
+     - `OnTokenValidated` middleware checks database security stamp on every request, immediately blocking existing access tokens from protected admin APIs (`401 Unauthorized`).
+
+---
+
+## 6. End-to-End Curl Testing Suite
+
+Run this bash script to verify all core flows in sequence:
+
+```bash
+#!/usr/bin/env bash
+set -e
+
+BASE_URL="http://localhost:5230"
+
+echo "=== 1. Super Admin Login ==="
+LOGIN_RES=$(curl -s -X POST "$BASE_URL/api/v1/admin/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"usernameOrEmail":"admin@sjewls.lk","password":"SuperAdmin@2026!"}')
+
+ADMIN_TOKEN=$(echo "$LOGIN_RES" | grep -o '"accessToken":"[^"]*' | cut -d'"' -f4)
+echo "Admin Token obtained: ${ADMIN_TOKEN:0:20}..."
+
+echo "=== 2. Check Customer Statistics ==="
+curl -s -X GET "$BASE_URL/api/v1/admin/customers/statistics" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+echo ""
+
+echo "=== 3. Create New Customer Profile ==="
+CREATE_RES=$(curl -s -X POST "$BASE_URL/api/v1/admin/customers" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "fullName": "Test Customer",
+    "phoneNumber": "+94770001122",
+    "email": "test.customer@sjewls.test",
+    "nic": "199411223344",
+    "branchId": "a0000000-0000-0000-0000-000000000001"
+  }')
+echo "$CREATE_RES"
+CUSTOMER_ID=$(echo "$CREATE_RES" | grep -o '"id":"[^"]*' | cut -d'"' -f4)
+echo "Created Customer ID: $CUSTOMER_ID"
+
+echo "=== 4. Verify Duplicate Prevention (409 Conflict) ==="
+curl -s -w "\nHTTP_STATUS:%{http_code}\n" -X POST "$BASE_URL/api/v1/admin/customers" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "fullName": "Duplicate Customer",
+    "phoneNumber": "+94770001122",
+    "email": "diff@sjewls.test",
+    "nic": "199411223344"
+  }'
+
+echo "=== 5. Deactivate Customer with Reason ==="
+curl -s -X PATCH "$BASE_URL/api/v1/admin/customers/$CUSTOMER_ID/status" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"isActive": false, "reason": "Administrative suspension test"}'
+echo ""
+
+echo "=== 6. Reactivate Customer ==="
+curl -s -X PATCH "$BASE_URL/api/v1/admin/customers/$CUSTOMER_ID/status" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"isActive": true, "reason": "Reinstated"}'
+echo ""
+
+echo "=== 7. Staff Self-Deactivation Prevention Check ==="
+SUPER_ADMIN_ID=$(echo "$LOGIN_RES" | grep -o '"id":"[^"]*' | head -1 | cut -d'"' -f4)
+curl -s -w "\nHTTP_STATUS:%{http_code}\n" -X PATCH "$BASE_URL/api/v1/admin/users/$SUPER_ADMIN_ID/status" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"isActive": false, "reason": "Testing self-deactivation"}'
+```

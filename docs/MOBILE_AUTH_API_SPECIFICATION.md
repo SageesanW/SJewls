@@ -214,10 +214,20 @@ Verifies the submitted 6-digit OTP. Returns either direct dashboard access token
 }
 ```
 
-#### Success Response: New Customer (`200 OK`)
+#### Success Response: New or Incomplete / Admin-Created Customer (`200 OK`)
 ```json
 {
   "nextAction": "CompleteProfile",
+  "customer": {
+    "id": "3358ccae-e77d-415a-8c5c-5ca0b9811e9e",
+    "fullName": "sai",
+    "nic": "199928918232",
+    "phoneNumber": "+94789832243",
+    "email": "w.sageesan@gmail.com",
+    "primaryContact": "w.sageesan@gmail.com",
+    "primaryBranchCode": "JAF-01",
+    "isProfileComplete": false
+  },
   "registrationToken": "reg_a7f920bc4d812e9471ab834c",
   "registrationTokenExpiresInSeconds": 3600,
   "verifiedContact": "+94759712375",
@@ -227,7 +237,8 @@ Verifies the submitted 6-digit OTP. Returns either direct dashboard access token
 ```
 *Action Required by Mobile App:*
 - Store `registrationToken`.
-- Direct user to the Complete Profile / Registration Screen.
+- If `customer` is present, pre-fill the name, NIC, and contact fields on the screen.
+- Direct user to provide their Date of Birth to complete registration.
 
 #### Error Responses
 - `400 Bad Request` (Incorrect Code / Decremented Attempts):
