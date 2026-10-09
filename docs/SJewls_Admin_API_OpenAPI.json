@@ -1101,6 +1101,465 @@
         }
       }
     },
+    "/api/v1/admin/jewellery-plans": {
+      "get": {
+        "tags": [
+          "Admin Jewellery Plans"
+        ],
+        "summary": "List Jewellery Plans with Card Progress",
+        "description": "Retrieves a paginated card grid of jewellery plans with database-derived overall gold progress, category filtering, search, and status (Active, Scheduled, Deactivated). Branch Staff are strictly isolated to their branch; Super Admins can filter across branches.",
+        "operationId": "AdminGetJewelleryPlans",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "style": "form",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "categoryId",
+            "in": "query",
+            "style": "form",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "style": "form",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "branchId",
+            "in": "query",
+            "style": "form",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "style": "form",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "style": "form",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 12
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JewelleryPlanPagedResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin Jewellery Plans"
+        ],
+        "summary": "Create Jewellery Plan",
+        "description": "Creates a new jewellery savings plan with selected category, custom or default duration options (in whole months), authoritative target gold grams, and start date. Validates category branch ownership.",
+        "operationId": "AdminCreateJewelleryPlan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateJewelleryPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JewelleryPlanDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/jewellery-plans/{id}": {
+      "get": {
+        "tags": [
+          "Admin Jewellery Plans"
+        ],
+        "summary": "Get Jewellery Plan Details",
+        "description": "Retrieves detailed information for a specific jewellery plan, including duration options, target gold grams, start date, and enrolment progress.",
+        "operationId": "AdminGetJewelleryPlanById",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "style": "simple",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JewelleryPlanDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Admin Jewellery Plans"
+        ],
+        "summary": "Update Jewellery Plan",
+        "description": "Updates plan metadata, category, target gold grams, start date, and offered durations. Existing customer enrolments retain their agreed snapshot terms (target grams, selected duration, joining date, and deadline).",
+        "operationId": "AdminUpdateJewelleryPlan",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "style": "simple",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateJewelleryPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JewelleryPlanDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/jewellery-plans/{id}/status": {
+      "patch": {
+        "tags": [
+          "Admin Jewellery Plans"
+        ],
+        "summary": "Deactivate or Reopen Jewellery Plan",
+        "description": "Transitions plan operational status between Active/Scheduled and Deactivated. Deactivating blocks new enrolments while allowing existing enrolled customers to continue contributing until their duration deadline. Reopening makes the plan available again once the start date arrives. Plan deletion is prohibited.",
+        "operationId": "AdminUpdateJewelleryPlanStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "style": "simple",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateJewelleryPlanStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JewelleryPlanDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/jewellery-plans/{id}/customers": {
+      "get": {
+        "tags": [
+          "Admin Jewellery Plans"
+        ],
+        "summary": "View Enrolled Customers for Jewellery Plan",
+        "description": "Retrieves a paginated list of customers enrolled in the specified jewellery plan, showing joining date, chosen duration, deadline, enrolment target grams, confirmed currency paid, net accumulated grams, remaining balance, individual progress percentage, and contribution history.",
+        "operationId": "AdminGetJewelleryPlanCustomers",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "style": "simple",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "style": "form",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "style": "form",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "style": "form",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "style": "form",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanCustomersPagedResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/jewellery-plans/upload-image": {
+      "post": {
+        "tags": [
+          "Admin Jewellery Plans"
+        ],
+        "summary": "Upload Jewellery Plan Visual Image",
+        "description": "Uploads a jewellery product image (PNG, JPG, WEBP, max 5MB) to Supabase Storage and returns the public CDN URL.",
+        "operationId": "AdminUploadJewelleryPlanImage",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "required": [
+                  "file"
+                ],
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              },
+              "encoding": {
+                "file": {
+                  "style": "form"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageUploadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/jewellery-plans/financial-quote": {
+      "post": {
+        "tags": [
+          "Admin Jewellery Plans"
+        ],
+        "summary": "Calculate Gold Rate Financial Quote",
+        "description": "Calculates gold contribution conversion using the current applicable 24K branch rate. Supports conversion by grams (grams \u00d7 rate = payable money) and by money (money \u00f7 rate = credited grams) with strict 4-decimal gram precision and remainder checks.",
+        "operationId": "AdminCalculateJewelleryFinancialQuote",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinancialQuoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinancialQuoteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
     "/api/v1/admin/users": {
       "get": {
         "tags": [
@@ -1757,6 +2216,67 @@
         },
         "additionalProperties": false
       },
+      "CreateJewelleryPlanRequest": {
+        "required": [
+          "allowedDurationsMonths",
+          "categoryId",
+          "imageUrl",
+          "name",
+          "startDate",
+          "targetProductGoldWeightGrams"
+        ],
+        "type": "object",
+        "properties": {
+          "branchId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "categoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "maxLength": 150,
+            "minLength": 2,
+            "type": "string"
+          },
+          "description": {
+            "maxLength": 1000,
+            "minLength": 0,
+            "type": "string",
+            "nullable": true
+          },
+          "imageUrl": {
+            "minLength": 1,
+            "type": "string",
+            "format": "uri"
+          },
+          "allowedDurationsMonths": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "targetProductGoldWeightGrams": {
+            "maximum": 10000,
+            "minimum": 0.0001,
+            "type": "number",
+            "format": "double"
+          },
+          "karat": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
       "CreateStaffUserRequest": {
         "required": [
           "email",
@@ -1816,6 +2336,119 @@
           "inactiveCustomers": {
             "type": "integer",
             "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EnrolmentContributionDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "currencyAmount": {
+            "type": "number",
+            "format": "double"
+          },
+          "currency": {
+            "type": "string",
+            "nullable": true
+          },
+          "goldGrams": {
+            "type": "number",
+            "format": "double"
+          },
+          "appliedRatePerGram": {
+            "type": "number",
+            "format": "double"
+          },
+          "karat": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "confirmedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "nullable": true
+          },
+          "paymentMethod": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "FinancialQuoteRequest": {
+        "type": "object",
+        "properties": {
+          "branchId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "enrolmentId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "mode": {
+            "type": "string",
+            "nullable": true
+          },
+          "inputGrams": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "inputMoney": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "FinancialQuoteResponse": {
+        "type": "object",
+        "properties": {
+          "branchId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ratePerGram": {
+            "type": "number",
+            "format": "double"
+          },
+          "effectiveFromUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "currency": {
+            "type": "string",
+            "nullable": true
+          },
+          "payableMoney": {
+            "type": "number",
+            "format": "double"
+          },
+          "creditedGrams": {
+            "type": "number",
+            "format": "double"
+          },
+          "remainingTargetGrams": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "willExceedTarget": {
+            "type": "boolean"
+          },
+          "quoteExpiresAtUtc": {
+            "type": "string",
+            "format": "date-time"
           }
         },
         "additionalProperties": false
@@ -1919,6 +2552,292 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/JewelleryCategoryDto"
+            },
+            "nullable": true
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "JewelleryPlanDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "branchId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "branchName": {
+            "type": "string",
+            "nullable": true
+          },
+          "branchCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "currency": {
+            "type": "string",
+            "nullable": true
+          },
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "imageUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "categoryId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "categoryName": {
+            "type": "string",
+            "nullable": true
+          },
+          "targetProductGoldWeightGrams": {
+            "type": "number",
+            "format": "double"
+          },
+          "karat": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "allowedDurationsMonths": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "nullable": true
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "displayStatus": {
+            "type": "string",
+            "nullable": true
+          },
+          "totalEnrolments": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "activeEnrolments": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalNetAccumulatedGrams": {
+            "type": "number",
+            "format": "double"
+          },
+          "totalTargetGramsAcrossEnrolments": {
+            "type": "number",
+            "format": "double"
+          },
+          "overallProgressPercentage": {
+            "type": "number",
+            "format": "double"
+          },
+          "createdAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAtUtc": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "deactivatedAtUtc": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "reopenedAtUtc": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "JewelleryPlanPagedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/JewelleryPlanDto"
+            },
+            "nullable": true
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int32",
+            "readOnly": true
+          },
+          "activeCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "scheduledCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "deactivatedCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PlanCustomerEnrolmentDto": {
+        "type": "object",
+        "properties": {
+          "enrolmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "customerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "customerName": {
+            "type": "string",
+            "nullable": true
+          },
+          "phoneNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "joiningDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "selectedDurationMonths": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "deadline": {
+            "type": "string",
+            "format": "date"
+          },
+          "enrolmentTargetGrams": {
+            "type": "number",
+            "format": "double"
+          },
+          "totalConfirmedMoneyPaid": {
+            "type": "number",
+            "format": "double"
+          },
+          "currency": {
+            "type": "string",
+            "nullable": true
+          },
+          "netAccumulatedGrams": {
+            "type": "number",
+            "format": "double"
+          },
+          "remainingGrams": {
+            "type": "number",
+            "format": "double"
+          },
+          "individualProgressPercentage": {
+            "type": "number",
+            "format": "double"
+          },
+          "enrolmentStatus": {
+            "type": "string",
+            "nullable": true
+          },
+          "contributions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnrolmentContributionDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "PlanCustomersPagedResponse": {
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "planName": {
+            "type": "string",
+            "nullable": true
+          },
+          "categoryName": {
+            "type": "string",
+            "nullable": true
+          },
+          "planTargetGrams": {
+            "type": "number",
+            "format": "double"
+          },
+          "currency": {
+            "type": "string",
+            "nullable": true
+          },
+          "overallProgressPercentage": {
+            "type": "number",
+            "format": "double"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanCustomerEnrolmentDto"
             },
             "nullable": true
           },
@@ -2204,6 +3123,79 @@
         "properties": {
           "isActive": {
             "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateJewelleryPlanRequest": {
+        "required": [
+          "allowedDurationsMonths",
+          "categoryId",
+          "imageUrl",
+          "name",
+          "startDate",
+          "targetProductGoldWeightGrams"
+        ],
+        "type": "object",
+        "properties": {
+          "categoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "maxLength": 150,
+            "minLength": 2,
+            "type": "string"
+          },
+          "description": {
+            "maxLength": 1000,
+            "minLength": 0,
+            "type": "string",
+            "nullable": true
+          },
+          "imageUrl": {
+            "minLength": 1,
+            "type": "string",
+            "format": "uri"
+          },
+          "allowedDurationsMonths": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "targetProductGoldWeightGrams": {
+            "maximum": 10000,
+            "minimum": 0.0001,
+            "type": "number",
+            "format": "double"
+          },
+          "karat": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateJewelleryPlanStatusRequest": {
+        "required": [
+          "action"
+        ],
+        "type": "object",
+        "properties": {
+          "action": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
           }
         },
         "additionalProperties": false

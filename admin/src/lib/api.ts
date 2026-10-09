@@ -301,5 +301,85 @@ export const adminApi = {
       body: formData,
     });
   },
+
+  // Jewellery Plans
+  async getJewelleryPlans(params?: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    categoryId?: string;
+    status?: string;
+    branchId?: string;
+  }): Promise<import("../types/jewelleryPlan").JewelleryPlanPagedResponse> {
+    const query = new URLSearchParams();
+    if (params?.page) query.set("page", params.page.toString());
+    if (params?.pageSize) query.set("pageSize", params.pageSize.toString());
+    if (params?.search) query.set("search", params.search);
+    if (params?.categoryId) query.set("categoryId", params.categoryId);
+    if (params?.status) query.set("status", params.status);
+    if (params?.branchId) query.set("branchId", params.branchId);
+
+    const queryString = query.toString();
+    const endpoint = queryString ? `/api/v1/admin/jewellery-plans?${queryString}` : "/api/v1/admin/jewellery-plans";
+    return fetchWithAuth<import("../types/jewelleryPlan").JewelleryPlanPagedResponse>(endpoint);
+  },
+
+  async getJewelleryPlanById(id: string): Promise<import("../types/jewelleryPlan").JewelleryPlan> {
+    return fetchWithAuth<import("../types/jewelleryPlan").JewelleryPlan>(`/api/v1/admin/jewellery-plans/${id}`);
+  },
+
+  async createJewelleryPlan(data: import("../types/jewelleryPlan").CreateJewelleryPlanRequest): Promise<import("../types/jewelleryPlan").JewelleryPlan> {
+    return fetchWithAuth<import("../types/jewelleryPlan").JewelleryPlan>("/api/v1/admin/jewellery-plans", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateJewelleryPlan(id: string, data: import("../types/jewelleryPlan").UpdateJewelleryPlanRequest): Promise<import("../types/jewelleryPlan").JewelleryPlan> {
+    return fetchWithAuth<import("../types/jewelleryPlan").JewelleryPlan>(`/api/v1/admin/jewellery-plans/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateJewelleryPlanStatus(id: string, data: import("../types/jewelleryPlan").UpdateJewelleryPlanStatusRequest): Promise<import("../types/jewelleryPlan").JewelleryPlan> {
+    return fetchWithAuth<import("../types/jewelleryPlan").JewelleryPlan>(`/api/v1/admin/jewellery-plans/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async getJewelleryPlanCustomers(id: string, params?: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    status?: string;
+  }): Promise<import("../types/jewelleryPlan").PlanCustomersPagedResponse> {
+    const query = new URLSearchParams();
+    if (params?.page) query.set("page", params.page.toString());
+    if (params?.pageSize) query.set("pageSize", params.pageSize.toString());
+    if (params?.search) query.set("search", params.search);
+    if (params?.status) query.set("status", params.status);
+
+    const queryString = query.toString();
+    const endpoint = queryString ? `/api/v1/admin/jewellery-plans/${id}/customers?${queryString}` : `/api/v1/admin/jewellery-plans/${id}/customers`;
+    return fetchWithAuth<import("../types/jewelleryPlan").PlanCustomersPagedResponse>(endpoint);
+  },
+
+  async uploadJewelleryPlanImage(file: File): Promise<import("../types/jewelleryCategory").ImageUploadResponse> {
+    const formData = new FormData();
+    formData.append("file", file);
+    return fetchWithAuth<import("../types/jewelleryCategory").ImageUploadResponse>("/api/v1/admin/jewellery-plans/upload-image", {
+      method: "POST",
+      body: formData,
+    });
+  },
+
+  async calculateFinancialQuote(data: import("../types/jewelleryPlan").FinancialQuoteRequest): Promise<import("../types/jewelleryPlan").FinancialQuoteResponse> {
+    return fetchWithAuth<import("../types/jewelleryPlan").FinancialQuoteResponse>("/api/v1/admin/jewellery-plans/financial-quote", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
 };
 

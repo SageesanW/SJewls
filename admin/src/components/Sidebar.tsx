@@ -66,10 +66,12 @@ export function Sidebar({
       enabled: true,
     },
     {
-      href: "#plans",
+      href: "/jewellery-plans/plans",
       label: "Plans",
-      isActive: pathname === "/jewellery-plans/plans",
-      enabled: false,
+      isActive:
+        pathname === "/jewellery-plans/plans" ||
+        pathname.startsWith("/jewellery-plans/plans/"),
+      enabled: true,
     },
     {
       href: "#plan-customers",

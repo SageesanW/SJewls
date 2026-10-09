@@ -19,7 +19,7 @@ public class JewelleryPlan : BaseEntity
     public decimal TargetVat { get; set; }
     public decimal TotalTargetAmount { get; set; }
 
-    public int[] AllowedDurationsMonths { get; set; } = new[] { 6, 8, 12 };
+    public int[] AllowedDurationsMonths { get; set; } = new[] { 6, 12, 18 };
 
     public CancellationFeeType CancellationFeeType { get; set; } = CancellationFeeType.Percentage;
     public decimal CancellationFeeValue { get; set; } = 5.0m; // e.g. 5%
@@ -27,7 +27,16 @@ public class JewelleryPlan : BaseEntity
     public Guid? CategoryId { get; set; }
     public JewelleryPlanCategory? Category { get; set; }
 
+    public DateOnly StartDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+
     public bool IsActive { get; set; } = true;
+    public DateTimeOffset? DeactivatedAtUtc { get; set; }
+    public Guid? DeactivatedByStaffId { get; set; }
+    public Staff? DeactivatedByStaff { get; set; }
+
+    public DateTimeOffset? ReopenedAtUtc { get; set; }
+    public Guid? ReopenedByStaffId { get; set; }
+    public Staff? ReopenedByStaff { get; set; }
 
     // Navigation properties
     public ICollection<JewelleryEnrolment> Enrolments { get; set; } = new List<JewelleryEnrolment>();

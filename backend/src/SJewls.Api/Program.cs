@@ -87,6 +87,7 @@ builder.Services.AddScoped<IAdminCustomerService, AdminCustomerService>();
 builder.Services.AddScoped<IBranchService, BranchService>();
 builder.Services.AddHttpClient<ISupabaseStorageService, SupabaseStorageService>();
 builder.Services.AddScoped<IJewelleryCategoryService, JewelleryCategoryService>();
+builder.Services.AddScoped<IJewelleryPlanService, JewelleryPlanService>();
 
 
 // Rate Limiting for Auth Endpoints
@@ -348,6 +349,7 @@ app.MapAdminUserEndpoints();
 app.MapAdminCustomerEndpoints();
 app.MapBranchEndpoints();
 app.MapJewelleryCategoryEndpoints();
+app.MapJewelleryPlanEndpoints();
 
 
 // Seed initial roles, default branch, and initial Super Admin if configured

@@ -189,10 +189,19 @@ public class SJewlsDbContext : DbContext
         modelBuilder.Entity<JewelleryPlan>(entity =>
         {
             entity.HasIndex(e => e.Code).IsUnique();
+            entity.HasIndex(e => new { e.BranchId, e.IsActive, e.StartDate });
             entity.HasOne(e => e.Category)
                   .WithMany(c => c.JewelleryPlans)
                   .HasForeignKey(e => e.CategoryId)
                   .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.DeactivatedByStaff)
+                  .WithMany()
+                  .HasForeignKey(e => e.DeactivatedByStaffId)
+                  .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.ReopenedByStaff)
+                  .WithMany()
+                  .HasForeignKey(e => e.ReopenedByStaffId)
+                  .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<JewelleryEnrolment>(entity =>

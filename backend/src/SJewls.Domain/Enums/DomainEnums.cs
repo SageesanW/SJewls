@@ -48,7 +48,8 @@ public enum JewelleryEnrolmentStatus
     Completed = 2,
     Extended = 3,
     Cancelled = 4,
-    Claimed = 5
+    Claimed = 5,
+    DurationEnded = 6
 }
 
 public enum CancellationFeeType
