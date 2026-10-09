@@ -1,6 +1,6 @@
 import { Branch, ForgotPasswordResponse, LoginResponse, ResetPasswordResponse, StaffUser } from "../types/auth";
 
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5230").replace(/\/+$/, "");
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/+$/, "");
 
 export class ApiError extends Error {
   status: number;
