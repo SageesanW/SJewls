@@ -1,0 +1,36 @@
+# Git & Source Control
+.git
+.gitignore
+
+# IDE & Editor Settings
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build & Compilation Outputs
+**/bin/
+**/obj/
+**/publish/
+**/out/
+
+# Environment Variables & Local Secrets
+.env
+.env.*
+*.env
+
+# Local Development Scripts
+dev.sh
+free-port.sh
+
+# Testing & Logs
+tests/
+TestResults/
+*.log
+
+# Docker Configuration Files
+Dockerfile*
+.dockerignore

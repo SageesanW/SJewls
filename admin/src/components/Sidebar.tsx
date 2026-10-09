@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "../lib/auth-context";
@@ -14,6 +14,8 @@ import {
   ChevronRight,
   ShieldCheck,
   Building2,
+  Gem,
+  ChevronDown,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -33,6 +35,18 @@ export function Sidebar({
   const { user, logout, isSuperAdmin, isBranchAdmin } = useAuth();
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
+  // Expandable Jewellery Plan state
+  const isJewelleryPlanActive = pathname.startsWith("/jewellery-plans");
+  const [jewelleryExpanded, setJewelleryExpanded] = useState<boolean>(() => {
+    return pathname.startsWith("/jewellery-plans");
+  });
+
+  useEffect(() => {
+    if (pathname.startsWith("/jewellery-plans")) {
+      setJewelleryExpanded(true);
+    }
+  }, [pathname]);
+
   const navItems = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/customers", label: "Customers", icon: UserCheck },
@@ -40,6 +54,35 @@ export function Sidebar({
     ...(isSuperAdmin || isBranchAdmin
       ? [{ href: "/users", label: "Users & Staff", icon: Users }]
       : []),
+  ];
+
+  const jewellerySubItems = [
+    {
+      href: "/jewellery-plans/categories",
+      label: "Categories",
+      isActive:
+        pathname === "/jewellery-plans/categories" ||
+        pathname === "/jewellery-plans",
+      enabled: true,
+    },
+    {
+      href: "#plans",
+      label: "Plans",
+      isActive: pathname === "/jewellery-plans/plans",
+      enabled: false,
+    },
+    {
+      href: "#plan-customers",
+      label: "Plan Customers",
+      isActive: pathname === "/jewellery-plans/customers",
+      enabled: false,
+    },
+    {
+      href: "#payments",
+      label: "Payments",
+      isActive: pathname === "/jewellery-plans/payments",
+      enabled: false,
+    },
   ];
 
   const primaryBranch = user?.assignedBranches?.[0];
@@ -52,54 +95,234 @@ export function Sidebar({
         .toUpperCase()
     : "SJ";
 
-  const renderNavLinks = (isMobile = false) => (
-    <nav className="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto sidebar-scroll">
-      {navItems.map((item) => {
-        const Icon = item.icon;
-        const isActive =
-          pathname === item.href || pathname.startsWith(`${item.href}/`);
-        const showLabel = isMobile || !collapsed;
+  const renderNavLinks = (isMobile = false) => {
+    const showLabel = isMobile || !collapsed;
 
-        return (
-          <div
-            key={item.href}
-            className="relative"
-            onMouseEnter={() => setHoveredItem(item.href)}
-            onMouseLeave={() => setHoveredItem(null)}
-          >
-            <Link
-              href={item.href}
-              onClick={() => {
-                if (isMobile) onCloseMobile();
-              }}
-              className={`flex items-center gap-3.5 px-3.5 py-3 rounded-xl text-sm font-medium transition-all duration-150 ${
-                isActive
-                  ? "nav-gold-active font-bold"
-                  : "text-emerald-100/90 hover:text-white hover:bg-white/10"
-              } ${!showLabel ? "justify-center px-0" : ""}`}
-              aria-current={isActive ? "page" : undefined}
+    return (
+      <nav className="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto sidebar-scroll">
+        {/* Dashboard & Customers */}
+        {navItems.slice(0, 2).map((item) => {
+          const Icon = item.icon;
+          const isActive =
+            pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+          return (
+            <div
+              key={item.href}
+              className="relative"
+              onMouseEnter={() => setHoveredItem(item.href)}
+              onMouseLeave={() => setHoveredItem(null)}
             >
-              <Icon
-                className={`w-5 h-5 flex-shrink-0 transition-transform ${
-                  isActive ? "text-[#0B3D0B]" : "text-[#FFD700]"
-                }`}
-              />
-              {showLabel && (
-                <span className="truncate tracking-wide">{item.label}</span>
-              )}
-            </Link>
+              <Link
+                href={item.href}
+                onClick={() => {
+                  if (isMobile) onCloseMobile();
+                }}
+                className={`flex items-center gap-3.5 px-3.5 py-3 rounded-xl text-sm font-medium transition-all duration-150 ${
+                  isActive
+                    ? "nav-gold-active font-bold"
+                    : "text-emerald-100/90 hover:text-white hover:bg-white/10"
+                } ${!showLabel ? "justify-center px-0" : ""}`}
+                aria-current={isActive ? "page" : undefined}
+              >
+                <Icon
+                  className={`w-5 h-5 flex-shrink-0 transition-transform ${
+                    isActive ? "text-[#0B3D0B]" : "text-[#FFD700]"
+                  }`}
+                />
+                {showLabel && (
+                  <span className="truncate tracking-wide">{item.label}</span>
+                )}
+              </Link>
 
-            {/* Tooltip for desktop collapsed mode */}
-            {!showLabel && hoveredItem === item.href && (
-              <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 bg-[#0A260A] text-white text-xs font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap z-50 pointer-events-none">
-                {item.label}
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </nav>
-  );
+              {/* Tooltip for desktop collapsed mode */}
+              {!showLabel && hoveredItem === item.href && (
+                <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 bg-[#0A260A] text-white text-xs font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap z-50 pointer-events-none">
+                  {item.label}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Expandable Jewellery Plan Group */}
+        <div
+          className="relative"
+          onMouseEnter={() => setHoveredItem("jewellery-plan")}
+          onMouseLeave={() => setHoveredItem(null)}
+        >
+          {showLabel ? (
+            <div>
+              <button
+                type="button"
+                onClick={() => setJewelleryExpanded((prev) => !prev)}
+                className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
+                  isJewelleryPlanActive
+                    ? "nav-gold-active font-bold shadow-sm"
+                    : "text-emerald-100/90 hover:text-white hover:bg-white/10"
+                }`}
+                aria-expanded={jewelleryExpanded}
+              >
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <Gem
+                    className={`w-5 h-5 flex-shrink-0 ${
+                      isJewelleryPlanActive ? "text-[#0B3D0B]" : "text-[#FFD700]"
+                    }`}
+                  />
+                  <span className="truncate tracking-wide">Jewellery Plan</span>
+                </div>
+                <ChevronDown
+                  className={`w-4 h-4 flex-shrink-0 transition-transform duration-200 ${
+                    jewelleryExpanded ? "rotate-180" : ""
+                  } ${
+                    isJewelleryPlanActive ? "text-[#0B3D0B]" : "text-emerald-300"
+                  }`}
+                />
+              </button>
+
+              {/* Collapsible Submenu */}
+              {jewelleryExpanded && (
+                <div className="mt-1 ml-4 pl-3.5 border-l-2 border-emerald-700/50 space-y-1 py-1 animate-fadeIn">
+                  {jewellerySubItems.map((sub) => {
+                    if (sub.enabled) {
+                      return (
+                        <Link
+                          key={sub.href}
+                          href={sub.href}
+                          onClick={() => {
+                            if (isMobile) onCloseMobile();
+                          }}
+                          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                            sub.isActive
+                              ? "bg-[#FFD700]/20 text-[#FFD700] font-bold border border-[#FFD700]/30 shadow-xs"
+                              : "text-emerald-200/90 hover:text-white hover:bg-white/5"
+                          }`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              sub.isActive ? "bg-[#FFD700]" : "bg-emerald-400/60"
+                            }`}
+                          />
+                          <span className="truncate">{sub.label}</span>
+                        </Link>
+                      );
+                    }
+
+                    return (
+                      <div
+                        key={sub.label}
+                        className="flex items-center justify-between px-3 py-2 text-xs text-emerald-400/50 cursor-not-allowed select-none rounded-lg"
+                        title="Module coming soon"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-700/60" />
+                          <span>{sub.label}</span>
+                        </div>
+                        <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/5 text-emerald-400/60 border border-white/5">
+                          Soon
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Desktop Collapsed View */
+            <div>
+              <Link
+                href="/jewellery-plans/categories"
+                className={`flex items-center justify-center p-3 rounded-xl transition-all ${
+                  isJewelleryPlanActive
+                    ? "nav-gold-active font-bold"
+                    : "text-emerald-100/90 hover:text-white hover:bg-white/10"
+                }`}
+                title="Jewellery Plan Categories"
+              >
+                <Gem
+                  className={`w-5 h-5 flex-shrink-0 ${
+                    isJewelleryPlanActive ? "text-[#0B3D0B]" : "text-[#FFD700]"
+                  }`}
+                />
+              </Link>
+
+              {hoveredItem === "jewellery-plan" && (
+                <div className="absolute left-full top-0 ml-3 w-48 bg-[#0A260A] text-white p-2 rounded-xl shadow-2xl border border-white/10 z-50">
+                  <div className="px-2.5 py-1.5 text-xs font-bold text-[#FFD700] border-b border-white/10 mb-1">
+                    Jewellery Plan
+                  </div>
+                  <Link
+                    href="/jewellery-plans/categories"
+                    className="flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg text-emerald-100 hover:text-white hover:bg-white/10 font-medium"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#FFD700]" />
+                    Categories
+                  </Link>
+                  <div className="flex items-center justify-between px-2.5 py-1.5 text-xs text-emerald-400/50">
+                    <span>Plans</span>
+                    <span className="text-[9px] px-1 bg-white/5 rounded">Soon</span>
+                  </div>
+                  <div className="flex items-center justify-between px-2.5 py-1.5 text-xs text-emerald-400/50">
+                    <span>Plan Customers</span>
+                    <span className="text-[9px] px-1 bg-white/5 rounded">Soon</span>
+                  </div>
+                  <div className="flex items-center justify-between px-2.5 py-1.5 text-xs text-emerald-400/50">
+                    <span>Payments</span>
+                    <span className="text-[9px] px-1 bg-white/5 rounded">Soon</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Branches & Users */}
+        {navItems.slice(2).map((item) => {
+          const Icon = item.icon;
+          const isActive =
+            pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+          return (
+            <div
+              key={item.href}
+              className="relative"
+              onMouseEnter={() => setHoveredItem(item.href)}
+              onMouseLeave={() => setHoveredItem(null)}
+            >
+              <Link
+                href={item.href}
+                onClick={() => {
+                  if (isMobile) onCloseMobile();
+                }}
+                className={`flex items-center gap-3.5 px-3.5 py-3 rounded-xl text-sm font-medium transition-all duration-150 ${
+                  isActive
+                    ? "nav-gold-active font-bold"
+                    : "text-emerald-100/90 hover:text-white hover:bg-white/10"
+                } ${!showLabel ? "justify-center px-0" : ""}`}
+                aria-current={isActive ? "page" : undefined}
+              >
+                <Icon
+                  className={`w-5 h-5 flex-shrink-0 transition-transform ${
+                    isActive ? "text-[#0B3D0B]" : "text-[#FFD700]"
+                  }`}
+                />
+                {showLabel && (
+                  <span className="truncate tracking-wide">{item.label}</span>
+                )}
+              </Link>
+
+              {/* Tooltip for desktop collapsed mode */}
+              {!showLabel && hoveredItem === item.href && (
+                <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 bg-[#0A260A] text-white text-xs font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap z-50 pointer-events-none">
+                  {item.label}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </nav>
+    );
+  };
 
   return (
     <>

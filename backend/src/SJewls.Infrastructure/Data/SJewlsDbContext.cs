@@ -28,6 +28,7 @@ public class SJewlsDbContext : DbContext
     public DbSet<GoldRate> GoldRates => Set<GoldRate>();
     public DbSet<PaymentQuote> PaymentQuotes => Set<PaymentQuote>();
 
+    public DbSet<JewelleryPlanCategory> JewelleryCategories => Set<JewelleryPlanCategory>();
     public DbSet<JewelleryPlan> JewelleryPlans => Set<JewelleryPlan>();
     public DbSet<JewelleryEnrolment> JewelleryEnrolments => Set<JewelleryEnrolment>();
     public DbSet<JewelleryContribution> JewelleryContributions => Set<JewelleryContribution>();
@@ -174,10 +175,24 @@ public class SJewlsDbContext : DbContext
                   .OnDelete(DeleteBehavior.Restrict);
         });
 
+        // Jewellery Plan Category
+        modelBuilder.Entity<JewelleryPlanCategory>(entity =>
+        {
+            entity.HasIndex(e => new { e.BranchId, e.NormalizedName }).IsUnique();
+            entity.HasOne(e => e.Branch)
+                  .WithMany(b => b.JewelleryCategories)
+                  .HasForeignKey(e => e.BranchId)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
+
         // Jewellery Plan & Enrolment
         modelBuilder.Entity<JewelleryPlan>(entity =>
         {
             entity.HasIndex(e => e.Code).IsUnique();
+            entity.HasOne(e => e.Category)
+                  .WithMany(c => c.JewelleryPlans)
+                  .HasForeignKey(e => e.CategoryId)
+                  .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<JewelleryEnrolment>(entity =>

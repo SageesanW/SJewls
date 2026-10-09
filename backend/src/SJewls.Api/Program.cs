@@ -17,6 +17,13 @@ using SJewls.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Railway / Container Port Binding (listens on 0.0.0.0:PORT when PORT is set)
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrEmpty(port))
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+}
+
 // 1. Database Configuration (Supabase PostgreSQL)
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
     ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
@@ -78,6 +85,8 @@ builder.Services.AddScoped<IPasswordHasher<Staff>, PasswordHasher<Staff>>();
 builder.Services.AddScoped<IStaffAuthService, StaffAuthService>();
 builder.Services.AddScoped<IAdminCustomerService, AdminCustomerService>();
 builder.Services.AddScoped<IBranchService, BranchService>();
+builder.Services.AddHttpClient<ISupabaseStorageService, SupabaseStorageService>();
+builder.Services.AddScoped<IJewelleryCategoryService, JewelleryCategoryService>();
 
 
 // Rate Limiting for Auth Endpoints
@@ -307,7 +316,8 @@ app.MapGet("/api/v1/health", async (SJewlsDbContext? db) =>
     {
         try
         {
-            dbConnected = await db.Database.CanConnectAsync();
+            await db.Database.ExecuteSqlRawAsync("SELECT 1;");
+            dbConnected = true;
         }
         catch (Exception ex)
         {
@@ -332,11 +342,12 @@ app.MapGet("/api/v1/health", async (SJewlsDbContext? db) =>
 app.MapAuthEndpoints();
 app.MapCustomerEndpoints();
 
-// Map Admin Authentication, User, Customer & Branch Management Endpoints
+// Map Admin Authentication, User, Customer, Branch & Jewellery Category Management Endpoints
 app.MapAdminAuthEndpoints();
 app.MapAdminUserEndpoints();
 app.MapAdminCustomerEndpoints();
 app.MapBranchEndpoints();
+app.MapJewelleryCategoryEndpoints();
 
 
 // Seed initial roles, default branch, and initial Super Admin if configured

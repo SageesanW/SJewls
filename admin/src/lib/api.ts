@@ -1,6 +1,6 @@
 import { Branch, ForgotPasswordResponse, LoginResponse, ResetPasswordResponse, StaffUser } from "../types/auth";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5230";
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5230").replace(/\/+$/, "");
 
 export class ApiError extends Error {
   status: number;
@@ -34,8 +34,9 @@ export function removeToken(): void {
 
 async function fetchWithAuth<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(options.headers as Record<string, string>),
   };
 
@@ -239,6 +240,66 @@ export const adminApi = {
 
   async getCustomerDetail(id: string): Promise<import("../types/customer").CustomerDetail> {
     return fetchWithAuth<import("../types/customer").CustomerDetail>(`/api/v1/admin/customers/${id}`);
+  },
+
+  // Jewellery Plan Categories
+  async getJewelleryCategories(params?: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    branchId?: string;
+    isActive?: boolean;
+  }): Promise<import("../types/jewelleryCategory").JewelleryCategoryPagedResponse> {
+    const query = new URLSearchParams();
+    if (params?.page) query.set("page", params.page.toString());
+    if (params?.pageSize) query.set("pageSize", params.pageSize.toString());
+    if (params?.search) query.set("search", params.search);
+    if (params?.branchId) query.set("branchId", params.branchId);
+    if (params?.isActive !== undefined) query.set("isActive", params.isActive.toString());
+
+    const queryString = query.toString();
+    const endpoint = queryString ? `/api/v1/admin/jewellery-categories?${queryString}` : "/api/v1/admin/jewellery-categories";
+    return fetchWithAuth<import("../types/jewelleryCategory").JewelleryCategoryPagedResponse>(endpoint);
+  },
+
+  async getJewelleryCategoryById(id: string): Promise<import("../types/jewelleryCategory").JewelleryCategory> {
+    return fetchWithAuth<import("../types/jewelleryCategory").JewelleryCategory>(`/api/v1/admin/jewellery-categories/${id}`);
+  },
+
+  async createJewelleryCategory(data: import("../types/jewelleryCategory").CreateJewelleryCategoryRequest): Promise<import("../types/jewelleryCategory").JewelleryCategory> {
+    return fetchWithAuth<import("../types/jewelleryCategory").JewelleryCategory>("/api/v1/admin/jewellery-categories", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateJewelleryCategory(id: string, data: import("../types/jewelleryCategory").UpdateJewelleryCategoryRequest): Promise<import("../types/jewelleryCategory").JewelleryCategory> {
+    return fetchWithAuth<import("../types/jewelleryCategory").JewelleryCategory>(`/api/v1/admin/jewellery-categories/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateJewelleryCategoryStatus(id: string, isActive: boolean): Promise<import("../types/jewelleryCategory").JewelleryCategory> {
+    return fetchWithAuth<import("../types/jewelleryCategory").JewelleryCategory>(`/api/v1/admin/jewellery-categories/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ isActive }),
+    });
+  },
+
+  async deleteJewelleryCategory(id: string): Promise<void> {
+    return fetchWithAuth<void>(`/api/v1/admin/jewellery-categories/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  async uploadJewelleryCategoryImage(file: File): Promise<import("../types/jewelleryCategory").ImageUploadResponse> {
+    const formData = new FormData();
+    formData.append("file", file);
+    return fetchWithAuth<import("../types/jewelleryCategory").ImageUploadResponse>("/api/v1/admin/jewellery-categories/upload-image", {
+      method: "POST",
+      body: formData,
+    });
   },
 };
 

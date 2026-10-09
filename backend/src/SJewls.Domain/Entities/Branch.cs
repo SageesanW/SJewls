@@ -18,5 +18,6 @@ public class Branch : BaseEntity
     public ICollection<StaffBranch> StaffAssignments { get; set; } = new List<StaffBranch>();
     public ICollection<ChituPlan> ChituPlans { get; set; } = new List<ChituPlan>();
     public ICollection<JewelleryPlan> JewelleryPlans { get; set; } = new List<JewelleryPlan>();
+    public ICollection<JewelleryPlanCategory> JewelleryCategories { get; set; } = new List<JewelleryPlanCategory>();
     public ICollection<GoldRate> GoldRates { get; set; } = new List<GoldRate>();
 }

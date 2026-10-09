@@ -24,10 +24,29 @@ public class JewelleryPlan : BaseEntity
     public CancellationFeeType CancellationFeeType { get; set; } = CancellationFeeType.Percentage;
     public decimal CancellationFeeValue { get; set; } = 5.0m; // e.g. 5%
 
+    public Guid? CategoryId { get; set; }
+    public JewelleryPlanCategory? Category { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     // Navigation properties
     public ICollection<JewelleryEnrolment> Enrolments { get; set; } = new List<JewelleryEnrolment>();
+}
+
+public class JewelleryPlanCategory : BaseEntity
+{
+    public Guid BranchId { get; set; }
+    public Branch? Branch { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+    public string NormalizedName { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? ImageUrl { get; set; }
+
+    public bool IsActive { get; set; } = true;
+
+    // Navigation properties
+    public ICollection<JewelleryPlan> JewelleryPlans { get; set; } = new List<JewelleryPlan>();
 }
 
 public class JewelleryEnrolment : BaseEntity
