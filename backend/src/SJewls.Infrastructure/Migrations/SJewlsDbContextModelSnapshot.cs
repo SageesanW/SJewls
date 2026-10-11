@@ -569,14 +569,35 @@ namespace SJewls.Infrastructure.Migrations
                     b.Property<Guid>("BranchId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CategoryNameSnapshot")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("IdempotencyKey")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ImageUrlSnapshot")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("JewelleryPlanId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("PlanNameSnapshot")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("PremiumPercentage")
+                        .HasColumnType("decimal(18, 4)");
 
                     b.Property<int>("SelectedDurationMonths")
                         .HasColumnType("integer");
@@ -609,11 +630,100 @@ namespace SJewls.Infrastructure.Migrations
 
                     b.HasIndex("BranchId");
 
-                    b.HasIndex("CustomerId");
-
                     b.HasIndex("JewelleryPlanId");
 
+                    b.HasIndex("CustomerId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasFilter("\"IdempotencyKey\" IS NOT NULL");
+
                     b.ToTable("JewelleryEnrolments");
+                });
+
+            modelBuilder.Entity("SJewls.Domain.Entities.JewelleryPaymentQuote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("AmountToPay")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<decimal?>("BaseAmount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<decimal>("BaseGoldGrams")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<decimal?>("ChargeableGoldGrams")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("EnteredValue")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<DateTimeOffset>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("InputMode")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("JewelleryEnrolmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PaymentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("PremiumAmount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<decimal>("PremiumGrams")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<decimal>("PremiumPercentage")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<DateTimeOffset>("RateAsOf")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("RatePerGram")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<string>("RateSource")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("RemainingGramsAfterPayment")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("TotalGoldCredit")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("ExpiresAtUtc");
+
+                    b.HasIndex("PaymentId");
+
+                    b.HasIndex("JewelleryEnrolmentId", "Status");
+
+                    b.ToTable("JewelleryPaymentQuotes");
                 });
 
             modelBuilder.Entity("SJewls.Domain.Entities.JewelleryPlan", b =>
@@ -668,6 +778,9 @@ namespace SJewls.Infrastructure.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<decimal>("PremiumPercentage")
+                        .HasColumnType("decimal(18, 4)");
 
                     b.Property<DateTimeOffset?>("ReopenedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -1530,7 +1643,7 @@ namespace SJewls.Infrastructure.Migrations
                     b.HasOne("SJewls.Domain.Entities.Customer", "Customer")
                         .WithMany("JewelleryEnrolments")
                         .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("SJewls.Domain.Entities.JewelleryPlan", "JewelleryPlan")
@@ -1544,6 +1657,32 @@ namespace SJewls.Infrastructure.Migrations
                     b.Navigation("Customer");
 
                     b.Navigation("JewelleryPlan");
+                });
+
+            modelBuilder.Entity("SJewls.Domain.Entities.JewelleryPaymentQuote", b =>
+                {
+                    b.HasOne("SJewls.Domain.Entities.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SJewls.Domain.Entities.JewelleryEnrolment", "JewelleryEnrolment")
+                        .WithMany("Quotes")
+                        .HasForeignKey("JewelleryEnrolmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SJewls.Domain.Entities.Payment", "Payment")
+                        .WithMany()
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("JewelleryEnrolment");
+
+                    b.Navigation("Payment");
                 });
 
             modelBuilder.Entity("SJewls.Domain.Entities.JewelleryPlan", b =>
@@ -1816,6 +1955,8 @@ namespace SJewls.Infrastructure.Migrations
                     b.Navigation("Contributions");
 
                     b.Navigation("ExtensionRequests");
+
+                    b.Navigation("Quotes");
                 });
 
             modelBuilder.Entity("SJewls.Domain.Entities.JewelleryPlan", b =>

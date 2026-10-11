@@ -49,6 +49,16 @@ builder.Services.AddOptions<EmailOptions>()
     .Validate(options => !string.IsNullOrWhiteSpace(options.Username), "Email:Username is required.")
     .Validate(options => !string.IsNullOrWhiteSpace(options.FromAddress), "Email:FromAddress is required.")
     .Validate(options => !string.IsNullOrWhiteSpace(options.FromName), "Email:FromName is required.")
+    .Validate(options =>
+    {
+        if (options.IsOAuth2)
+        {
+            return !string.IsNullOrWhiteSpace(options.ClientId) &&
+                   !string.IsNullOrWhiteSpace(options.ClientSecret) &&
+                   !string.IsNullOrWhiteSpace(options.RefreshToken);
+        }
+        return true;
+    }, "When Email:AuthMechanism is 'OAuth2', Email:ClientId, Email:ClientSecret, and Email:RefreshToken are required.")
     .ValidateOnStart();
 
 // 3. SMS Configuration (Text.lk SMS Gateway)
@@ -64,7 +74,8 @@ builder.Services.AddScoped<ISmsSender>(sp =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
     var provider = config["Sms:Provider"] ?? "TextLk";
-    if (provider.Equals("Mock", StringComparison.OrdinalIgnoreCase))
+    var apiToken = config["Sms:ApiToken"];
+    if (provider.Equals("Mock", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(apiToken))
     {
         return sp.GetRequiredService<MockSmsSender>();
     }
@@ -72,7 +83,7 @@ builder.Services.AddScoped<ISmsSender>(sp =>
 });
 
 // 4. Register Application & Infrastructure Services
-builder.Services.AddScoped<EmailOtpProvider>();
+builder.Services.AddHttpClient<EmailOtpProvider>();
 builder.Services.AddScoped<IEmailOtpProvider>(sp => sp.GetRequiredService<EmailOtpProvider>());
 builder.Services.AddScoped<IEmailSender>(sp => sp.GetRequiredService<EmailOtpProvider>()); // Real Gmail SMTP email delivery via MailKit
 builder.Services.AddScoped<ITokenService, TokenService>();
@@ -88,6 +99,11 @@ builder.Services.AddScoped<IBranchService, BranchService>();
 builder.Services.AddHttpClient<ISupabaseStorageService, SupabaseStorageService>();
 builder.Services.AddScoped<IJewelleryCategoryService, JewelleryCategoryService>();
 builder.Services.AddScoped<IJewelleryPlanService, JewelleryPlanService>();
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient<IGoldRateService, GoldRateService>();
+builder.Services.AddScoped<ICustomerNotificationService, CustomerNotificationService>();
+builder.Services.AddScoped<ICustomerJewelleryPlanService, CustomerJewelleryPlanService>();
+builder.Services.AddScoped<IJewelleryPaymentFinalizationService, JewelleryPaymentFinalizationService>();
 
 
 // Rate Limiting for Auth Endpoints
@@ -342,6 +358,7 @@ app.MapGet("/api/v1/health", async (SJewlsDbContext? db) =>
 // Map Customer Authentication & Registration Endpoints
 app.MapAuthEndpoints();
 app.MapCustomerEndpoints();
+app.MapCustomerJewelleryPlanEndpoints();
 
 // Map Admin Authentication, User, Customer, Branch & Jewellery Category Management Endpoints
 app.MapAdminAuthEndpoints();

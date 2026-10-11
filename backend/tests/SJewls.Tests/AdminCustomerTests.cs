@@ -380,5 +380,145 @@ public class AdminCustomerTests
         Assert.Null(reactivated.DeactivatedAtUtc);
         Assert.Null(reactivated.DeactivationReason);
     }
+
+    [Fact]
+    public async Task GetCustomerJewelleryEnrolments_ReturnsHistoricalAndActive_WithContributionsAndReferences()
+    {
+        var (db, service, superAdminId, _, branch1Id, _) = CreateTestContext();
+        var customer = await db.Customers.FirstAsync(c => c.PrimaryBranchId == branch1Id);
+
+        var category = new JewelleryPlanCategory
+        {
+            Id = Guid.NewGuid(),
+            Name = "Bridal Gold",
+            BranchId = branch1Id,
+            IsActive = true
+        };
+        db.JewelleryCategories.Add(category);
+
+        var plan = new JewelleryPlan
+        {
+            Id = Guid.NewGuid(),
+            Name = "Bridal Necklace Plan",
+            Code = "BNP-01",
+            BranchId = branch1Id,
+            CategoryId = category.Id,
+            TargetProductGoldWeightGrams = 50m,
+            IsActive = true
+        };
+        db.JewelleryPlans.Add(plan);
+
+        // 1. Active enrolment
+        var enr1 = new JewelleryEnrolment
+        {
+            Id = Guid.NewGuid(),
+            CustomerId = customer.Id,
+            JewelleryPlanId = plan.Id,
+            BranchId = branch1Id,
+            PlanNameSnapshot = "Bridal Necklace Plan",
+            CategoryNameSnapshot = "Bridal Gold",
+            SelectedDurationMonths = 12,
+            StartDate = new DateOnly(2025, 1, 1),
+            TargetEndDate = new DateOnly(2026, 1, 1),
+            TargetProductWeightGrams = 50m,
+            TotalSavedGrams = 20m,
+            TotalContributedCurrency = 600000m,
+            Currency = "LKR",
+            PremiumPercentage = 5m,
+            Status = JewelleryEnrolmentStatus.Active
+        };
+
+        var payment = new Payment
+        {
+            Id = Guid.NewGuid(),
+            CustomerId = customer.Id,
+            BranchId = branch1Id,
+            Amount = 600000m,
+            Currency = "LKR",
+            Method = PaymentMethod.MockOnline,
+            Status = PaymentStatus.Succeeded,
+            ProviderReference = "TXN-TEST-001"
+        };
+        db.Payments.Add(payment);
+
+        var contrib = new JewelleryContribution
+        {
+            Id = Guid.NewGuid(),
+            JewelleryEnrolmentId = enr1.Id,
+            PaymentId = payment.Id,
+            CurrencyAmount = 600000m,
+            GoldGrams = 20m,
+            AppliedRatePerGram = 30000m,
+            Karat = 22,
+            ConfirmedAtUtc = DateTime.UtcNow
+        };
+        enr1.Contributions.Add(contrib);
+
+        // 2. Historical completed enrolment
+        var enr2 = new JewelleryEnrolment
+        {
+            Id = Guid.NewGuid(),
+            CustomerId = customer.Id,
+            JewelleryPlanId = plan.Id,
+            BranchId = branch1Id,
+            PlanNameSnapshot = "Bridal Necklace Plan",
+            CategoryNameSnapshot = "Bridal Gold",
+            SelectedDurationMonths = 6,
+            StartDate = new DateOnly(2024, 1, 1),
+            TargetEndDate = new DateOnly(2024, 7, 1),
+            TargetProductWeightGrams = 20m,
+            TotalSavedGrams = 20m,
+            TotalContributedCurrency = 500000m,
+            Currency = "LKR",
+            PremiumPercentage = 5m,
+            Status = JewelleryEnrolmentStatus.Completed
+        };
+
+        // 3. Historical closed/cancelled enrolment
+        var enr3 = new JewelleryEnrolment
+        {
+            Id = Guid.NewGuid(),
+            CustomerId = customer.Id,
+            JewelleryPlanId = plan.Id,
+            BranchId = branch1Id,
+            PlanNameSnapshot = "Bridal Necklace Plan",
+            CategoryNameSnapshot = "Bridal Gold",
+            SelectedDurationMonths = 6,
+            StartDate = new DateOnly(2023, 1, 1),
+            TargetEndDate = new DateOnly(2023, 7, 1),
+            TargetProductWeightGrams = 10m,
+            TotalSavedGrams = 2m,
+            TotalContributedCurrency = 50000m,
+            Currency = "LKR",
+            PremiumPercentage = 5m,
+            Status = JewelleryEnrolmentStatus.Cancelled
+        };
+
+        db.JewelleryEnrolments.AddRange(enr1, enr2, enr3);
+        await db.SaveChangesAsync();
+
+        var enrolments = await service.GetCustomerJewelleryEnrolmentsAsync(superAdminId, customer.Id);
+
+        Assert.Equal(3, enrolments.Count);
+        Assert.All(enrolments, e => Assert.StartsWith("ENR-", e.EnrolmentReference));
+        Assert.Contains(enrolments, e => e.Status == "Active");
+        Assert.Contains(enrolments, e => e.Status == "Completed");
+        Assert.Contains(enrolments, e => e.Status == "Cancelled");
+
+        var active = enrolments.First(e => e.Status == "Active");
+        Assert.Equal("Bridal Necklace Plan", active.PlanName);
+        Assert.Equal("Bridal Gold", active.CategoryName);
+        Assert.Equal(50m, active.TargetWeightGrams);
+        Assert.Equal(20m, active.TotalSavedGrams);
+        Assert.Equal(30m, active.RemainingGrams);
+        Assert.Equal(600000m, active.TotalContributedCurrency);
+        Assert.Single(active.Contributions);
+        Assert.Equal(600000m, active.Contributions[0].CurrencyAmount);
+        Assert.Equal("Succeeded", active.Contributions[0].Status);
+
+        // Also verify GetCustomerByIdAsync retrieves them
+        var details = await service.GetCustomerByIdAsync(superAdminId, customer.Id);
+        Assert.Equal(3, details.JewelleryEnrolments.Count);
+    }
 }
 

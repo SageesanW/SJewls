@@ -14,6 +14,7 @@ export interface JewelleryPlan {
   categoryName: string;
   targetProductGoldWeightGrams: number;
   karat: number;
+  premiumPercentage: number;
   allowedDurationsMonths: number[];
   startDate: string;
   isActive: boolean;
@@ -49,6 +50,7 @@ export interface CreateJewelleryPlanRequest {
   allowedDurationsMonths: number[];
   startDate: string;
   targetProductGoldWeightGrams: number;
+  premiumPercentage?: number;
   karat?: number;
 }
 
@@ -60,6 +62,7 @@ export interface UpdateJewelleryPlanRequest {
   allowedDurationsMonths: number[];
   startDate: string;
   targetProductGoldWeightGrams: number;
+  premiumPercentage?: number;
   karat?: number;
 }
 
@@ -89,6 +92,7 @@ export interface PlanCustomerEnrolment {
   joiningDate: string;
   selectedDurationMonths: number;
   deadline: string;
+  premiumPercentage: number;
   enrolmentTargetGrams: number;
   totalConfirmedMoneyPaid: number;
   currency: string;

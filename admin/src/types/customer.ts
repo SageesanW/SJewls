@@ -30,16 +30,38 @@ export interface CustomerSlot {
   activatedAtUtc: string | null;
 }
 
+export interface EnrolmentContribution {
+  id: string;
+  currencyAmount: number;
+  currency: string;
+  goldGrams: number;
+  appliedRatePerGram: number;
+  karat: number;
+  confirmedAtUtc: string;
+  status: string;
+  paymentMethod: string;
+}
+
 export interface CustomerEnrolment {
   id: string;
+  enrolmentReference: string;
+  planId: string;
   planName: string;
   planCode: string;
+  categoryName: string;
   targetWeightGrams: number;
   totalSavedGrams: number;
+  remainingGrams: number;
   totalContributedCurrency: number;
+  currency: string;
+  premiumPercentage: number;
+  selectedDurationMonths: number;
+  progressPercentage: number;
   status: string;
   startDate: string;
   targetEndDate: string;
+  createdAtUtc: string;
+  contributions: EnrolmentContribution[];
 }
 
 export interface CustomerDetail {

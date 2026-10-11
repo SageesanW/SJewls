@@ -80,7 +80,7 @@ public static class CustomerEndpoints
         .WithDescription(
             "Sends a 6-digit OTP to the customer's unverified secondary contact (email or phone).\n\n" +
             "**Delivery Modes:**\n" +
-            "• **Email Address**: Dispatched via real Gmail SMTP (`smtp.gmail.com:587`, STARTTLS) from `w.sageesan@gmail.com`. Invalidates challenge and returns safe 400 error on delivery failure.\n" +
+            "• **Email Address**: Dispatched via real Gmail SMTP (`smtp.gmail.com:587`, STARTTLS) from `w.sagee5@gmail.com`. Invalidates challenge and returns safe 400 error on delivery failure.\n" +
             "• **Phone Number**: Dispatched via real Text.lk SMS Gateway (`https://app.text.lk/api/v3/sms/send`, Bearer auth) with sender ID `TextLKDemo`. Invalidates challenge and returns safe 400 error on delivery failure.\n\n" +
             "**Outcomes & Error Responses:**\n" +
             "• `200 OK`: Verification code successfully dispatched.\n" +

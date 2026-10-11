@@ -20,6 +20,8 @@ public static class JewelleryPlanEndpoints
             [FromQuery] Guid? categoryId,
             [FromQuery] string? status,
             [FromQuery] Guid? branchId,
+            [FromQuery] DateOnly? fromDate,
+            [FromQuery] DateOnly? toDate,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 12,
             CancellationToken ct = default) =>
@@ -30,7 +32,7 @@ public static class JewelleryPlanEndpoints
             try
             {
                 var result = await service.GetPlansAsync(
-                    staffId.Value, search, categoryId, status, branchId, page, pageSize, ct);
+                    staffId.Value, search, categoryId, status, branchId, page, pageSize, fromDate, toDate, ct);
                 return Results.Ok(result);
             }
             catch (UnauthorizedAccessException ex)
@@ -41,7 +43,7 @@ public static class JewelleryPlanEndpoints
         .RequireAuthorization("StaffOnly")
         .WithName("AdminGetJewelleryPlans")
         .WithSummary("List Jewellery Plans with Card Progress")
-        .WithDescription("Retrieves a paginated card grid of jewellery plans with database-derived overall gold progress, category filtering, search, and status (Active, Scheduled, Deactivated). Branch Staff are strictly isolated to their branch; Super Admins can filter across branches.")
+        .WithDescription("Retrieves a paginated card grid of jewellery plans with database-derived overall gold progress, lifetime counts/totals, date filtering (fromDate/toDate for joining date and confirmed payment date), category filtering, search, and status. Branch Staff are strictly isolated to their branch; Super Admins can filter across branches.")
         .Produces<JewelleryPlanPagedResponse>(StatusCodes.Status200OK)
         .Produces(StatusCodes.Status401Unauthorized)
         .Produces(StatusCodes.Status403Forbidden);
@@ -51,6 +53,8 @@ public static class JewelleryPlanEndpoints
             Guid id,
             ClaimsPrincipal user,
             IJewelleryPlanService service,
+            [FromQuery] DateOnly? fromDate,
+            [FromQuery] DateOnly? toDate,
             CancellationToken ct = default) =>
         {
             var staffId = GetStaffId(user);
@@ -58,7 +62,7 @@ public static class JewelleryPlanEndpoints
 
             try
             {
-                var plan = await service.GetPlanByIdAsync(id, staffId.Value, ct);
+                var plan = await service.GetPlanByIdAsync(id, staffId.Value, fromDate, toDate, ct);
                 if (plan == null)
                 {
                     return Results.NotFound(new { message = $"Jewellery plan with ID '{id}' was not found." });

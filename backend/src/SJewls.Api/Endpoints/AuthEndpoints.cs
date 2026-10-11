@@ -61,7 +61,7 @@ public static class AuthEndpoints
         .WithDescription(
             "Generates and dispatches a 6-digit verification code to the specified contact.\n\n" +
             "**Delivery Modes:**\n" +
-            "• **Email Address**: Dispatched via real Gmail SMTP (`smtp.gmail.com:587`, STARTTLS) from `w.sageesan@gmail.com` with subject 'Your SJewls verification code'. Returns 200 OK only after the SMTP server explicitly accepts the message. If delivery fails (e.g., SMTP auth/network failure), the challenge is immediately invalidated and a safe 400 error is returned (no fallback to mock).\n" +
+            "• **Email Address**: Dispatched via real Gmail SMTP (`smtp.gmail.com:587`, STARTTLS) from `w.sagee5@gmail.com` with subject 'Your SJewls verification code'. Returns 200 OK only after the SMTP server explicitly accepts the message. If delivery fails (e.g., SMTP auth/network failure), the challenge is immediately invalidated and a safe 400 error is returned (no fallback to mock).\n" +
             "• **Phone Number**: Dispatched via real Text.lk SMS Gateway (`https://app.text.lk/api/v3/sms/send`, Bearer auth) with sender ID `TextLKDemo`. Returns 200 OK only after the SMS gateway accepts delivery. On failure, the challenge is immediately invalidated and a safe 400 error is returned.\n\n" +
             "**Outcomes & Error Responses:**\n" +
             "• `200 OK`: Verification code successfully accepted by delivery provider. Valid for 5 minutes (resend cooldown 60 seconds).\n" +

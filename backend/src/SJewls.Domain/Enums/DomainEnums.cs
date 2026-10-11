@@ -86,3 +86,17 @@ public enum RequestStatus
     Approved = 2,
     Rejected = 3
 }
+
+public enum JewelleryQuoteInputMode
+{
+    BuyGram = 1,
+    BuyAmount = 2
+}
+
+public enum JewelleryQuoteStatus
+{
+    Active = 1,
+    Used = 2,
+    Expired = 3,
+    Cancelled = 4
+}

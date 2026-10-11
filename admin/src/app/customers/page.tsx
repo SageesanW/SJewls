@@ -7,6 +7,7 @@ import { useAuth } from "../../lib/auth-context";
 import {
   CustomerListItem,
   CustomerDetail,
+  CustomerEnrolment,
   CustomerStatistics,
   CreateCustomerRequest,
 } from "../../types/customer";
@@ -70,6 +71,7 @@ export default function CustomersPage() {
   const [detailCustomer, setDetailCustomer] = useState<CustomerDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState<boolean>(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [selectedEnrolmentForPayments, setSelectedEnrolmentForPayments] = useState<CustomerEnrolment | null>(null);
 
   // State: Create Customer Modal
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
@@ -197,6 +199,7 @@ export default function CustomersPage() {
   const handleCloseDetail = () => {
     setDetailCustomer(null);
     setDetailError(null);
+    setSelectedEnrolmentForPayments(null);
   };
 
   // Handle open create customer modal
@@ -1219,7 +1222,7 @@ export default function CustomersPage() {
               onClick={handleCloseDetail}
             />
 
-            <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden z-50 flex flex-col max-h-[90vh]">
+            <div className="relative w-full max-w-5xl bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden z-50 flex flex-col max-h-[90vh]">
               {/* Header */}
               <div className="px-6 py-4 bg-[#0B3D0B] text-white flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
@@ -1406,20 +1409,133 @@ export default function CustomersPage() {
                       </div>
                     </div>
 
-                    {/* Savings Plans Section */}
-                    <div>
-                      <h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
-                        <Gem className="w-4 h-4 text-[#0B3D0B]" />
-                        <span>Registered Savings & Investment Plans</span>
-                      </h4>
+                    {/* Jewellery Investments Section */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                          <Gem className="w-4 h-4 text-[#B8860B]" />
+                          <span>Jewellery Investments</span>
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900">
+                            {detailCustomer.jewelleryEnrolments.length}
+                          </span>
+                        </h4>
+                        <span className="text-[11px] text-gray-500 font-medium">
+                          Historical & Active Enrolments
+                        </span>
+                      </div>
 
-                      {detailCustomer.chituSlots.length === 0 &&
-                      detailCustomer.jewelleryEnrolments.length === 0 ? (
+                      {detailCustomer.jewelleryEnrolments.length === 0 ? (
                         <div className="p-4 rounded-xl border border-dashed border-gray-300 text-center text-xs text-gray-500">
-                          This customer currently has no active or closed savings plans.
+                          This customer has no jewellery plan investments recorded.
                         </div>
                       ) : (
-                        <div className="space-y-2.5">
+                        <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-2xs">
+                          <table className="min-w-full divide-y divide-gray-200 text-xs">
+                            <thead className="bg-gray-50 text-gray-600 font-semibold">
+                              <tr>
+                                <th className="px-3.5 py-2.5 text-left whitespace-nowrap">Reference</th>
+                                <th className="px-3.5 py-2.5 text-left whitespace-nowrap">Plan & Category</th>
+                                <th className="px-3.5 py-2.5 text-left whitespace-nowrap">Dates</th>
+                                <th className="px-3.5 py-2.5 text-center whitespace-nowrap">Duration</th>
+                                <th className="px-3.5 py-2.5 text-right whitespace-nowrap">Target</th>
+                                <th className="px-3.5 py-2.5 text-right whitespace-nowrap">Accumulated / Remaining</th>
+                                <th className="px-3.5 py-2.5 text-right whitespace-nowrap">Total Paid (LKR)</th>
+                                <th className="px-3.5 py-2.5 text-left whitespace-nowrap">Progress & Status</th>
+                                <th className="px-3.5 py-2.5 text-center whitespace-nowrap">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 bg-white">
+                              {detailCustomer.jewelleryEnrolments.map((enr) => {
+                                const statusColors: Record<string, string> = {
+                                  Active: "bg-emerald-100 text-emerald-800 border-emerald-200",
+                                  Completed: "bg-blue-100 text-blue-800 border-blue-200",
+                                  Matured: "bg-purple-100 text-purple-800 border-purple-200",
+                                  Closed: "bg-gray-100 text-gray-700 border-gray-200",
+                                  Cancelled: "bg-red-100 text-red-800 border-red-200",
+                                };
+                                const badgeClass = statusColors[enr.status] || "bg-amber-100 text-amber-800 border-amber-200";
+                                const remGrams = enr.remainingGrams ?? Math.max(0, enr.targetWeightGrams - enr.totalSavedGrams);
+
+                                return (
+                                  <tr key={enr.id} className="hover:bg-amber-50/20 transition-colors">
+                                    <td className="px-3.5 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
+                                      <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-800 border border-gray-200">
+                                        {enr.enrolmentReference || `ENR-${enr.id.substring(0, 8).toUpperCase()}`}
+                                      </span>
+                                    </td>
+                                    <td className="px-3.5 py-3 whitespace-nowrap">
+                                      <div className="font-bold text-gray-900">{enr.planName}</div>
+                                      <div className="text-[11px] text-gray-500">{enr.categoryName || "General Plan"}</div>
+                                    </td>
+                                    <td className="px-3.5 py-3 whitespace-nowrap">
+                                      <div className="text-gray-900 font-medium">Joined: {enr.startDate}</div>
+                                      <div className="text-[11px] text-gray-500">Due: {enr.targetEndDate}</div>
+                                    </td>
+                                    <td className="px-3.5 py-3 text-center whitespace-nowrap">
+                                      <span className="px-2 py-0.5 rounded-md bg-gray-100 font-semibold text-gray-700">
+                                        {enr.selectedDurationMonths} mos
+                                      </span>
+                                    </td>
+                                    <td className="px-3.5 py-3 text-right font-semibold text-gray-900 whitespace-nowrap">
+                                      {enr.targetWeightGrams.toFixed(2)}g
+                                    </td>
+                                    <td className="px-3.5 py-3 text-right whitespace-nowrap">
+                                      <span className="font-bold text-emerald-700">{enr.totalSavedGrams.toFixed(2)}g</span>
+                                      <span className="text-gray-400 mx-1">/</span>
+                                      <span className="text-gray-500">{remGrams.toFixed(2)}g</span>
+                                    </td>
+                                    <td className="px-3.5 py-3 text-right font-bold text-gray-900 whitespace-nowrap">
+                                      {enr.currency || "LKR"} {enr.totalContributedCurrency.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </td>
+                                    <td className="px-3.5 py-3 whitespace-nowrap">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <div className="w-16 bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                                          <div
+                                            className="bg-emerald-600 h-1.5 rounded-full"
+                                            style={{ width: `${Math.min(100, Math.max(0, enr.progressPercentage || 0))}%` }}
+                                          />
+                                        </div>
+                                        <span className="text-[10px] font-bold text-gray-600">
+                                          {(enr.progressPercentage || 0).toFixed(0)}%
+                                        </span>
+                                      </div>
+                                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${badgeClass}`}>
+                                        {enr.status}
+                                      </span>
+                                    </td>
+                                    <td className="px-3.5 py-3 text-center whitespace-nowrap">
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedEnrolmentForPayments(enr)}
+                                        className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-[#0B3D0B] text-white hover:bg-[#072707] transition-colors cursor-pointer"
+                                      >
+                                        View History
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Chitu Savings Slots Section */}
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                        <CreditCard className="w-4 h-4 text-[#0B3D0B]" />
+                        <span>Chitu Savings Slots</span>
+                        <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-900">
+                          {detailCustomer.chituSlots.length}
+                        </span>
+                      </h4>
+                      {detailCustomer.chituSlots.length === 0 ? (
+                        <div className="p-4 rounded-xl border border-dashed border-gray-300 text-center text-xs text-gray-500">
+                          This customer has no active or closed Chitu savings slots.
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                           {detailCustomer.chituSlots.map((slot) => (
                             <div
                               key={slot.id}
@@ -1438,25 +1554,6 @@ export default function CustomersPage() {
                               </span>
                             </div>
                           ))}
-
-                          {detailCustomer.jewelleryEnrolments.map((enr) => (
-                            <div
-                              key={enr.id}
-                              className="p-3 rounded-xl border border-gray-200 bg-amber-50/30 flex items-center justify-between text-xs"
-                            >
-                              <div>
-                                <span className="font-bold text-gray-900 block">
-                                  {enr.planName}
-                                </span>
-                                <span className="text-gray-500 text-[11px]">
-                                  Target: {enr.targetWeightGrams}g | Saved: {enr.totalSavedGrams}g
-                                </span>
-                              </div>
-                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
-                                {enr.status}
-                              </span>
-                            </div>
-                          ))}
                         </div>
                       )}
                     </div>
@@ -1471,6 +1568,137 @@ export default function CustomersPage() {
                   className="px-4 py-2 rounded-xl text-xs font-bold text-gray-700 bg-white border border-gray-300 hover:bg-gray-100 transition-colors cursor-pointer"
                 >
                   Close Profile
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ================= ENROLMENT PAYMENT HISTORY MODAL ================= */}
+        {selectedEnrolmentForPayments && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
+            <div
+              className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+              onClick={() => setSelectedEnrolmentForPayments(null)}
+            />
+
+            <div className="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden z-60 flex flex-col max-h-[85vh]">
+              {/* Header */}
+              <div className="px-6 py-4 bg-[#0B3D0B] text-white flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Gem className="w-5 h-5 text-[#FFD700]" />
+                    <h3 className="text-base font-bold">
+                      {selectedEnrolmentForPayments.planName}
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-white/20 text-white">
+                      {selectedEnrolmentForPayments.enrolmentReference || `ENR-${selectedEnrolmentForPayments.id.substring(0, 8).toUpperCase()}`}
+                    </span>
+                  </div>
+                  <p className="text-xs text-emerald-200 mt-0.5">
+                    Category: {selectedEnrolmentForPayments.categoryName || "General Plan"} | Status: {selectedEnrolmentForPayments.status}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSelectedEnrolmentForPayments(null)}
+                  className="p-1 rounded-lg text-emerald-200 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Summary Stats Cards */}
+              <div className="p-5 bg-gray-50 border-b border-gray-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div className="p-3 bg-white rounded-xl border border-gray-200 shadow-2xs">
+                  <span className="text-gray-500 block text-[11px]">Target Weight</span>
+                  <span className="text-sm font-bold text-gray-900">{selectedEnrolmentForPayments.targetWeightGrams.toFixed(2)}g</span>
+                </div>
+                <div className="p-3 bg-white rounded-xl border border-gray-200 shadow-2xs">
+                  <span className="text-gray-500 block text-[11px]">Accumulated Gold</span>
+                  <span className="text-sm font-bold text-emerald-700">{selectedEnrolmentForPayments.totalSavedGrams.toFixed(2)}g</span>
+                </div>
+                <div className="p-3 bg-white rounded-xl border border-gray-200 shadow-2xs">
+                  <span className="text-gray-500 block text-[11px]">Remaining Target</span>
+                  <span className="text-sm font-bold text-amber-700">
+                    {(selectedEnrolmentForPayments.remainingGrams ?? Math.max(0, selectedEnrolmentForPayments.targetWeightGrams - selectedEnrolmentForPayments.totalSavedGrams)).toFixed(2)}g
+                  </span>
+                </div>
+                <div className="p-3 bg-white rounded-xl border border-gray-200 shadow-2xs">
+                  <span className="text-gray-500 block text-[11px]">Total Paid (LKR)</span>
+                  <span className="text-sm font-bold text-gray-900">
+                    {selectedEnrolmentForPayments.currency || "LKR"} {selectedEnrolmentForPayments.totalContributedCurrency.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+
+              {/* Payments Content */}
+              <div className="p-6 overflow-y-auto">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">
+                  Confirmed Payment History ({selectedEnrolmentForPayments.contributions?.length || 0})
+                </h4>
+
+                {(!selectedEnrolmentForPayments.contributions || selectedEnrolmentForPayments.contributions.length === 0) ? (
+                  <div className="p-6 rounded-xl border border-dashed border-gray-300 text-center text-xs text-gray-500">
+                    No payment contributions have been recorded yet for this jewellery enrolment.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-2xs">
+                    <table className="min-w-full divide-y divide-gray-200 text-xs">
+                      <thead className="bg-gray-50 text-gray-600 font-semibold">
+                        <tr>
+                          <th className="px-3 py-2.5 text-left whitespace-nowrap">Confirmed Date</th>
+                          <th className="px-3 py-2.5 text-right whitespace-nowrap">Amount Paid</th>
+                          <th className="px-3 py-2.5 text-right whitespace-nowrap">Gold Credited</th>
+                          <th className="px-3 py-2.5 text-center whitespace-nowrap">Karat</th>
+                          <th className="px-3 py-2.5 text-right whitespace-nowrap">Applied Rate</th>
+                          <th className="px-3 py-2.5 text-center whitespace-nowrap">Method</th>
+                          <th className="px-3 py-2.5 text-center whitespace-nowrap">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 bg-white">
+                        {selectedEnrolmentForPayments.contributions.map((c) => (
+                          <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-3 py-2.5 whitespace-nowrap text-gray-700">
+                              {new Date(c.confirmedAtUtc).toLocaleString()}
+                            </td>
+                            <td className="px-3 py-2.5 whitespace-nowrap text-right font-bold text-gray-900">
+                              {c.currency || "LKR"} {c.currencyAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-3 py-2.5 whitespace-nowrap text-right font-bold text-emerald-700">
+                              {c.goldGrams.toFixed(4)}g
+                            </td>
+                            <td className="px-3 py-2.5 whitespace-nowrap text-center font-semibold text-gray-700">
+                              {c.karat}K
+                            </td>
+                            <td className="px-3 py-2.5 whitespace-nowrap text-right text-gray-600">
+                              LKR {c.appliedRatePerGram.toLocaleString()}/g
+                            </td>
+                            <td className="px-3 py-2.5 whitespace-nowrap text-center">
+                              <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-[10px] font-semibold">
+                                {c.paymentMethod}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2.5 whitespace-nowrap text-center">
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                                {c.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-3.5 bg-gray-50 border-t border-gray-200 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSelectedEnrolmentForPayments(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-gray-700 bg-white border border-gray-300 hover:bg-gray-100 transition-colors cursor-pointer"
+                >
+                  Close
                 </button>
               </div>
             </div>

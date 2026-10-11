@@ -1,4 +1,8 @@
+using System.Net;
+using System.Net.Http;
 using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -10,6 +14,21 @@ using SJewls.Infrastructure.Services;
 using Xunit;
 
 namespace SJewls.Tests;
+
+public class MockHttpMessageHandler : HttpMessageHandler
+{
+    private readonly Func<HttpRequestMessage, HttpResponseMessage> _handler;
+
+    public MockHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> handler)
+    {
+        _handler = handler;
+    }
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(_handler(request));
+    }
+}
 
 public class FakeSmsSender : ISmsSender
 {
@@ -296,5 +315,115 @@ public class OtpDeliveryAndHashingTests
 
         // Assert: OTPs are random and varied (not just 123456 repeated)
         Assert.True(generatedOtps.Count > 1, "OTP values must be random and unique across requests");
+    }
+
+    [Fact]
+    public async Task EmailOtpProvider_OAuthTokenOwnerVerification_Succeeds_WhenOwnerMatchesExpectedSender()
+    {
+        // Arrange
+        var expectedSender = "w.sagee5@gmail.com";
+        var options = Options.Create(new EmailOptions
+        {
+            Host = "smtp.gmail.com",
+            Port = 587,
+            Username = "w.sagee5@gmail.com",
+            FromAddress = "w.sagee5@gmail.com",
+            FromName = "SJewls",
+            AuthMechanism = "OAuth2",
+            ClientId = "test-client-id",
+            ClientSecret = "test-client-secret",
+            RefreshToken = "test-refresh-token"
+        });
+
+        var handler = new MockHttpMessageHandler(request =>
+        {
+            if (request.RequestUri?.AbsoluteUri.Contains("gmail.googleapis.com") == true)
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        JsonSerializer.Serialize(new { emailAddress = "w.sagee5@gmail.com" }),
+                        Encoding.UTF8,
+                        "application/json")
+                };
+            }
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+
+        using var httpClient = new HttpClient(handler);
+        var provider = new EmailOtpProvider(options, NullLogger<EmailOtpProvider>.Instance, httpClient);
+
+        // Act & Assert (Should not throw)
+        await provider.VerifyOAuthTokenOwnerAsync(httpClient, "test-access-token", expectedSender);
+    }
+
+    [Fact]
+    public async Task EmailOtpProvider_OAuthTokenOwnerVerification_Throws_WhenOwnerMismatched()
+    {
+        // Arrange
+        var expectedSender = "w.sagee5@gmail.com";
+        var options = Options.Create(new EmailOptions
+        {
+            Host = "smtp.gmail.com",
+            Port = 587,
+            Username = "w.sagee5@gmail.com",
+            FromAddress = "w.sagee5@gmail.com",
+            FromName = "SJewls",
+            AuthMechanism = "OAuth2",
+            ClientId = "test-client-id",
+            ClientSecret = "test-client-secret",
+            RefreshToken = "test-refresh-token"
+        });
+
+        var handler = new MockHttpMessageHandler(request =>
+        {
+            if (request.RequestUri?.AbsoluteUri.Contains("gmail.googleapis.com") == true)
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        JsonSerializer.Serialize(new { emailAddress = "unauthorized-account@gmail.com" }),
+                        Encoding.UTF8,
+                        "application/json")
+                };
+            }
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+
+        using var httpClient = new HttpClient(handler);
+        var provider = new EmailOtpProvider(options, NullLogger<EmailOtpProvider>.Instance, httpClient);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            provider.VerifyOAuthTokenOwnerAsync(httpClient, "test-access-token", expectedSender));
+
+        Assert.Contains("unauthorized-account@gmail.com", ex.Message);
+        Assert.Contains(expectedSender, ex.Message);
+    }
+
+    [Fact]
+    public async Task EmailOtpProvider_Throws_WhenOAuth2Requested_ButCredentialsMissing()
+    {
+        // Arrange: AuthMechanism is OAuth2, but ClientId/ClientSecret/RefreshToken are null or empty
+        var options = Options.Create(new EmailOptions
+        {
+            Host = "smtp.gmail.com",
+            Port = 587,
+            Username = "w.sagee5@gmail.com",
+            FromAddress = "w.sagee5@gmail.com",
+            FromName = "SJewls",
+            AuthMechanism = "OAuth2",
+            ClientId = "",
+            ClientSecret = "",
+            RefreshToken = ""
+        });
+
+        var provider = new EmailOtpProvider(options, NullLogger<EmailOtpProvider>.Instance);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            provider.SendOtpEmailAsync("recipient@example.com", "123456", 5));
+
+        Assert.Contains("Email OAuth2 credentials are incomplete", ex.Message);
     }
 }

@@ -223,8 +223,8 @@ Verifies the submitted 6-digit OTP. Returns either direct dashboard access token
     "fullName": "sai",
     "nic": "199928918232",
     "phoneNumber": "+94789832243",
-    "email": "w.sageesan@gmail.com",
-    "primaryContact": "w.sageesan@gmail.com",
+    "email": "w.sagee5@gmail.com",
+    "primaryContact": "w.sagee5@gmail.com",
     "primaryBranchCode": "JAF-01",
     "isProfileComplete": false
   },

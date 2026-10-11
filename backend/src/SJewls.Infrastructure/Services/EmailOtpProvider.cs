@@ -1,5 +1,7 @@
+using System.Net.Http.Headers;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Extensions.Logging;
@@ -14,11 +16,16 @@ public class EmailOtpProvider : IEmailOtpProvider, IEmailSender
 {
     private readonly EmailOptions _options;
     private readonly ILogger<EmailOtpProvider> _logger;
+    private readonly HttpClient? _httpClient;
 
-    public EmailOtpProvider(IOptions<EmailOptions> options, ILogger<EmailOtpProvider> logger)
+    public EmailOtpProvider(
+        IOptions<EmailOptions> options,
+        ILogger<EmailOtpProvider> logger,
+        HttpClient? httpClient = null)
     {
         _options = options.Value;
         _logger = logger;
+        _httpClient = httpClient;
     }
 
     public async Task SendOtpEmailAsync(string toEmail, string otpCode, int expiryMinutes, CancellationToken cancellationToken = default)
@@ -33,14 +40,13 @@ public class EmailOtpProvider : IEmailOtpProvider, IEmailSender
             throw new ArgumentException("Verification code cannot be empty.", nameof(otpCode));
         }
 
-        var password = _options.Password?.Replace(" ", "").Trim();
-        if (string.IsNullOrWhiteSpace(password))
-        {
-            throw new InvalidOperationException("Email:Password is not configured. Please configure your Gmail App Password via User Secrets or environment variable.");
-        }
+        ValidateEmailCredentials();
+
+        var senderAddress = GetSenderAddress();
+        var senderName = GetSenderName();
 
         var message = new MimeMessage();
-        message.From.Add(new MailboxAddress(_options.FromName, _options.FromAddress));
+        message.From.Add(new MailboxAddress(senderName, senderAddress));
         message.To.Add(new MailboxAddress(toEmail, toEmail));
         message.Subject = "Your SJewls verification code";
 
@@ -103,14 +109,13 @@ $@"<!DOCTYPE html>
             throw new ArgumentException("Recipient email address cannot be empty.", nameof(toEmail));
         }
 
-        var password = _options.Password?.Replace(" ", "").Trim();
-        if (string.IsNullOrWhiteSpace(password))
-        {
-            throw new InvalidOperationException("Email:Password is not configured. Please configure your Gmail App Password via User Secrets or environment variable.");
-        }
+        ValidateEmailCredentials();
+
+        var senderAddress = GetSenderAddress();
+        var senderName = GetSenderName();
 
         var message = new MimeMessage();
-        message.From.Add(new MailboxAddress(_options.FromName, _options.FromAddress));
+        message.From.Add(new MailboxAddress(senderName, senderAddress));
         message.To.Add(new MailboxAddress(toEmail, toEmail));
         message.Subject = subject;
         message.Body = new TextPart("plain") { Text = body };
@@ -118,16 +123,109 @@ $@"<!DOCTYPE html>
         await SendMessageInternalAsync(toEmail, message, cancellationToken);
     }
 
+    private string GetSenderAddress()
+    {
+        return !string.IsNullOrWhiteSpace(_options.FromAddress)
+            ? _options.FromAddress
+            : (!string.IsNullOrWhiteSpace(_options.Username) ? _options.Username : "w.sagee5@gmail.com");
+    }
+
+    private string GetSenderName()
+    {
+        return !string.IsNullOrWhiteSpace(_options.FromName) ? _options.FromName : "SJewls";
+    }
+
+    private void ValidateEmailCredentials()
+    {
+        var isOAuth2 = string.Equals(_options.AuthMechanism, "OAuth2", StringComparison.OrdinalIgnoreCase) ||
+                       (!string.IsNullOrWhiteSpace(_options.RefreshToken) && !string.IsNullOrWhiteSpace(_options.ClientId));
+
+        if (isOAuth2)
+        {
+            if (string.IsNullOrWhiteSpace(_options.ClientId) ||
+                string.IsNullOrWhiteSpace(_options.ClientSecret) ||
+                string.IsNullOrWhiteSpace(_options.RefreshToken))
+            {
+                throw new InvalidOperationException(
+                    "Email OAuth2 credentials are incomplete. Please configure Email:ClientId, Email:ClientSecret, " +
+                    "and Email:RefreshToken (authorized for the sender) via User Secrets or environment variables.");
+            }
+        }
+        else
+        {
+            var password = _options.Password?.Replace(" ", "").Trim();
+            if (string.IsNullOrWhiteSpace(password))
+            {
+                throw new InvalidOperationException(
+                    "Email credentials are not configured. Please configure Email:Password (Gmail App Password) " +
+                    "or Email:RefreshToken / Email:ClientId / Email:ClientSecret (Google OAuth2) via User Secrets or environment variable.");
+            }
+        }
+    }
+
     private async Task SendMessageInternalAsync(string toEmail, MimeMessage message, CancellationToken cancellationToken)
+    {
+        if (_options.IsOAuth2)
+        {
+            await SendViaGmailApiAsync(toEmail, message, cancellationToken);
+            return;
+        }
+
+        await SendViaSmtpAsync(toEmail, message, cancellationToken);
+    }
+
+    private async Task SendViaGmailApiAsync(string toEmail, MimeMessage message, CancellationToken cancellationToken)
+    {
+        var senderEmail = GetSenderAddress();
+        var http = _httpClient ?? new HttpClient();
+
+        // 1. Refresh access token from Google OAuth2 token endpoint
+        var accessToken = await GetOAuthAccessTokenAsync(http, senderEmail, cancellationToken);
+
+        // 2. Validate token ownership / audience
+        await VerifyOAuthTokenOwnerAsync(http, accessToken, senderEmail, cancellationToken);
+
+        // 3. Serialize MimeMessage to RFC 822 format and Base64Url encode
+        using var memoryStream = new MemoryStream();
+        await message.WriteToAsync(memoryStream, cancellationToken);
+        var rawBase64Url = Convert.ToBase64String(memoryStream.ToArray())
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
+
+        // 4. Send via Gmail REST API (users/{senderEmail}/messages/send)
+        var sendUrl = $"https://gmail.googleapis.com/gmail/v1/users/{Uri.EscapeDataString(senderEmail)}/messages/send";
+        using var sendRequest = new HttpRequestMessage(HttpMethod.Post, sendUrl)
+        {
+            Content = new StringContent(
+                JsonSerializer.Serialize(new { raw = rawBase64Url }),
+                System.Text.Encoding.UTF8,
+                "application/json")
+        };
+        sendRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        var sendResponse = await http.SendAsync(sendRequest, cancellationToken);
+        var sendJson = await sendResponse.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!sendResponse.IsSuccessStatusCode)
+        {
+            _logger.LogError("Gmail API delivery failed for recipient {Recipient} from {Sender}. Status: {StatusCode}, Body: {Body}",
+                MaskEmail(toEmail), MaskEmail(senderEmail), sendResponse.StatusCode, sendJson);
+            throw new InvalidOperationException(
+                $"Gmail API delivery failed for '{senderEmail}'. Status: {sendResponse.StatusCode}, Details: {sendJson}");
+        }
+
+        _logger.LogInformation("Gmail API accepted email delivery for recipient {Recipient} from {Sender}",
+            MaskEmail(toEmail), MaskEmail(senderEmail));
+    }
+
+    private async Task SendViaSmtpAsync(string toEmail, MimeMessage message, CancellationToken cancellationToken)
     {
         using var client = new SmtpClient();
 
         try
         {
-            var password = _options.Password?.Replace(" ", "").Trim() ?? string.Empty;
-
-            // Preserve full certificate validation (CA, expiration, hostname) while tolerating
-            // macOS-specific network issues where online OCSP/CRL revocation checks time out or return unknown.
+            // Preserve full certificate validation while tolerating macOS-specific revocation check timeouts
             client.CheckCertificateRevocation = false;
             client.ServerCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) =>
             {
@@ -148,17 +246,21 @@ $@"<!DOCTYPE html>
 
             // Connect with STARTTLS
             await client.ConnectAsync(_options.Host, _options.Port, SecureSocketOptions.StartTls, cancellationToken);
-            await client.AuthenticateAsync(_options.Username, password, cancellationToken);
+
+            var password = _options.Password?.Replace(" ", "").Trim() ?? string.Empty;
+            var username = GetSenderAddress();
+            await client.AuthenticateAsync(username, password, cancellationToken);
+
             await client.SendAsync(message, cancellationToken);
             await client.DisconnectAsync(true, cancellationToken);
 
-            _logger.LogInformation("SMTP accepted email delivery for recipient {Recipient} via {Host}:{Port}",
-                MaskEmail(toEmail), _options.Host, _options.Port);
+            _logger.LogInformation("SMTP accepted email delivery for recipient {Recipient} from {Sender} via {Host}:{Port}",
+                MaskEmail(toEmail), MaskEmail(GetSenderAddress()), _options.Host, _options.Port);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "SMTP delivery failed for recipient {Recipient} via {Host}:{Port}. Error: {ErrorMessage}",
-                MaskEmail(toEmail), _options.Host, _options.Port, ex.Message);
+            _logger.LogError(ex, "SMTP delivery failed for recipient {Recipient} from {Sender} via {Host}:{Port}. Error: {ErrorMessage}",
+                MaskEmail(toEmail), MaskEmail(GetSenderAddress()), _options.Host, _options.Port, ex.Message);
 
             if (client.IsConnected)
             {
@@ -173,6 +275,118 @@ $@"<!DOCTYPE html>
             }
 
             throw;
+        }
+    }
+
+    private async Task<string> GetOAuthAccessTokenAsync(HttpClient http, string senderEmail, CancellationToken cancellationToken)
+    {
+        var tokenEndpoint = "https://oauth2.googleapis.com/token";
+        using var tokenRequest = new HttpRequestMessage(HttpMethod.Post, tokenEndpoint)
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["client_id"] = _options.ClientId!,
+                ["client_secret"] = _options.ClientSecret!,
+                ["refresh_token"] = _options.RefreshToken!,
+                ["grant_type"] = "refresh_token"
+            })
+        };
+
+        var tokenResponse = await http.SendAsync(tokenRequest, cancellationToken);
+        var tokenJson = await tokenResponse.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!tokenResponse.IsSuccessStatusCode)
+        {
+            _logger.LogError("Failed to refresh Google OAuth2 access token for {Sender}. Status: {StatusCode}, Body: {Body}",
+                MaskEmail(senderEmail), tokenResponse.StatusCode, tokenJson);
+            throw new InvalidOperationException(
+                $"Failed to refresh Google OAuth2 access token for '{senderEmail}'. Google responded with {tokenResponse.StatusCode}: {tokenJson}");
+        }
+
+        using var doc = JsonDocument.Parse(tokenJson);
+        if (!doc.RootElement.TryGetProperty("access_token", out var accessTokenProp))
+        {
+            throw new InvalidOperationException("Google OAuth2 token endpoint did not return an 'access_token'.");
+        }
+
+        var accessToken = accessTokenProp.GetString();
+        if (string.IsNullOrWhiteSpace(accessToken))
+        {
+            throw new InvalidOperationException("Retrieved Google OAuth2 access token is empty.");
+        }
+
+        return accessToken;
+    }
+
+    public async Task VerifyOAuthTokenOwnerAsync(HttpClient http, string accessToken, string expectedSenderEmail, CancellationToken cancellationToken = default)
+    {
+        string? authenticatedEmail = null;
+
+        // Try 1: Gmail API profile endpoint (most specific for Gmail sender)
+        try
+        {
+            using var profileRequest = new HttpRequestMessage(HttpMethod.Get, "https://gmail.googleapis.com/gmail/v1/users/me/profile");
+            profileRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+            var profileResponse = await http.SendAsync(profileRequest, cancellationToken);
+            if (profileResponse.IsSuccessStatusCode)
+            {
+                var profileJson = await profileResponse.Content.ReadAsStringAsync(cancellationToken);
+                using var profileDoc = JsonDocument.Parse(profileJson);
+                if (profileDoc.RootElement.TryGetProperty("emailAddress", out var emailProp))
+                {
+                    authenticatedEmail = emailProp.GetString();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Gmail profile lookup skipped or failed during token validation.");
+        }
+
+        // Try 2: Google tokeninfo endpoint fallback
+        if (string.IsNullOrWhiteSpace(authenticatedEmail))
+        {
+            try
+            {
+                using var tokenInfoRequest = new HttpRequestMessage(HttpMethod.Get, $"https://oauth2.googleapis.com/tokeninfo?access_token={Uri.EscapeDataString(accessToken)}");
+                var tokenInfoResponse = await http.SendAsync(tokenInfoRequest, cancellationToken);
+                if (tokenInfoResponse.IsSuccessStatusCode)
+                {
+                    var tokenInfoJson = await tokenInfoResponse.Content.ReadAsStringAsync(cancellationToken);
+                    using var tokenInfoDoc = JsonDocument.Parse(tokenInfoJson);
+                    if (tokenInfoDoc.RootElement.TryGetProperty("email", out var emailProp))
+                    {
+                        authenticatedEmail = emailProp.GetString();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Google tokeninfo lookup skipped or failed during token validation.");
+            }
+        }
+
+        // Ensure the token owner strictly matches the expected sender email
+        if (!string.IsNullOrWhiteSpace(authenticatedEmail))
+        {
+            if (!string.Equals(authenticatedEmail, expectedSenderEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogError("OAuth refresh token account mismatch: Token belongs to {TokenOwner}, but sender is configured as {Sender}",
+                    MaskEmail(authenticatedEmail), MaskEmail(expectedSenderEmail));
+
+                throw new InvalidOperationException(
+                    $"The configured OAuth refresh token belongs to '{authenticatedEmail}', but Email:FromAddress is '{expectedSenderEmail}'. " +
+                    $"The OAuth refresh token must belong to '{expectedSenderEmail}'.");
+            }
+
+            _logger.LogInformation("Verified Google OAuth2 refresh token ownership matches configured sender: {Sender}",
+                MaskEmail(expectedSenderEmail));
+        }
+        else
+        {
+            _logger.LogWarning("Could not retrieve email claim from Google OAuth tokeninfo/profile for verification. Proceeding with sender {Sender}",
+                MaskEmail(expectedSenderEmail));
         }
     }
 

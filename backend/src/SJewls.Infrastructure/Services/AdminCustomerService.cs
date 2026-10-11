@@ -224,7 +224,11 @@ public class AdminCustomerService : IAdminCustomerService
             .Include(c => c.ChituSlots)
                 .ThenInclude(s => s.ChituPlan)
             .Include(c => c.JewelleryEnrolments)
-                .ThenInclude(e => e.JewelleryPlan)
+                .ThenInclude(e => e.JewelleryPlan!)
+                    .ThenInclude(p => p.Category)
+            .Include(c => c.JewelleryEnrolments)
+                .ThenInclude(e => e.Contributions)
+                    .ThenInclude(contrib => contrib.Payment)
             .FirstOrDefaultAsync(c => c.Id == customerId, cancellationToken);
 
         if (customer == null)
@@ -271,18 +275,97 @@ public class AdminCustomerService : IAdminCustomerService
                 Status = s.Status.ToString(),
                 ActivatedAtUtc = s.ActivatedAtUtc
             }).ToList(),
-            JewelleryEnrolments = customer.JewelleryEnrolments.Select(e => new AdminCustomerEnrolmentDto
+            JewelleryEnrolments = customer.JewelleryEnrolments
+                .OrderByDescending(e => e.CreatedAtUtc)
+                .Select(MapToAdminCustomerEnrolmentDto)
+                .ToList()
+        };
+    }
+
+    public async Task<List<AdminCustomerEnrolmentDto>> GetCustomerJewelleryEnrolmentsAsync(
+        Guid currentStaffId,
+        Guid customerId,
+        CancellationToken cancellationToken = default)
+    {
+        var (caller, isSuperAdmin, permittedBranchIds) = await VerifyStaffAccessAsync(currentStaffId, cancellationToken);
+
+        var customer = await _db.Customers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == customerId, cancellationToken);
+
+        if (customer == null)
+        {
+            throw new KeyNotFoundException($"Customer with ID {customerId} was not found.");
+        }
+
+        if (!isSuperAdmin && !permittedBranchIds.Contains(customer.PrimaryBranchId))
+        {
+            throw new UnauthorizedAccessException("You do not have permission to view enrolments for this customer.");
+        }
+
+        var enrolments = await _db.JewelleryEnrolments
+            .AsNoTracking()
+            .Include(e => e.JewelleryPlan!)
+                .ThenInclude(p => p.Category)
+            .Include(e => e.Contributions)
+                .ThenInclude(c => c.Payment)
+            .Where(e => e.CustomerId == customerId)
+            .OrderByDescending(e => e.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+
+        return enrolments.Select(MapToAdminCustomerEnrolmentDto).ToList();
+    }
+
+    private static AdminCustomerEnrolmentDto MapToAdminCustomerEnrolmentDto(JewelleryEnrolment e)
+    {
+        var planName = !string.IsNullOrWhiteSpace(e.PlanNameSnapshot) ? e.PlanNameSnapshot : (e.JewelleryPlan?.Name ?? "Jewellery Plan");
+        var categoryName = !string.IsNullOrWhiteSpace(e.CategoryNameSnapshot) ? e.CategoryNameSnapshot : (e.JewelleryPlan?.Category?.Name ?? string.Empty);
+        var planCode = e.JewelleryPlan?.Code ?? "JEW";
+        var remainingGrams = Math.Max(0m, e.TargetProductWeightGrams - e.TotalSavedGrams);
+
+        decimal progress = 0m;
+        if (e.TargetProductWeightGrams > 0)
+        {
+            progress = Math.Min(100m, Math.Round((e.TotalSavedGrams / e.TargetProductWeightGrams) * 100m, 1));
+        }
+
+        var contributions = e.Contributions
+            .OrderByDescending(c => c.ConfirmedAtUtc)
+            .Select(c => new EnrolmentContributionDto
             {
-                Id = e.Id,
-                PlanName = e.JewelleryPlan?.Name ?? "Jewellery Gold Plan",
-                PlanCode = e.JewelleryPlan?.Code ?? "JEW",
-                TargetWeightGrams = e.TargetProductWeightGrams,
-                TotalSavedGrams = e.TotalSavedGrams,
-                TotalContributedCurrency = e.TotalContributedCurrency,
-                Status = e.Status.ToString(),
-                StartDate = e.StartDate,
-                TargetEndDate = e.TargetEndDate
-            }).ToList()
+                Id = c.Id,
+                CurrencyAmount = c.CurrencyAmount,
+                Currency = e.Currency ?? "LKR",
+                GoldGrams = c.GoldGrams,
+                AppliedRatePerGram = c.AppliedRatePerGram,
+                Karat = c.Karat,
+                ConfirmedAtUtc = c.ConfirmedAtUtc,
+                Status = c.Payment?.Status.ToString() ?? "Succeeded",
+                PaymentMethod = c.Payment?.Method.ToString() ?? "Online"
+            })
+            .ToList();
+
+        return new AdminCustomerEnrolmentDto
+        {
+            Id = e.Id,
+            EnrolmentReference = $"ENR-{e.Id.ToString()[..8].ToUpperInvariant()}",
+            PlanId = e.JewelleryPlanId,
+            PlanName = planName,
+            PlanCode = planCode,
+            CategoryName = categoryName,
+            TargetWeightGrams = e.TargetProductWeightGrams,
+            TotalSavedGrams = e.TotalSavedGrams,
+            RemainingGrams = remainingGrams,
+            TotalContributedCurrency = e.TotalContributedCurrency,
+            Currency = e.Currency ?? "LKR",
+            PremiumPercentage = e.PremiumPercentage,
+            SelectedDurationMonths = e.SelectedDurationMonths,
+            ProgressPercentage = progress,
+            Status = e.Status.ToString(),
+            StartDate = e.StartDate,
+            TargetEndDate = e.TargetEndDate,
+            CreatedAtUtc = e.CreatedAtUtc,
+            Contributions = contributions
         };
     }
 

@@ -32,6 +32,7 @@ public class SJewlsDbContext : DbContext
     public DbSet<JewelleryPlan> JewelleryPlans => Set<JewelleryPlan>();
     public DbSet<JewelleryEnrolment> JewelleryEnrolments => Set<JewelleryEnrolment>();
     public DbSet<JewelleryContribution> JewelleryContributions => Set<JewelleryContribution>();
+    public DbSet<JewelleryPaymentQuote> JewelleryPaymentQuotes => Set<JewelleryPaymentQuote>();
 
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<PaymentAllocation> PaymentAllocations => Set<PaymentAllocation>();
@@ -206,10 +207,40 @@ public class SJewlsDbContext : DbContext
 
         modelBuilder.Entity<JewelleryEnrolment>(entity =>
         {
+            entity.HasIndex(e => new { e.CustomerId, e.IdempotencyKey })
+                  .IsUnique()
+                  .HasFilter("\"IdempotencyKey\" IS NOT NULL");
+
             entity.HasOne(e => e.JewelleryPlan)
                   .WithMany(p => p.Enrolments)
                   .HasForeignKey(e => e.JewelleryPlanId)
                   .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Customer)
+                  .WithMany(c => c.JewelleryEnrolments)
+                  .HasForeignKey(e => e.CustomerId)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<JewelleryPaymentQuote>(entity =>
+        {
+            entity.HasIndex(e => e.ExpiresAtUtc);
+            entity.HasIndex(e => new { e.JewelleryEnrolmentId, e.Status });
+
+            entity.HasOne(q => q.Customer)
+                  .WithMany()
+                  .HasForeignKey(q => q.CustomerId)
+                  .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(q => q.JewelleryEnrolment)
+                  .WithMany(e => e.Quotes)
+                  .HasForeignKey(q => q.JewelleryEnrolmentId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(q => q.Payment)
+                  .WithMany()
+                  .HasForeignKey(q => q.PaymentId)
+                  .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<JewelleryContribution>(entity =>

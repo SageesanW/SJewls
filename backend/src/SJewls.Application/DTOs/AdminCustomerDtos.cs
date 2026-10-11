@@ -99,14 +99,25 @@ public class AdminCustomerSlotDto
 public class AdminCustomerEnrolmentDto
 {
     public Guid Id { get; set; }
+    public Guid EnrolmentId => Id;
+    public string EnrolmentReference { get; set; } = string.Empty;
+    public Guid PlanId { get; set; }
     public string PlanName { get; set; } = string.Empty;
     public string PlanCode { get; set; } = string.Empty;
+    public string CategoryName { get; set; } = string.Empty;
     public decimal TargetWeightGrams { get; set; }
     public decimal TotalSavedGrams { get; set; }
+    public decimal RemainingGrams { get; set; }
     public decimal TotalContributedCurrency { get; set; }
+    public string Currency { get; set; } = "LKR";
+    public decimal PremiumPercentage { get; set; } = 5.0m;
+    public int SelectedDurationMonths { get; set; }
+    public decimal ProgressPercentage { get; set; }
     public string Status { get; set; } = string.Empty;
     public DateOnly StartDate { get; set; }
     public DateOnly TargetEndDate { get; set; }
+    public DateTimeOffset CreatedAtUtc { get; set; }
+    public List<EnrolmentContributionDto> Contributions { get; set; } = new();
 }
 
 public class AdminCustomerPagedResponse

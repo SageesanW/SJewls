@@ -82,7 +82,7 @@ All customer authentication endpoints are grouped under the **Customer Authentic
   ```
 - **Delivery Mechanisms**:
   - **Phone (`+94...`)**: Dispatched via Text.lk SMS Gateway (`TextLKDemo` sender ID). Returns `200 OK` once accepted by the gateway.
-  - **Email (`...`)**: Dispatched via Gmail SMTP (`smtp.gmail.com:587`, STARTTLS) from `w.sageesan@gmail.com`.
+  - **Email (`...`)**: Dispatched via Gmail SMTP (`smtp.gmail.com:587`, STARTTLS) from `w.sagee5@gmail.com`.
 - **Response (200 OK)**:
   ```json
   {
@@ -123,14 +123,14 @@ All customer authentication endpoints are grouped under the **Customer Authentic
         "fullName": "sai",
         "nic": "199928918232",
         "phoneNumber": "+94789832243",
-        "email": "w.sageesan@gmail.com",
-        "primaryContact": "w.sageesan@gmail.com",
+        "email": "w.sagee5@gmail.com",
+        "primaryContact": "w.sagee5@gmail.com",
         "primaryBranchCode": "JAF-01",
         "isProfileComplete": false
       },
       "registrationToken": "reg_6bff9140e5a7...",
       "registrationTokenExpiresInSeconds": 3600,
-      "verifiedContact": "w.sageesan@gmail.com",
+      "verifiedContact": "w.sagee5@gmail.com",
       "verifiedContactType": 2,
       "requiredAdditionalContactType": "Phone"
     }
@@ -504,3 +504,66 @@ curl -s -w "\nHTTP_STATUS:%{http_code}\n" -X PATCH "$BASE_URL/api/v1/admin/users
   -H "Content-Type: application/json" \
   -d '{"isActive": false, "reason": "Testing self-deactivation"}'
 ```
+
+---
+
+## 8. Customer Jewellery Investments & Plan Tracking (Scalar & API Reference)
+
+Interactive documentation available in the **Admin Scalar Explorer**: 👉 **[http://localhost:5230/scalar/admin](http://localhost:5230/scalar/admin)**
+
+### 8.1 Customer Jewellery Enrolments API
+- **Endpoint**: `GET /api/v1/admin/customers/{customerId}/jewellery-enrolments`
+- **Authorization**: Staff JWT (`StaffOnly` policy, scoped to staff branch or Super Admin).
+- **Behavior**: Retrieves all jewellery investments for the customer. Returns **one row per enrolment**, preserving historical records (Active, Completed, Matured, Closed, Cancelled).
+- **Response Fields**:
+  - `enrolmentReference`: Human-readable identifier formatted as `ENR-XXXXXXXX`.
+  - `planId`, `planName`, `planCode`: Linked jewellery plan details.
+  - `categoryName`: Plan category snapshot (e.g., `Bridal Gold`, `Coins & Bars`).
+  - `startDate`, `targetEndDate`: Joining date and maturity deadline.
+  - `selectedDurationMonths`: Chosen duration (e.g. 6, 12, 18).
+  - `targetWeightGrams`: Target gold grams for the enrolment.
+  - `totalSavedGrams`, `remainingGrams`: Net accumulated gold credit and remaining grams.
+  - `totalContributedCurrency`, `currency`: Confirmed money paid in LKR.
+  - `progressPercentage`: Progress towards target (`(totalSavedGrams / targetWeightGrams) * 100`).
+  - `status`: Enrolment status (`Active`, `Completed`, `Cancelled`, `Closed`).
+  - `contributions`: Full payment history breakdown including `currencyAmount`, `goldGrams`, `appliedRatePerGram`, `karat`, `confirmedAtUtc`, `paymentMethod`, and `status`.
+
+---
+
+### 8.2 Plan Tracking & Lifetime Figures
+- **Endpoints**:
+  - `GET /api/v1/admin/jewellery-plans` (Paginated grid)
+  - `GET /api/v1/admin/jewellery-plans/{id}` (Plan details)
+- **Lifetime Tracking Fields**:
+  - `lifetimeUniqueCustomersCount`: Lifetime distinct customers who joined this plan (including customers who later left or closed).
+  - `lifetimeTotalEnrolmentsCount`: Lifetime total enrolment instances, including repeat and historical enrolments.
+  - `lifetimeTotalCollectedLkr`: Total LKR collected from **confirmed successful payments** (`PaymentStatus.Succeeded`).
+- **Across-Plans Aggregates** (calculated before pagination):
+  - `lifetimeTotalEnrolmentsAcrossPlans`: Total lifetime enrolments across all matching plans.
+  - `lifetimeTotalCollectedLkrAcrossPlans`: Total lifetime LKR collected across all matching plans.
+
+---
+
+### 8.3 Date-Range Filtering Semantics
+Query parameters `fromDate` and `toDate` (`YYYY-MM-DD`):
+- `GET /api/v1/admin/jewellery-plans?fromDate=2025-01-01&toDate=2025-03-31`
+- **Filtered Output Fields**:
+  - `filteredUniqueCustomersCount`: Distinct customers who joined within `[fromDate, toDate]`.
+  - `filteredTotalEnrolmentsCount`: Enrolments created with joining date (`StartDate`) within `[fromDate, toDate]`.
+  - `filteredTotalCollectedLkr`: Collections from confirmed payments (`ConfirmedAtUtc`) within `[fromDate, toDate]`.
+  - `filteredTotalEnrolmentsAcrossPlans`: Aggregated across all matching plans.
+  - `filteredTotalCollectedLkrAcrossPlans`: Aggregated collections across all matching plans.
+- **Critical Accounting Rules**:
+  1. **Joining Date vs. Payment Date**: Enrolment counts filter on `StartDate`. Total collected filters on `c.ConfirmedAtUtc`.
+  2. **Cross-Period Payments**: A customer who joined *earlier* (e.g., in January) but paid *during* the selected window (e.g., in March) contributes to that period's collection total.
+  3. **Joining Without Payment**: Creating an enrolment increments enrolment count and customer count, but does **not** increase total collected (remains 0 LKR until successful payment).
+  4. **Exclusions**: Quotes, pending, failed, and cancelled payments are excluded. Payments are grouped by `PaymentId` to prevent duplicate transaction records from inflating totals.
+  5. **Gross Accounting**: Collections represent gross money received. Refunds are not subtracted and collections are never labelled profit.
+
+---
+
+### 8.4 Plan View Customers
+- **Endpoint**: `GET /api/v1/admin/jewellery-plans/{planId}/customers`
+- **One Row Per Enrolment**: A customer joining the same plan multiple times receives separate rows with independent balances, progress, deadlines, and payment histories.
+- **Preservation on Leave/Closure**: When customers leave or close enrolments, their historical enrolment records are preserved and not deleted or excluded from lifetime counts.
+

@@ -12,11 +12,15 @@ public interface IJewelleryPlanService
         Guid? branchId,
         int page,
         int pageSize,
+        DateOnly? fromDate = null,
+        DateOnly? toDate = null,
         CancellationToken ct = default);
 
     Task<JewelleryPlanDto?> GetPlanByIdAsync(
         Guid id,
         Guid staffId,
+        DateOnly? fromDate = null,
+        DateOnly? toDate = null,
         CancellationToken ct = default);
 
     Task<JewelleryPlanDto> CreatePlanAsync(

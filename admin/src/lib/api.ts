@@ -242,6 +242,10 @@ export const adminApi = {
     return fetchWithAuth<import("../types/customer").CustomerDetail>(`/api/v1/admin/customers/${id}`);
   },
 
+  async getCustomerJewelleryEnrolments(customerId: string): Promise<import("../types/customer").CustomerEnrolment[]> {
+    return fetchWithAuth<import("../types/customer").CustomerEnrolment[]>(`/api/v1/admin/customers/${customerId}/jewellery-enrolments`);
+  },
+
   // Jewellery Plan Categories
   async getJewelleryCategories(params?: {
     page?: number;

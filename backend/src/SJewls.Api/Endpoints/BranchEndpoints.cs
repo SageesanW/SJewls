@@ -186,5 +186,84 @@ public static class BranchEndpoints
         .Produces(StatusCodes.Status409Conflict)
         .Produces(StatusCodes.Status401Unauthorized)
         .Produces(StatusCodes.Status403Forbidden);
+
+        // 3. Admin Gold Rate Management Endpoints
+        app.MapPost("/api/v1/admin/gold-rates", async (
+            [FromBody] RecordGoldRateRequest request,
+            ClaimsPrincipal user,
+            SJewls.Infrastructure.Data.SJewlsDbContext db,
+            CancellationToken ct) =>
+        {
+            if (request.RatePerGram <= 0)
+            {
+                return Results.BadRequest(new { message = "Rate per gram must be greater than zero." });
+            }
+
+            var staffIdClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? user.FindFirst("sub")?.Value;
+            Guid.TryParse(staffIdClaim, out var staffId);
+
+            var goldRate = new SJewls.Domain.Entities.GoldRate
+            {
+                BranchId = request.BranchId,
+                Karat = request.Karat <= 0 ? 24 : request.Karat,
+                RatePerGram = request.RatePerGram,
+                EffectiveFromUtc = request.EffectiveFromUtc ?? DateTimeOffset.UtcNow,
+                RecordedByStaffId = staffId != Guid.Empty ? staffId : Guid.Parse("c0000000-0000-0000-0000-000000000001")
+            };
+
+            db.GoldRates.Add(goldRate);
+            await db.SaveChangesAsync(ct);
+
+            return Results.Created($"/api/v1/admin/gold-rates/{goldRate.Id}", new
+            {
+                id = goldRate.Id,
+                branchId = goldRate.BranchId,
+                karat = goldRate.Karat,
+                ratePerGram = goldRate.RatePerGram,
+                effectiveFromUtc = goldRate.EffectiveFromUtc
+            });
+        })
+        .RequireAuthorization("StaffOnly")
+        .WithTags("Admin Gold Rates")
+        .WithName("AdminRecordGoldRate")
+        .WithSummary("Record Branch Gold Rate")
+        .WithDescription("Records a branch gold rate in LKR per gram for calculations and customer quotes.")
+        .Produces(StatusCodes.Status201Created)
+        .Produces(StatusCodes.Status400BadRequest)
+        .Produces(StatusCodes.Status401Unauthorized);
+
+        app.MapGet("/api/v1/admin/gold-rates", async (
+            [FromQuery] Guid? branchId,
+            SJewls.Infrastructure.Data.SJewlsDbContext db,
+            CancellationToken ct) =>
+        {
+            var query = Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AsNoTracking(db.GoldRates);
+            if (branchId.HasValue)
+            {
+                query = query.Where(r => r.BranchId == branchId.Value);
+            }
+            var list = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+                query.OrderByDescending(r => r.EffectiveFromUtc)
+                    .Take(50)
+                    .Select(r => new
+                    {
+                        id = r.Id,
+                        branchId = r.BranchId,
+                        karat = r.Karat,
+                        ratePerGram = r.RatePerGram,
+                        effectiveFromUtc = r.EffectiveFromUtc
+                    }), ct);
+            return Results.Ok(list);
+        })
+        .RequireAuthorization("StaffOnly")
+        .WithTags("Admin Gold Rates")
+        .WithName("AdminGetGoldRates")
+        .WithSummary("Get Recorded Gold Rates")
+        .Produces(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status401Unauthorized);
     }
 }
+
+public record RecordGoldRateRequest(Guid BranchId, int Karat, decimal RatePerGram, DateTimeOffset? EffectiveFromUtc, string? Notes);
+

@@ -235,5 +235,40 @@ public static class AdminCustomerEndpoints
         .Produces(StatusCodes.Status400BadRequest)
         .Produces(StatusCodes.Status403Forbidden)
         .Produces(StatusCodes.Status404NotFound);
+
+        // 7. GET /api/v1/admin/customers/{customerId:guid}/jewellery-enrolments
+        group.MapGet("/{customerId:guid}/jewellery-enrolments", async (
+            Guid customerId,
+            ClaimsPrincipal user,
+            IAdminCustomerService customerService,
+            CancellationToken ct) =>
+        {
+            var sub = user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? user.FindFirst("sub")?.Value;
+            if (!Guid.TryParse(sub, out var currentStaffId))
+            {
+                return Results.Unauthorized();
+            }
+
+            try
+            {
+                var enrolments = await customerService.GetCustomerJewelleryEnrolmentsAsync(currentStaffId, customerId, ct);
+                return Results.Ok(enrolments);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.NotFound(new { message = ex.Message });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Results.Json(new { message = ex.Message }, statusCode: StatusCodes.Status403Forbidden);
+            }
+        })
+        .WithName("AdminGetCustomerJewelleryEnrolments")
+        .WithSummary("Get Customer's Jewellery Plan Enrolments")
+        .WithDescription("Retrieves all jewellery plan enrolments for an authorized customer, including historical, completed, and closed enrolments with full payment and contribution history.")
+        .Produces<List<AdminCustomerEnrolmentDto>>(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status401Unauthorized)
+        .Produces(StatusCodes.Status403Forbidden)
+        .Produces(StatusCodes.Status404NotFound);
     }
 }

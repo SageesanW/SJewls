@@ -21,6 +21,8 @@ public class JewelleryPlanDto
     public decimal TargetProductGoldWeightGrams { get; set; }
     public int Karat { get; set; } = 24;
 
+    public decimal PremiumPercentage { get; set; } = 5.0m;
+
     public int[] AllowedDurationsMonths { get; set; } = Array.Empty<int>();
     public DateOnly StartDate { get; set; }
 
@@ -33,6 +35,16 @@ public class JewelleryPlanDto
     public decimal TotalNetAccumulatedGrams { get; set; }
     public decimal TotalTargetGramsAcrossEnrolments { get; set; }
     public decimal OverallProgressPercentage { get; set; }
+
+    // Lifetime Plan Tracking metrics
+    public int LifetimeUniqueCustomersCount { get; set; }
+    public int LifetimeTotalEnrolmentsCount { get; set; }
+    public decimal LifetimeTotalCollectedLkr { get; set; }
+
+    // Date-filtered metrics (populated when date filters are specified)
+    public int? FilteredUniqueCustomersCount { get; set; }
+    public int? FilteredTotalEnrolmentsCount { get; set; }
+    public decimal? FilteredTotalCollectedLkr { get; set; }
 
     public DateTimeOffset CreatedAtUtc { get; set; }
     public DateTimeOffset? UpdatedAtUtc { get; set; }
@@ -52,6 +64,12 @@ public class JewelleryPlanPagedResponse
     public int ActiveCount { get; set; }
     public int ScheduledCount { get; set; }
     public int DeactivatedCount { get; set; }
+
+    // Lifetime and date-filtered aggregates across all matching plans before pagination
+    public int LifetimeTotalEnrolmentsAcrossPlans { get; set; }
+    public decimal LifetimeTotalCollectedLkrAcrossPlans { get; set; }
+    public int? FilteredTotalEnrolmentsAcrossPlans { get; set; }
+    public decimal? FilteredTotalCollectedLkrAcrossPlans { get; set; }
 }
 
 public class CreateJewelleryPlanRequest
@@ -83,6 +101,9 @@ public class CreateJewelleryPlanRequest
     [Range(0.0001, 10000.0, ErrorMessage = "Target gold weight must be a positive number of grams.")]
     public decimal TargetProductGoldWeightGrams { get; set; }
 
+    [Range(0.0, 99.9999, ErrorMessage = "Premium percentage must be between 0% and 99.99%.")]
+    public decimal PremiumPercentage { get; set; } = 5.0m;
+
     public int Karat { get; set; } = 24;
 }
 
@@ -112,6 +133,9 @@ public class UpdateJewelleryPlanRequest
     [Required(ErrorMessage = "Target gold grams is required.")]
     [Range(0.0001, 10000.0, ErrorMessage = "Target gold weight must be a positive number of grams.")]
     public decimal TargetProductGoldWeightGrams { get; set; }
+
+    [Range(0.0, 99.9999, ErrorMessage = "Premium percentage must be between 0% and 99.99%.")]
+    public decimal PremiumPercentage { get; set; } = 5.0m;
 
     public int Karat { get; set; } = 24;
 }
@@ -143,6 +167,7 @@ public class PlanCustomersPagedResponse
 public class PlanCustomerEnrolmentDto
 {
     public Guid EnrolmentId { get; set; }
+    public string EnrolmentReference { get; set; } = string.Empty;
     public Guid CustomerId { get; set; }
     public string CustomerName { get; set; } = string.Empty;
     public string PhoneNumber { get; set; } = string.Empty;
@@ -152,6 +177,7 @@ public class PlanCustomerEnrolmentDto
     public int SelectedDurationMonths { get; set; }
     public DateOnly Deadline { get; set; }
 
+    public decimal PremiumPercentage { get; set; }
     public decimal EnrolmentTargetGrams { get; set; }
     public decimal TotalConfirmedMoneyPaid { get; set; }
     public string Currency { get; set; } = "LKR";

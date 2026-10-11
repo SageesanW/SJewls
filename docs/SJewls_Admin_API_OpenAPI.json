@@ -2,7 +2,7 @@
   "openapi": "3.0.1",
   "info": {
     "title": "SJewls Admin & Staff Portal API",
-    "description": "API endpoints for the SJewls Admin Web Portal \u2014 Staff Authentication, Password Recovery, Staff User Management, Customer Management with Full Unmasked NIC, and Branch Statistics.",
+    "description": "API endpoints for the SJewls Admin Web Portal — Staff Authentication, Password Recovery, Staff User Management, Customer Management with Full Unmasked NIC, and Branch Statistics.",
     "version": "v1"
   },
   "servers": [
@@ -740,6 +740,52 @@
         }
       }
     },
+    "/api/v1/admin/customers/{customerId}/jewellery-enrolments": {
+      "get": {
+        "tags": [
+          "Admin Customers"
+        ],
+        "summary": "Get Customer's Jewellery Plan Enrolments",
+        "description": "Retrieves all jewellery plan enrolments for an authorized customer, including historical, completed, and closed enrolments with full payment and contribution history.",
+        "operationId": "AdminGetCustomerJewelleryEnrolments",
+        "parameters": [
+          {
+            "name": "customerId",
+            "in": "path",
+            "required": true,
+            "style": "simple",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AdminCustomerEnrolmentDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
     "/api/v1/admin/jewellery-categories": {
       "get": {
         "tags": [
@@ -1107,7 +1153,7 @@
           "Admin Jewellery Plans"
         ],
         "summary": "List Jewellery Plans with Card Progress",
-        "description": "Retrieves a paginated card grid of jewellery plans with database-derived overall gold progress, category filtering, search, and status (Active, Scheduled, Deactivated). Branch Staff are strictly isolated to their branch; Super Admins can filter across branches.",
+        "description": "Retrieves a paginated card grid of jewellery plans with database-derived overall gold progress, lifetime counts/totals, date filtering (fromDate/toDate for joining date and confirmed payment date), category filtering, search, and status. Branch Staff are strictly isolated to their branch; Super Admins can filter across branches.",
         "operationId": "AdminGetJewelleryPlans",
         "parameters": [
           {
@@ -1142,6 +1188,24 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "fromDate",
+            "in": "query",
+            "style": "form",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "toDate",
+            "in": "query",
+            "style": "form",
+            "schema": {
+              "type": "string",
+              "format": "date"
             }
           },
           {
@@ -1244,6 +1308,24 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "fromDate",
+            "in": "query",
+            "style": "form",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "toDate",
+            "in": "query",
+            "style": "form",
+            "schema": {
+              "type": "string",
+              "format": "date"
             }
           }
         ],
@@ -1522,7 +1604,7 @@
           "Admin Jewellery Plans"
         ],
         "summary": "Calculate Gold Rate Financial Quote",
-        "description": "Calculates gold contribution conversion using the current applicable 24K branch rate. Supports conversion by grams (grams \u00d7 rate = payable money) and by money (money \u00f7 rate = credited grams) with strict 4-decimal gram precision and remainder checks.",
+        "description": "Calculates gold contribution conversion using the current applicable 24K branch rate. Supports conversion by grams (grams × rate = payable money) and by money (money ÷ rate = credited grams) with strict 4-decimal gram precision and remainder checks.",
         "operationId": "AdminCalculateJewelleryFinancialQuote",
         "requestBody": {
           "content": {
@@ -1836,11 +1918,28 @@
             "type": "string",
             "format": "uuid"
           },
+          "enrolmentId": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true
+          },
+          "enrolmentReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "planId": {
+            "type": "string",
+            "format": "uuid"
+          },
           "planName": {
             "type": "string",
             "nullable": true
           },
           "planCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "categoryName": {
             "type": "string",
             "nullable": true
           },
@@ -1852,7 +1951,27 @@
             "type": "number",
             "format": "double"
           },
+          "remainingGrams": {
+            "type": "number",
+            "format": "double"
+          },
           "totalContributedCurrency": {
+            "type": "number",
+            "format": "double"
+          },
+          "currency": {
+            "type": "string",
+            "nullable": true
+          },
+          "premiumPercentage": {
+            "type": "number",
+            "format": "double"
+          },
+          "selectedDurationMonths": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "progressPercentage": {
             "type": "number",
             "format": "double"
           },
@@ -1867,6 +1986,17 @@
           "targetEndDate": {
             "type": "string",
             "format": "date"
+          },
+          "createdAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "contributions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnrolmentContributionDto"
+            },
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -2270,6 +2400,12 @@
             "type": "number",
             "format": "double"
           },
+          "premiumPercentage": {
+            "maximum": 99.9999,
+            "minimum": 0,
+            "type": "number",
+            "format": "double"
+          },
           "karat": {
             "type": "integer",
             "format": "int32"
@@ -2631,6 +2767,10 @@
             "type": "integer",
             "format": "int32"
           },
+          "premiumPercentage": {
+            "type": "number",
+            "format": "double"
+          },
           "allowedDurationsMonths": {
             "type": "array",
             "items": {
@@ -2669,6 +2809,33 @@
           "overallProgressPercentage": {
             "type": "number",
             "format": "double"
+          },
+          "lifetimeUniqueCustomersCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lifetimeTotalEnrolmentsCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lifetimeTotalCollectedLkr": {
+            "type": "number",
+            "format": "double"
+          },
+          "filteredUniqueCustomersCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "filteredTotalEnrolmentsCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "filteredTotalCollectedLkr": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
           },
           "createdAtUtc": {
             "type": "string",
@@ -2730,6 +2897,24 @@
           "deactivatedCount": {
             "type": "integer",
             "format": "int32"
+          },
+          "lifetimeTotalEnrolmentsAcrossPlans": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lifetimeTotalCollectedLkrAcrossPlans": {
+            "type": "number",
+            "format": "double"
+          },
+          "filteredTotalEnrolmentsAcrossPlans": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "filteredTotalCollectedLkrAcrossPlans": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -2740,6 +2925,10 @@
           "enrolmentId": {
             "type": "string",
             "format": "uuid"
+          },
+          "enrolmentReference": {
+            "type": "string",
+            "nullable": true
           },
           "customerId": {
             "type": "string",
@@ -2768,6 +2957,10 @@
           "deadline": {
             "type": "string",
             "format": "date"
+          },
+          "premiumPercentage": {
+            "type": "number",
+            "format": "double"
           },
           "enrolmentTargetGrams": {
             "type": "number",
@@ -3176,6 +3369,12 @@
             "type": "number",
             "format": "double"
           },
+          "premiumPercentage": {
+            "maximum": 99.9999,
+            "minimum": 0,
+            "type": "number",
+            "format": "double"
+          },
           "karat": {
             "type": "integer",
             "format": "int32"
@@ -3228,7 +3427,7 @@
   },
   "security": [
     {
-      "Bearer": []
+      "Bearer": [ ]
     }
   ]
 }

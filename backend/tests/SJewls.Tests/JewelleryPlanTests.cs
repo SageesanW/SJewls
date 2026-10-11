@@ -604,5 +604,333 @@ public class JewelleryPlanTests
         Assert.Equal(12.0m, item.RemainingGrams);
         Assert.Equal(40.0m, item.IndividualProgressPercentage); // 8/20 * 100 = 40%
         Assert.Equal("Active", item.EnrolmentStatus);
+        Assert.StartsWith("ENR-", item.EnrolmentReference);
+    }
+
+    [Fact]
+    public async Task PlanTracking_LifetimeCountsVsTotalCollected_EnrolmentDoesNotIncreaseTotalCollected()
+    {
+        var (db, superAdminId, _, branch1Id, _, cat1Id) = SetupTestDatabase();
+        var auditService = new AuditLogService(db, NullLogger<AuditLogService>.Instance);
+        var service = new JewelleryPlanService(db, auditService, NullLogger<JewelleryPlanService>.Instance);
+
+        var plan = await service.CreatePlanAsync(new CreateJewelleryPlanRequest
+        {
+            BranchId = branch1Id,
+            CategoryId = cat1Id,
+            Name = "Tracking Metrics Plan",
+            ImageUrl = "https://storage.sjewls.lk/plans/tracking.png",
+            AllowedDurationsMonths = new List<int> { 12 },
+            StartDate = new DateOnly(2025, 1, 1),
+            TargetProductGoldWeightGrams = 20.0m
+        }, superAdminId, "127.0.0.1");
+
+        // Initial: 0 enrolments, 0 customers, 0 collected
+        var initialDto = await service.GetPlanByIdAsync(plan.Id, superAdminId);
+        Assert.NotNull(initialDto);
+        Assert.Equal(0, initialDto.LifetimeTotalEnrolmentsCount);
+        Assert.Equal(0, initialDto.LifetimeUniqueCustomersCount);
+        Assert.Equal(0m, initialDto.LifetimeTotalCollectedLkr);
+
+        // Customer joins without making any payment
+        var customer = new Customer
+        {
+            Id = Guid.NewGuid(),
+            FullName = "Kamal Perera",
+            PhoneNumber = "+94771234567",
+            PrimaryBranchId = branch1Id,
+            IsActive = true
+        };
+        db.Customers.Add(customer);
+
+        var enrolment = new JewelleryEnrolment
+        {
+            Id = Guid.NewGuid(),
+            JewelleryPlanId = plan.Id,
+            CustomerId = customer.Id,
+            BranchId = branch1Id,
+            SelectedDurationMonths = 12,
+            StartDate = new DateOnly(2025, 1, 1),
+            TargetEndDate = new DateOnly(2026, 1, 1),
+            TargetProductWeightGrams = 20m,
+            TotalSavedGrams = 0m,
+            TotalContributedCurrency = 0m,
+            Status = JewelleryEnrolmentStatus.Active
+        };
+        db.JewelleryEnrolments.Add(enrolment);
+        await db.SaveChangesAsync();
+
+        // Enrolment creation alone increases counts, but NOT total collected
+        var afterEnrolDto = await service.GetPlanByIdAsync(plan.Id, superAdminId);
+        Assert.NotNull(afterEnrolDto);
+        Assert.Equal(1, afterEnrolDto.LifetimeTotalEnrolmentsCount);
+        Assert.Equal(1, afterEnrolDto.LifetimeUniqueCustomersCount);
+        Assert.Equal(0m, afterEnrolDto.LifetimeTotalCollectedLkr);
+
+        // Add a pending payment and a quote (MUST BE EXCLUDED)
+        var pendingPayment = new Payment
+        {
+            Id = Guid.NewGuid(),
+            CustomerId = customer.Id,
+            BranchId = branch1Id,
+            Amount = 50000m,
+            Currency = "LKR",
+            Method = PaymentMethod.MockOnline,
+            Status = PaymentStatus.Pending,
+            ProviderReference = "TXN-PENDING"
+        };
+        db.Payments.Add(pendingPayment);
+
+        var pendingContrib = new JewelleryContribution
+        {
+            Id = Guid.NewGuid(),
+            JewelleryEnrolmentId = enrolment.Id,
+            PaymentId = pendingPayment.Id,
+            CurrencyAmount = 50000m,
+            GoldGrams = 1.5m,
+            AppliedRatePerGram = 33000m,
+            Karat = 22,
+            ConfirmedAtUtc = DateTime.UtcNow
+        };
+        db.JewelleryContributions.Add(pendingContrib);
+        await db.SaveChangesAsync();
+
+        var afterPendingDto = await service.GetPlanByIdAsync(plan.Id, superAdminId);
+        Assert.Equal(0m, afterPendingDto!.LifetimeTotalCollectedLkr);
+
+        // Add a confirmed successful payment
+        var successPayment = new Payment
+        {
+            Id = Guid.NewGuid(),
+            CustomerId = customer.Id,
+            BranchId = branch1Id,
+            Amount = 150000m,
+            Currency = "LKR",
+            Method = PaymentMethod.MockOnline,
+            Status = PaymentStatus.Succeeded,
+            ProviderReference = "TXN-SUCCESS"
+        };
+        db.Payments.Add(successPayment);
+
+        var successContrib = new JewelleryContribution
+        {
+            Id = Guid.NewGuid(),
+            JewelleryEnrolmentId = enrolment.Id,
+            PaymentId = successPayment.Id,
+            CurrencyAmount = 150000m,
+            GoldGrams = 4.5m,
+            AppliedRatePerGram = 33000m,
+            Karat = 22,
+            ConfirmedAtUtc = DateTime.UtcNow
+        };
+        db.JewelleryContributions.Add(successContrib);
+        await db.SaveChangesAsync();
+
+        var afterSuccessDto = await service.GetPlanByIdAsync(plan.Id, superAdminId);
+        Assert.Equal(150000m, afterSuccessDto!.LifetimeTotalCollectedLkr);
+    }
+
+    [Fact]
+    public async Task PlanTracking_DateFiltering_JoiningDateAndPaymentConfirmationDateSemantics()
+    {
+        var (db, superAdminId, _, branch1Id, _, cat1Id) = SetupTestDatabase();
+        var auditService = new AuditLogService(db, NullLogger<AuditLogService>.Instance);
+        var service = new JewelleryPlanService(db, auditService, NullLogger<JewelleryPlanService>.Instance);
+
+        var plan = await service.CreatePlanAsync(new CreateJewelleryPlanRequest
+        {
+            BranchId = branch1Id,
+            CategoryId = cat1Id,
+            Name = "Date Filtered Plan",
+            ImageUrl = "https://storage.sjewls.lk/plans/datefilter.png",
+            AllowedDurationsMonths = new List<int> { 12 },
+            StartDate = new DateOnly(2025, 1, 1),
+            TargetProductGoldWeightGrams = 20.0m
+        }, superAdminId, "127.0.0.1");
+
+        // Customer 1 joined early in Jan 2025, but pays in March 2025
+        var cust1 = new Customer { Id = Guid.NewGuid(), FullName = "Cust 1", PrimaryBranchId = branch1Id, IsActive = true };
+        var enr1 = new JewelleryEnrolment
+        {
+            Id = Guid.NewGuid(),
+            JewelleryPlanId = plan.Id,
+            CustomerId = cust1.Id,
+            BranchId = branch1Id,
+            SelectedDurationMonths = 12,
+            StartDate = new DateOnly(2025, 1, 10),
+            TargetEndDate = new DateOnly(2026, 1, 10),
+            TargetProductWeightGrams = 20m,
+            Status = JewelleryEnrolmentStatus.Active
+        };
+        var pay1 = new Payment
+        {
+            Id = Guid.NewGuid(),
+            CustomerId = cust1.Id,
+            BranchId = branch1Id,
+            Amount = 100000m,
+            Currency = "LKR",
+            Method = PaymentMethod.MockOnline,
+            Status = PaymentStatus.Succeeded,
+            ProviderReference = "TXN-1"
+        };
+        var contrib1 = new JewelleryContribution
+        {
+            Id = Guid.NewGuid(),
+            JewelleryEnrolmentId = enr1.Id,
+            PaymentId = pay1.Id,
+            CurrencyAmount = 100000m,
+            GoldGrams = 3m,
+            ConfirmedAtUtc = new DateTime(2025, 3, 15, 10, 0, 0, DateTimeKind.Utc)
+        };
+        enr1.Contributions.Add(contrib1);
+
+        // Customer 2 joined in March 2025 and also pays in March 2025
+        var cust2 = new Customer { Id = Guid.NewGuid(), FullName = "Cust 2", PrimaryBranchId = branch1Id, IsActive = true };
+        var enr2 = new JewelleryEnrolment
+        {
+            Id = Guid.NewGuid(),
+            JewelleryPlanId = plan.Id,
+            CustomerId = cust2.Id,
+            BranchId = branch1Id,
+            SelectedDurationMonths = 12,
+            StartDate = new DateOnly(2025, 3, 5),
+            TargetEndDate = new DateOnly(2026, 3, 5),
+            TargetProductWeightGrams = 20m,
+            Status = JewelleryEnrolmentStatus.Active
+        };
+        var pay2 = new Payment
+        {
+            Id = Guid.NewGuid(),
+            CustomerId = cust2.Id,
+            BranchId = branch1Id,
+            Amount = 200000m,
+            Currency = "LKR",
+            Method = PaymentMethod.MockOnline,
+            Status = PaymentStatus.Succeeded,
+            ProviderReference = "TXN-2"
+        };
+        var contrib2 = new JewelleryContribution
+        {
+            Id = Guid.NewGuid(),
+            JewelleryEnrolmentId = enr2.Id,
+            PaymentId = pay2.Id,
+            CurrencyAmount = 200000m,
+            GoldGrams = 6m,
+            ConfirmedAtUtc = new DateTime(2025, 3, 20, 14, 0, 0, DateTimeKind.Utc)
+        };
+        enr2.Contributions.Add(contrib2);
+
+        db.Customers.AddRange(cust1, cust2);
+        db.Payments.AddRange(pay1, pay2);
+        db.JewelleryEnrolments.AddRange(enr1, enr2);
+        await db.SaveChangesAsync();
+
+        // Query with date range: 2025-03-01 to 2025-03-31
+        var pagedResult = await service.GetPlansAsync(
+            superAdminId, null, null, null, null, 1, 10,
+            fromDate: new DateOnly(2025, 3, 1),
+            toDate: new DateOnly(2025, 3, 31));
+
+        var planDto = pagedResult.Items.First(p => p.Id == plan.Id);
+
+        // Lifetime figures: both customers
+        Assert.Equal(2, planDto.LifetimeTotalEnrolmentsCount);
+        Assert.Equal(2, planDto.LifetimeUniqueCustomersCount);
+        Assert.Equal(300000m, planDto.LifetimeTotalCollectedLkr);
+
+        // Filtered enrolment counts (filtered by joining date: only cust2 joined in March):
+        Assert.Equal(1, planDto.FilteredTotalEnrolmentsCount);
+        Assert.Equal(1, planDto.FilteredUniqueCustomersCount);
+
+        // Filtered collections (filtered by payment date: BOTH paid in March, including cust1 who joined earlier!):
+        Assert.Equal(300000m, planDto.FilteredTotalCollectedLkr);
+    }
+
+    [Fact]
+    public async Task PlanCustomers_MultipleEnrolmentsForSameCustomer_SeparateRowsAndMetrics()
+    {
+        var (db, superAdminId, _, branch1Id, _, cat1Id) = SetupTestDatabase();
+        var auditService = new AuditLogService(db, NullLogger<AuditLogService>.Instance);
+        var service = new JewelleryPlanService(db, auditService, NullLogger<JewelleryPlanService>.Instance);
+
+        var plan = await service.CreatePlanAsync(new CreateJewelleryPlanRequest
+        {
+            BranchId = branch1Id,
+            CategoryId = cat1Id,
+            Name = "Multi Enrolment Test Plan",
+            ImageUrl = "https://storage.sjewls.lk/plans/multi.png",
+            AllowedDurationsMonths = new List<int> { 6, 12 },
+            StartDate = new DateOnly(2025, 1, 1),
+            TargetProductGoldWeightGrams = 20.0m
+        }, superAdminId, "127.0.0.1");
+
+        var customer = new Customer
+        {
+            Id = Guid.NewGuid(),
+            FullName = "Repeat Customer",
+            PhoneNumber = "+94770001122",
+            PrimaryBranchId = branch1Id,
+            IsActive = true
+        };
+        db.Customers.Add(customer);
+
+        // Enrolment 1: 12 months, active
+        var enr1 = new JewelleryEnrolment
+        {
+            Id = Guid.NewGuid(),
+            JewelleryPlanId = plan.Id,
+            CustomerId = customer.Id,
+            BranchId = branch1Id,
+            SelectedDurationMonths = 12,
+            StartDate = new DateOnly(2025, 1, 1),
+            TargetEndDate = new DateOnly(2026, 1, 1),
+            TargetProductWeightGrams = 20.0m,
+            TotalSavedGrams = 10.0m,
+            TotalContributedCurrency = 300000m,
+            Status = JewelleryEnrolmentStatus.Active
+        };
+
+        // Enrolment 2: 6 months, completed (historical)
+        var enr2 = new JewelleryEnrolment
+        {
+            Id = Guid.NewGuid(),
+            JewelleryPlanId = plan.Id,
+            CustomerId = customer.Id,
+            BranchId = branch1Id,
+            SelectedDurationMonths = 6,
+            StartDate = new DateOnly(2024, 1, 1),
+            TargetEndDate = new DateOnly(2024, 7, 1),
+            TargetProductWeightGrams = 10.0m,
+            TotalSavedGrams = 10.0m,
+            TotalContributedCurrency = 280000m,
+            Status = JewelleryEnrolmentStatus.Completed
+        };
+
+        db.JewelleryEnrolments.AddRange(enr1, enr2);
+        await db.SaveChangesAsync();
+
+        var planCustomers = await service.GetPlanCustomersAsync(plan.Id, superAdminId, null, null, 1, 10);
+
+        // Must return two separate rows for the same customer
+        Assert.Equal(2, planCustomers.Items.Count);
+        var row1 = planCustomers.Items.First(x => x.EnrolmentId == enr1.Id);
+        var row2 = planCustomers.Items.First(x => x.EnrolmentId == enr2.Id);
+
+        Assert.Equal(enr1.Id, row1.EnrolmentId);
+        Assert.Equal(12, row1.SelectedDurationMonths);
+        Assert.Equal("Active", row1.EnrolmentStatus);
+        Assert.Equal(20.0m, row1.EnrolmentTargetGrams);
+        Assert.StartsWith("ENR-", row1.EnrolmentReference);
+
+        Assert.Equal(enr2.Id, row2.EnrolmentId);
+        Assert.Equal(6, row2.SelectedDurationMonths);
+        Assert.Equal("Completed", row2.EnrolmentStatus);
+        Assert.Equal(10.0m, row2.EnrolmentTargetGrams);
+        Assert.StartsWith("ENR-", row2.EnrolmentReference);
+
+        // Verify lifetime counts on the plan preserve historical enrolments
+        var planDetails = await service.GetPlanByIdAsync(plan.Id, superAdminId);
+        Assert.Equal(1, planDetails!.LifetimeUniqueCustomersCount);
+        Assert.Equal(2, planDetails.LifetimeTotalEnrolmentsCount);
     }
 }

@@ -90,10 +90,14 @@ Configure the following variables in the **Variables** tab of the Railway servic
 | `Supabase__BucketName` | Media bucket name | `sjewls-media` |
 | `Email__Host` | SMTP server host | `smtp.gmail.com` |
 | `Email__Port` | SMTP port | `587` |
-| `Email__Username` | Gmail sender address | `[SENDER_EMAIL@gmail.com]` |
-| `Email__Password` | Gmail 16-character App Password | `[GMAIL_16_CHAR_APP_PASSWORD]` |
-| `Email__FromAddress` | Outgoing from email address | `[SENDER_EMAIL@gmail.com]` |
+| `Email__Username` | Gmail sender address | `w.sagee5@gmail.com` |
+| `Email__Password` | Gmail 16-character App Password (if using AppPassword auth) | `[GMAIL_16_CHAR_APP_PASSWORD]` |
+| `Email__FromAddress` | Outgoing from email address | `w.sagee5@gmail.com` |
 | `Email__FromName` | Display name for outgoing emails | `SJewls` |
+| `Email__AuthMechanism` | Auth mechanism (`AppPassword` or `OAuth2`) | `AppPassword` |
+| `Email__ClientId` | Google OAuth2 Client ID (if using OAuth2) | `[GOOGLE_OAUTH_CLIENT_ID]` |
+| `Email__ClientSecret` | Google OAuth2 Client Secret (if using OAuth2) | `[GOOGLE_OAUTH_CLIENT_SECRET]` |
+| `Email__RefreshToken` | Google OAuth2 Refresh Token (must belong to sender `w.sagee5@gmail.com`) | `[GOOGLE_OAUTH_REFRESH_TOKEN]` |
 | `Sms__Provider` | SMS Gateway provider (`TextLk` or `Mock`) | `TextLk` |
 | `Sms__ApiUrl` | Text.lk REST endpoint | `https://app.text.lk/api/v3/sms/send` |
 | `Sms__ApiToken` | Text.lk API token | `[TEXT_LK_API_TOKEN]` |

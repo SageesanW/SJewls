@@ -21,6 +21,8 @@ public class JewelleryPlan : BaseEntity
 
     public int[] AllowedDurationsMonths { get; set; } = new[] { 6, 12, 18 };
 
+    public decimal PremiumPercentage { get; set; } = 5.0m; // Default 5.0%, configurable per plan
+
     public CancellationFeeType CancellationFeeType { get; set; } = CancellationFeeType.Percentage;
     public decimal CancellationFeeValue { get; set; } = 5.0m; // e.g. 5%
 
@@ -69,6 +71,15 @@ public class JewelleryEnrolment : BaseEntity
     public Guid BranchId { get; set; }
     public Branch? Branch { get; set; }
 
+    public string? IdempotencyKey { get; set; }
+    public string Currency { get; set; } = "LKR";
+
+    // Snapshot of plan details at joining
+    public string PlanNameSnapshot { get; set; } = string.Empty;
+    public string CategoryNameSnapshot { get; set; } = string.Empty;
+    public string? ImageUrlSnapshot { get; set; }
+    public decimal PremiumPercentage { get; set; } = 5.0m;
+
     public int SelectedDurationMonths { get; set; }
     public DateOnly StartDate { get; set; }
     public DateOnly TargetEndDate { get; set; }
@@ -85,6 +96,7 @@ public class JewelleryEnrolment : BaseEntity
 
     // Navigation properties
     public ICollection<JewelleryContribution> Contributions { get; set; } = new List<JewelleryContribution>();
+    public ICollection<JewelleryPaymentQuote> Quotes { get; set; } = new List<JewelleryPaymentQuote>();
     public ICollection<ExtensionRequest> ExtensionRequests { get; set; } = new List<ExtensionRequest>();
     public ICollection<ClosureRequest> ClosureRequests { get; set; } = new List<ClosureRequest>();
 }
@@ -103,4 +115,38 @@ public class JewelleryContribution : BaseEntity
     public Payment? Payment { get; set; }
 
     public DateTimeOffset ConfirmedAtUtc { get; set; }
+}
+
+public class JewelleryPaymentQuote : BaseEntity
+{
+    public Guid CustomerId { get; set; }
+    public Customer? Customer { get; set; }
+
+    public Guid JewelleryEnrolmentId { get; set; }
+    public JewelleryEnrolment? JewelleryEnrolment { get; set; }
+
+    public JewelleryQuoteInputMode InputMode { get; set; }
+    public decimal EnteredValue { get; set; }
+    public string Currency { get; set; } = "LKR";
+
+    public decimal RatePerGram { get; set; }
+    public string RateSource { get; set; } = "GoldAPI.io";
+    public DateTimeOffset RateAsOf { get; set; }
+
+    public decimal PremiumPercentage { get; set; }
+    public decimal BaseGoldGrams { get; set; }
+    public decimal PremiumGrams { get; set; }
+    public decimal? ChargeableGoldGrams { get; set; }
+    public decimal TotalGoldCredit { get; set; }
+
+    public decimal? BaseAmount { get; set; }
+    public decimal? PremiumAmount { get; set; }
+    public decimal AmountToPay { get; set; }
+
+    public decimal RemainingGramsAfterPayment { get; set; }
+    public DateTimeOffset ExpiresAtUtc { get; set; }
+    public JewelleryQuoteStatus Status { get; set; } = JewelleryQuoteStatus.Active;
+
+    public Guid? PaymentId { get; set; }
+    public Payment? Payment { get; set; }
 }

@@ -41,4 +41,9 @@ public interface IAdminCustomerService
         UpdateCustomerStatusRequest request,
         string? ipAddress,
         CancellationToken cancellationToken = default);
+
+    Task<List<AdminCustomerEnrolmentDto>> GetCustomerJewelleryEnrolmentsAsync(
+        Guid currentStaffId,
+        Guid customerId,
+        CancellationToken cancellationToken = default);
 }

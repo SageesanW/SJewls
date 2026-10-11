@@ -1,9 +1,8 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import Link from "next/link";
 import { useAuth } from "../../../lib/auth-context";
 import { AdminLayout } from "../../../components/AdminLayout";
 import { adminApi, ApiError } from "../../../lib/api";
@@ -72,7 +71,6 @@ export default function JewelleryPlansPage() {
   // Metadata
   const [categories, setCategories] = useState<JewelleryCategory[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [categoriesLoading, setCategoriesLoading] = useState<boolean>(false);
 
   // Action popover
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
@@ -102,6 +100,7 @@ export default function JewelleryPlansPage() {
   const [customMonthInput, setCustomMonthInput] = useState<string>("");
   const [formStartDate, setFormStartDate] = useState<string>("");
   const [formTargetGrams, setFormTargetGrams] = useState<string>("25");
+  const [formPremiumPercentage, setFormPremiumPercentage] = useState<string>("5");
   const [formImageFile, setFormImageFile] = useState<File | null>(null);
   const [formImagePreview, setFormImagePreview] = useState<string | null>(null);
   const [formUploading, setFormUploading] = useState<boolean>(false);
@@ -111,39 +110,26 @@ export default function JewelleryPlansPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch active categories with full branch support
-  const fetchCategories = useCallback(async () => {
-    if (!user) return;
-    setCategoriesLoading(true);
-    try {
-      const catRes = await adminApi.getJewelleryCategories({ isActive: true, pageSize: 100 });
-      setCategories(catRes.items || []);
-    } catch (err) {
-      console.error("Failed to load active jewellery categories", err);
-    } finally {
-      setCategoriesLoading(false);
-    }
-  }, [user]);
-
-  // Load initial branch and categories once user is authenticated
+  // Load initial branch and categories
   useEffect(() => {
-    if (!user) return;
-
-    if (isSuperAdmin) {
-      adminApi.getBranches().then((branchRes) => {
-        setBranches(branchRes);
-      }).catch((err) => {
-        console.error("Failed to load branches", err);
-      });
+    async function loadInitialData() {
+      try {
+        if (isSuperAdmin) {
+          const branchRes = await adminApi.getBranches();
+          setBranches(branchRes);
+        }
+        const catRes = await adminApi.getJewelleryCategories({ isActive: true, pageSize: 50 });
+        setCategories(catRes.items);
+        setFormStartDate(new Date().toISOString().split("T")[0]);
+      } catch (err) {
+        console.error("Failed to load initial branches or categories", err);
+      }
     }
-
-    fetchCategories();
-    setFormStartDate(new Date().toISOString().split("T")[0]);
-  }, [user, isSuperAdmin, fetchCategories]);
+    loadInitialData();
+  }, [isSuperAdmin]);
 
   // Load plans
-  const fetchPlans = useCallback(async () => {
-    if (!user) return;
+  const fetchPlans = async () => {
     setLoading(true);
     setError(null);
     try {
@@ -168,24 +154,22 @@ export default function JewelleryPlansPage() {
     } finally {
       setLoading(false);
     }
-  }, [user, currentPage, pageSize, searchTerm, selectedCategoryFilter, statusFilter, selectedBranchId]);
+  };
 
   useEffect(() => {
-    if (user) {
-      fetchPlans();
-    }
+    fetchPlans();
     // Close any open popovers on filter change
     setActiveMenuId(null);
-  }, [user, fetchPlans]);
+  }, [currentPage, pageSize, selectedCategoryFilter, statusFilter, selectedBranchId]);
 
   // Debounced search
   useEffect(() => {
     const handler = setTimeout(() => {
       setCurrentPage(1);
-      if (user) fetchPlans();
+      fetchPlans();
     }, 350);
     return () => clearTimeout(handler);
-  }, [searchTerm, user, fetchPlans]);
+  }, [searchTerm]);
 
   // Load customers for selected plan
   const fetchPlanCustomers = async (planId: string, page = 1, search = "") => {
@@ -296,50 +280,9 @@ export default function JewelleryPlansPage() {
   };
 
   // Open Create Modal
-  const openCreateModal = async () => {
-    let defaultBranchId = "";
-    if (selectedBranchId && selectedBranchId !== "ALL") {
-      defaultBranchId = selectedBranchId;
-    } else if (user?.assignedBranches?.[0]?.branchId) {
-      defaultBranchId = user.assignedBranches[0].branchId;
-    } else if (branches.length > 0) {
-      defaultBranchId = branches[0].id;
-    }
-
-    setFormBranchId(defaultBranchId);
-
-    // Refresh active categories directly from API to ensure freshest database list
-    let latestCats = categories;
-    try {
-      const catRes = await adminApi.getJewelleryCategories({ isActive: true, pageSize: 100 });
-      if (catRes.items && catRes.items.length > 0) {
-        latestCats = catRes.items;
-        setCategories(catRes.items);
-      }
-    } catch (err) {
-      console.error("Failed to refresh categories on openCreateModal:", err);
-    }
-
-    // Match categories for target branch (case-insensitive UUID comparison)
-    const matching = latestCats.filter(
-      (c) => !defaultBranchId || defaultBranchId === "ALL" || c.branchId?.toLowerCase() === defaultBranchId.toLowerCase()
-    );
-
-    if (matching.length > 0) {
-      setFormCategoryId(matching[0].id);
-    } else if (latestCats.length > 0 && isSuperAdmin) {
-      // If default branch has no categories but another branch does, intelligently point to that branch
-      const firstBranchWithCats = latestCats[0].branchId;
-      if (firstBranchWithCats) {
-        setFormBranchId(firstBranchWithCats);
-        setFormCategoryId(latestCats[0].id);
-      } else {
-        setFormCategoryId("");
-      }
-    } else {
-      setFormCategoryId("");
-    }
-
+  const openCreateModal = () => {
+    setFormBranchId(user?.assignedBranches?.[0]?.branchId || branches[0]?.id || "");
+    setFormCategoryId(categories[0]?.id || "");
     setFormName("");
     setFormDescription("");
     setFormImageUrl("");
@@ -347,6 +290,7 @@ export default function JewelleryPlansPage() {
     setCustomMonthInput("");
     setFormStartDate(new Date().toISOString().split("T")[0]);
     setFormTargetGrams("25");
+    setFormPremiumPercentage("5");
     setFormImageFile(null);
     setFormImagePreview(null);
     setFormError(null);
@@ -358,7 +302,7 @@ export default function JewelleryPlansPage() {
   const openEditModal = (plan: JewelleryPlan) => {
     setEditingPlan(plan);
     setFormBranchId(plan.branchId);
-    setFormCategoryId(plan.categoryId || "");
+    setFormCategoryId(plan.categoryId || categories[0]?.id || "");
     setFormName(plan.name);
     setFormDescription(plan.description || "");
     setFormImageUrl(plan.imageUrl);
@@ -366,28 +310,12 @@ export default function JewelleryPlansPage() {
     setCustomMonthInput("");
     setFormStartDate(plan.startDate);
     setFormTargetGrams(plan.targetProductGoldWeightGrams.toString());
+    setFormPremiumPercentage(plan.premiumPercentage != null ? plan.premiumPercentage.toString() : "5");
     setFormImageFile(null);
     setFormImagePreview(plan.imageUrl || null);
     setFormError(null);
     setFormFieldErrors({});
     setActiveMenuId(null);
-    fetchCategories();
-  };
-
-  // Branch selector in modal (Super Admin)
-  const handleModalBranchChange = (newBranchId: string) => {
-    setFormBranchId(newBranchId);
-    const matching = categories.filter(
-      (c) => !newBranchId || newBranchId === "ALL" || c.branchId?.toLowerCase() === newBranchId.toLowerCase()
-    );
-    setFormCategoryId(matching[0]?.id || "");
-    if (formFieldErrors.categoryId) {
-      setFormFieldErrors((prev) => {
-        const n = { ...prev };
-        delete n.categoryId;
-        return n;
-      });
-    }
   };
 
   // Submit Create Plan
@@ -417,6 +345,11 @@ export default function JewelleryPlansPage() {
       errors.targetGrams = "Target gold weight must be a positive number.";
     }
 
+    const premiumVal = parseFloat(formPremiumPercentage);
+    if (isNaN(premiumVal) || premiumVal < 0 || premiumVal >= 100) {
+      errors.premiumPercentage = "Premium percentage must be between 0% and 99.99%.";
+    }
+
     if (Object.keys(errors).length > 0) {
       setFormFieldErrors(errors);
       return;
@@ -433,6 +366,7 @@ export default function JewelleryPlansPage() {
         allowedDurationsMonths: formDurations,
         startDate: formStartDate,
         targetProductGoldWeightGrams: gramsVal,
+        premiumPercentage: premiumVal,
         karat: 24,
       };
 
@@ -467,6 +401,11 @@ export default function JewelleryPlansPage() {
       errors.targetGrams = "Target gold weight must be a positive number.";
     }
 
+    const editPremiumVal = parseFloat(formPremiumPercentage);
+    if (isNaN(editPremiumVal) || editPremiumVal < 0 || editPremiumVal >= 100) {
+      errors.premiumPercentage = "Premium percentage must be between 0% and 99.99%.";
+    }
+
     if (Object.keys(errors).length > 0) {
       setFormFieldErrors(errors);
       return;
@@ -482,6 +421,7 @@ export default function JewelleryPlansPage() {
         allowedDurationsMonths: formDurations,
         startDate: formStartDate,
         targetProductGoldWeightGrams: gramsVal,
+        premiumPercentage: editPremiumVal,
         karat: 24,
       };
 
@@ -521,25 +461,11 @@ export default function JewelleryPlansPage() {
     }
   };
 
-  // Filter categories matching branch with case-insensitive UUID comparison
+  // Filter categories matching branch
   const activeCategoriesForBranch = useMemo(() => {
     if (!formBranchId || formBranchId === "ALL") return categories;
-    return categories.filter((c) => c.branchId?.toLowerCase() === formBranchId.toLowerCase());
+    return categories.filter((c) => c.branchId === formBranchId);
   }, [categories, formBranchId]);
-
-  // Category filter pills on top toolbar: deduplicated by name if All Branches, or scoped to selected branch
-  const displayedCategoryPills = useMemo(() => {
-    if (!selectedBranchId || selectedBranchId === "ALL") {
-      const seen = new Set<string>();
-      return categories.filter((c) => {
-        const lower = c.name.trim().toLowerCase();
-        if (seen.has(lower)) return false;
-        seen.add(lower);
-        return true;
-      });
-    }
-    return categories.filter((c) => c.branchId?.toLowerCase() === selectedBranchId.toLowerCase());
-  }, [categories, selectedBranchId]);
 
   return (
     <AdminLayout>
@@ -593,15 +519,14 @@ export default function JewelleryPlansPage() {
                 setSelectedCategoryFilter("ALL");
                 setCurrentPage(1);
               }}
-              className={`px-4 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap shadow-sm cursor-pointer ${
-                selectedCategoryFilter === "ALL"
+              className={`px-4 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap shadow-sm cursor-pointer ${selectedCategoryFilter === "ALL"
                   ? "bg-[#0B3D0B] text-white shadow-emerald-950/20"
                   : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-200"
-              }`}
+                }`}
             >
               All Categories
             </button>
-            {displayedCategoryPills.map((cat) => (
+            {categories.map((cat) => (
               <button
                 key={cat.id}
                 type="button"
@@ -609,11 +534,10 @@ export default function JewelleryPlansPage() {
                   setSelectedCategoryFilter(cat.id);
                   setCurrentPage(1);
                 }}
-                className={`px-4 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap shadow-sm cursor-pointer ${
-                  selectedCategoryFilter === cat.id
+                className={`px-4 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap shadow-sm cursor-pointer ${selectedCategoryFilter === cat.id
                     ? "bg-[#0B3D0B] text-white shadow-emerald-950/20"
                     : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-200"
-                }`}
+                  }`}
               >
                 {cat.name}
               </button>
@@ -683,36 +607,32 @@ export default function JewelleryPlansPage() {
               <button
                 type="button"
                 onClick={() => setStatusFilter("ALL")}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  statusFilter === "ALL" ? "bg-white text-gray-900 shadow-sm font-bold" : "hover:text-gray-900"
-                }`}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${statusFilter === "ALL" ? "bg-white text-gray-900 shadow-sm font-bold" : "hover:text-gray-900"
+                  }`}
               >
                 All
               </button>
               <button
                 type="button"
                 onClick={() => setStatusFilter("Active")}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  statusFilter === "Active" ? "bg-white text-emerald-800 shadow-sm font-bold" : "hover:text-gray-900"
-                }`}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${statusFilter === "Active" ? "bg-white text-emerald-800 shadow-sm font-bold" : "hover:text-gray-900"
+                  }`}
               >
                 Active ({activeCount})
               </button>
               <button
                 type="button"
                 onClick={() => setStatusFilter("Scheduled")}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  statusFilter === "Scheduled" ? "bg-white text-blue-800 shadow-sm font-bold" : "hover:text-gray-900"
-                }`}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${statusFilter === "Scheduled" ? "bg-white text-blue-800 shadow-sm font-bold" : "hover:text-gray-900"
+                  }`}
               >
                 Scheduled ({scheduledCount})
               </button>
               <button
                 type="button"
                 onClick={() => setStatusFilter("Deactivated")}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  statusFilter === "Deactivated" ? "bg-white text-red-800 shadow-sm font-bold" : "hover:text-gray-900"
-                }`}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${statusFilter === "Deactivated" ? "bg-white text-red-800 shadow-sm font-bold" : "hover:text-gray-900"
+                  }`}
               >
                 Deactivated ({deactivatedCount})
               </button>
@@ -794,13 +714,12 @@ export default function JewelleryPlansPage() {
 
                       {/* Status badge */}
                       <span
-                        className={`text-[11px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${
-                          isDeactivated
+                        className={`text-[11px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${isDeactivated
                             ? "bg-red-50 text-red-700 border border-red-200"
                             : isScheduled
-                            ? "bg-blue-50 text-blue-700 border border-blue-200"
-                            : "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                        }`}
+                              ? "bg-blue-50 text-blue-700 border border-blue-200"
+                              : "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                          }`}
                       >
                         {plan.displayStatus}
                       </span>
@@ -856,13 +775,22 @@ export default function JewelleryPlansPage() {
                         </div>
                       </div>
 
-                      <div className="space-y-1 col-span-2">
+                      <div className="space-y-1">
                         <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                           START DATE
                         </div>
                         <div className="font-semibold text-gray-700 flex items-center gap-1.5">
                           <Calendar className="w-3.5 h-3.5 text-gray-400" />
                           <span>{plan.startDate}</span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                          PREMIUM
+                        </div>
+                        <div className="font-bold text-gray-800">
+                          {plan.premiumPercentage}%
                         </div>
                       </div>
                     </div>
@@ -1026,7 +954,7 @@ export default function JewelleryPlansPage() {
                     </label>
                     <select
                       value={formBranchId}
-                      onChange={(e) => handleModalBranchChange(e.target.value)}
+                      onChange={(e) => setFormBranchId(e.target.value)}
                       className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-xs font-medium focus:ring-2 focus:ring-[#0B3D0B]/20 focus:border-[#0B3D0B]"
                     >
                       {branches.map((b) => (
@@ -1040,14 +968,9 @@ export default function JewelleryPlansPage() {
 
                 {/* Category Dropdown */}
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-xs font-bold text-gray-700">
-                      Category <span className="text-red-500">*</span>
-                    </label>
-                    {categoriesLoading && (
-                      <span className="text-[11px] text-gray-400 animate-pulse">Loading categories...</span>
-                    )}
-                  </div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                    Category <span className="text-red-500">*</span>
+                  </label>
                   <select
                     value={formCategoryId}
                     onChange={(e) => {
@@ -1060,9 +983,8 @@ export default function JewelleryPlansPage() {
                         });
                       }
                     }}
-                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-medium focus:ring-2 focus:ring-[#0B3D0B]/20 focus:border-[#0B3D0B] ${
-                      formFieldErrors.categoryId ? "border-red-400 bg-red-50/20" : "border-gray-200"
-                    }`}
+                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-medium focus:ring-2 focus:ring-[#0B3D0B]/20 focus:border-[#0B3D0B] ${formFieldErrors.categoryId ? "border-red-400 bg-red-50/20" : "border-gray-200"
+                      }`}
                   >
                     <option value="">Select a category</option>
                     {activeCategoriesForBranch.map((c) => (
@@ -1071,17 +993,6 @@ export default function JewelleryPlansPage() {
                       </option>
                     ))}
                   </select>
-                  {activeCategoriesForBranch.length === 0 && !categoriesLoading && (
-                    <div className="mt-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] flex items-center justify-between">
-                      <span>No active categories found for this branch.</span>
-                      <Link
-                        href="/jewellery-plans/categories"
-                        className="font-bold underline text-[#0B3D0B] hover:text-emerald-950 ml-2"
-                      >
-                        Create Category →
-                      </Link>
-                    </div>
-                  )}
                   {formFieldErrors.categoryId && (
                     <p className="mt-1 text-[11px] text-red-600">{formFieldErrors.categoryId}</p>
                   )}
@@ -1106,9 +1017,8 @@ export default function JewelleryPlansPage() {
                       }
                     }}
                     placeholder="e.g. Bridal Gold Saver"
-                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-medium focus:ring-2 focus:ring-[#0B3D0B]/20 focus:border-[#0B3D0B] ${
-                      formFieldErrors.name ? "border-red-400 bg-red-50/20" : "border-gray-200"
-                    }`}
+                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-medium focus:ring-2 focus:ring-[#0B3D0B]/20 focus:border-[#0B3D0B] ${formFieldErrors.name ? "border-red-400 bg-red-50/20" : "border-gray-200"
+                      }`}
                   />
                   {formFieldErrors.name && (
                     <p className="mt-1 text-[11px] text-red-600">{formFieldErrors.name}</p>
@@ -1130,11 +1040,10 @@ export default function JewelleryPlansPage() {
                           key={month}
                           type="button"
                           onClick={() => handleToggleDuration(month)}
-                          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                            isSelected
+                          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${isSelected
                               ? "bg-[#FFD700] text-[#0B3D0B] shadow-xs"
                               : "bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200"
-                          }`}
+                            }`}
                         >
                           {month} months
                         </button>
@@ -1195,8 +1104,8 @@ export default function JewelleryPlansPage() {
                   )}
                 </div>
 
-                {/* Two-Column: Start Date & Plan Gold (grams) */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Three-Column: Start Date, Plan Gold (grams), Premium (%) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1.5">
                       Start Date <span className="text-red-500">*</span>
@@ -1208,13 +1117,13 @@ export default function JewelleryPlansPage() {
                       className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-xs font-medium focus:ring-2 focus:ring-[#0B3D0B]/20 focus:border-[#0B3D0B]"
                     />
                     <p className="mt-1 text-[10px] text-gray-400">
-                      Date this plan becomes available for enrolment.
+                      Enrolment start date.
                     </p>
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                      Plan Gold (grams) <span className="text-red-500">*</span>
+                      Plan Gold (g) <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="number"
@@ -1232,12 +1141,43 @@ export default function JewelleryPlansPage() {
                         }
                       }}
                       placeholder="e.g. 25"
-                      className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-medium focus:ring-2 focus:ring-[#0B3D0B]/20 focus:border-[#0B3D0B] ${
-                        formFieldErrors.targetGrams ? "border-red-400 bg-red-50/20" : "border-gray-200"
-                      }`}
+                      className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-medium focus:ring-2 focus:ring-[#0B3D0B]/20 focus:border-[#0B3D0B] ${formFieldErrors.targetGrams ? "border-red-400 bg-red-50/20" : "border-gray-200"
+                        }`}
                     />
                     {formFieldErrors.targetGrams && (
                       <p className="mt-1 text-[11px] text-red-600">{formFieldErrors.targetGrams}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                      Premium (%) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="99.99"
+                      value={formPremiumPercentage}
+                      onChange={(e) => {
+                        setFormPremiumPercentage(e.target.value);
+                        if (formFieldErrors.premiumPercentage) {
+                          setFormFieldErrors((prev) => {
+                            const n = { ...prev };
+                            delete n.premiumPercentage;
+                            return n;
+                          });
+                        }
+                      }}
+                      placeholder="e.g. 5"
+                      className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-medium focus:ring-2 focus:ring-[#0B3D0B]/20 focus:border-[#0B3D0B] ${formFieldErrors.premiumPercentage ? "border-red-400 bg-red-50/20" : "border-gray-200"
+                        }`}
+                    />
+                    <p className="mt-1 text-[10px] text-gray-400">
+                      Default 5% markup/deduction.
+                    </p>
+                    {formFieldErrors.premiumPercentage && (
+                      <p className="mt-1 text-[11px] text-red-600">{formFieldErrors.premiumPercentage}</p>
                     )}
                   </div>
                 </div>
@@ -1283,9 +1223,8 @@ export default function JewelleryPlansPage() {
                   ) : (
                     <div
                       onClick={() => fileInputRef.current?.click()}
-                      className={`border-2 border-dashed rounded-2xl p-6 text-center hover:bg-gray-50 transition-all cursor-pointer ${
-                        formFieldErrors.image ? "border-red-300 bg-red-50/10" : "border-gray-200"
-                      }`}
+                      className={`border-2 border-dashed rounded-2xl p-6 text-center hover:bg-gray-50 transition-all cursor-pointer ${formFieldErrors.image ? "border-red-300 bg-red-50/10" : "border-gray-200"
+                        }`}
                     >
                       <UploadCloud className="w-8 h-8 text-[#0B3D0B] mx-auto mb-2" />
                       <span className="text-xs font-bold text-gray-800 block">
@@ -1356,11 +1295,10 @@ export default function JewelleryPlansPage() {
             <div className="bg-white rounded-3xl shadow-2xl border border-gray-100 w-full max-w-md overflow-hidden">
               <div className="p-6 space-y-4">
                 <div
-                  className={`w-12 h-12 rounded-2xl flex items-center justify-center mx-auto ${
-                    statusActionPlan.action === "Deactivate"
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center mx-auto ${statusActionPlan.action === "Deactivate"
                       ? "bg-red-50 text-red-600"
                       : "bg-emerald-50 text-emerald-700"
-                  }`}
+                    }`}
                 >
                   {statusActionPlan.action === "Deactivate" ? (
                     <Power className="w-6 h-6" />
@@ -1407,11 +1345,10 @@ export default function JewelleryPlansPage() {
                     type="button"
                     disabled={statusLoading}
                     onClick={handleStatusSubmit}
-                    className={`px-5 py-2.5 rounded-xl text-xs font-bold text-white transition-all shadow-md cursor-pointer flex items-center gap-1.5 ${
-                      statusActionPlan.action === "Deactivate"
+                    className={`px-5 py-2.5 rounded-xl text-xs font-bold text-white transition-all shadow-md cursor-pointer flex items-center gap-1.5 ${statusActionPlan.action === "Deactivate"
                         ? "bg-red-600 hover:bg-red-700"
                         : "bg-[#0B3D0B] hover:bg-[#082e08]"
-                    }`}
+                      }`}
                   >
                     {statusLoading && (
                       <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1560,13 +1497,12 @@ export default function JewelleryPlansPage() {
                           </td>
                           <td className="py-3.5 px-4 text-center whitespace-nowrap">
                             <span
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                c.enrolmentStatus === "Completed"
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${c.enrolmentStatus === "Completed"
                                   ? "bg-emerald-100 text-emerald-800"
                                   : c.enrolmentStatus === "DurationEnded"
-                                  ? "bg-amber-100 text-amber-800"
-                                  : "bg-blue-50 text-blue-800"
-                              }`}
+                                    ? "bg-amber-100 text-amber-800"
+                                    : "bg-blue-50 text-blue-800"
+                                }`}
                             >
                               {c.enrolmentStatus}
                             </span>
@@ -1690,3 +1626,4 @@ export default function JewelleryPlansPage() {
     </AdminLayout>
   );
 }
+

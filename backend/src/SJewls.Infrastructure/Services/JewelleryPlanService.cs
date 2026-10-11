@@ -33,6 +33,8 @@ public class JewelleryPlanService : IJewelleryPlanService
         Guid? branchId,
         int page,
         int pageSize,
+        DateOnly? fromDate = null,
+        DateOnly? toDate = null,
         CancellationToken ct = default)
     {
         var (staff, isSuperAdmin, staffBranchIds) = await GetAuthorizedStaffAsync(staffId, ct);
@@ -41,6 +43,8 @@ public class JewelleryPlanService : IJewelleryPlanService
             .Include(p => p.Branch)
             .Include(p => p.Category)
             .Include(p => p.Enrolments)
+                .ThenInclude(e => e.Contributions)
+                    .ThenInclude(c => c.Payment)
             .AsNoTracking()
             .AsQueryable();
 
@@ -77,7 +81,14 @@ public class JewelleryPlanService : IJewelleryPlanService
 
         var allMatching = await query.ToListAsync(ct);
 
-        // Calculate display status per plan based on its branch timezone
+        DateTimeOffset? fromUtc = fromDate.HasValue
+            ? new DateTimeOffset(fromDate.Value.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero)
+            : null;
+        DateTimeOffset? toUtc = toDate.HasValue
+            ? new DateTimeOffset(toDate.Value.ToDateTime(TimeOnly.MaxValue), TimeSpan.Zero)
+            : null;
+
+        // Calculate display status and tracking metrics per plan
         var evaluatedPlans = allMatching.Select(plan =>
         {
             var branchTz = plan.Branch?.Timezone ?? "Asia/Colombo";
@@ -85,7 +96,7 @@ public class JewelleryPlanService : IJewelleryPlanService
             var displayStatus = DetermineDisplayStatus(plan.IsActive, plan.StartDate, branchToday);
 
             // Progress formula:
-            // total net accumulated grams across enrolments / sum of enrolment target weight snapshots * 100
+            // total net accumulated grams across non-cancelled enrolments / sum of enrolment target weight snapshots * 100
             var relevantEnrolments = plan.Enrolments
                 .Where(e => e.Status != JewelleryEnrolmentStatus.Cancelled)
                 .ToList();
@@ -101,6 +112,43 @@ public class JewelleryPlanService : IJewelleryPlanService
                 if (overallProgress > 100m) overallProgress = 100m;
             }
 
+            // Lifetime tracking metrics across all enrolments (including repeat, completed, left/closed)
+            var allEnrolments = plan.Enrolments.ToList();
+            var lifetimeUniqueCustomers = allEnrolments.Select(e => e.CustomerId).Distinct().Count();
+            var lifetimeTotalEnrolments = allEnrolments.Count;
+
+            var lifetimeTotalCollectedLkr = allEnrolments
+                .SelectMany(e => e.Contributions)
+                .Where(c => c.Payment == null || c.Payment.Status == PaymentStatus.Succeeded)
+                .GroupBy(c => c.PaymentId)
+                .Select(g => g.First().CurrencyAmount)
+                .Sum();
+
+            // Date-filtered metrics
+            int? filteredUniqueCustomers = null;
+            int? filteredTotalEnrolments = null;
+            decimal? filteredTotalCollectedLkr = null;
+
+            if (fromDate.HasValue || toDate.HasValue)
+            {
+                var filteredEnrolments = allEnrolments
+                    .Where(e => (!fromDate.HasValue || e.StartDate >= fromDate.Value) &&
+                                (!toDate.HasValue || e.StartDate <= toDate.Value))
+                    .ToList();
+
+                filteredUniqueCustomers = filteredEnrolments.Select(e => e.CustomerId).Distinct().Count();
+                filteredTotalEnrolments = filteredEnrolments.Count;
+
+                filteredTotalCollectedLkr = allEnrolments
+                    .SelectMany(e => e.Contributions)
+                    .Where(c => (c.Payment == null || c.Payment.Status == PaymentStatus.Succeeded) &&
+                                (!fromUtc.HasValue || c.ConfirmedAtUtc >= fromUtc.Value) &&
+                                (!toUtc.HasValue || c.ConfirmedAtUtc <= toUtc.Value))
+                    .GroupBy(c => c.PaymentId)
+                    .Select(g => g.First().CurrencyAmount)
+                    .Sum();
+            }
+
             return new
             {
                 Plan = plan,
@@ -109,7 +157,13 @@ public class JewelleryPlanService : IJewelleryPlanService
                 ActiveEnrolments = activeEnrolmentsCount,
                 TotalNetAccumulatedGrams = totalNetAccumulatedGrams,
                 TotalTargetGramsAcrossEnrolments = totalTargetGramsAcrossEnrolments,
-                OverallProgressPercentage = overallProgress
+                OverallProgressPercentage = overallProgress,
+                LifetimeUniqueCustomersCount = lifetimeUniqueCustomers,
+                LifetimeTotalEnrolmentsCount = lifetimeTotalEnrolments,
+                LifetimeTotalCollectedLkr = lifetimeTotalCollectedLkr,
+                FilteredUniqueCustomersCount = filteredUniqueCustomers,
+                FilteredTotalEnrolmentsCount = filteredTotalEnrolments,
+                FilteredTotalCollectedLkr = filteredTotalCollectedLkr
             };
         }).ToList();
 
@@ -126,6 +180,17 @@ public class JewelleryPlanService : IJewelleryPlanService
         }
 
         var totalCount = filtered.Count;
+
+        // Aggregates across matching plans before pagination
+        var lifetimeTotalEnrolmentsAcrossPlans = filtered.Sum(p => p.LifetimeTotalEnrolmentsCount);
+        var lifetimeTotalCollectedAcrossPlans = filtered.Sum(p => p.LifetimeTotalCollectedLkr);
+        int? filteredTotalEnrolmentsAcrossPlans = (fromDate.HasValue || toDate.HasValue)
+            ? filtered.Sum(p => p.FilteredTotalEnrolmentsCount ?? p.LifetimeTotalEnrolmentsCount)
+            : null;
+        decimal? filteredTotalCollectedAcrossPlans = (fromDate.HasValue || toDate.HasValue)
+            ? filtered.Sum(p => p.FilteredTotalCollectedLkr ?? p.LifetimeTotalCollectedLkr)
+            : null;
+
         var pagedItems = filtered
             .OrderByDescending(p => p.Plan.CreatedAtUtc)
             .Skip((page - 1) * pageSize)
@@ -137,7 +202,13 @@ public class JewelleryPlanService : IJewelleryPlanService
                 x.ActiveEnrolments,
                 x.TotalNetAccumulatedGrams,
                 x.TotalTargetGramsAcrossEnrolments,
-                x.OverallProgressPercentage))
+                x.OverallProgressPercentage,
+                x.LifetimeUniqueCustomersCount,
+                x.LifetimeTotalEnrolmentsCount,
+                x.LifetimeTotalCollectedLkr,
+                x.FilteredUniqueCustomersCount,
+                x.FilteredTotalEnrolmentsCount,
+                x.FilteredTotalCollectedLkr))
             .ToList();
 
         return new JewelleryPlanPagedResponse
@@ -148,11 +219,20 @@ public class JewelleryPlanService : IJewelleryPlanService
             PageSize = pageSize,
             ActiveCount = activeCount,
             ScheduledCount = scheduledCount,
-            DeactivatedCount = deactivatedCount
+            DeactivatedCount = deactivatedCount,
+            LifetimeTotalEnrolmentsAcrossPlans = lifetimeTotalEnrolmentsAcrossPlans,
+            LifetimeTotalCollectedLkrAcrossPlans = lifetimeTotalCollectedAcrossPlans,
+            FilteredTotalEnrolmentsAcrossPlans = filteredTotalEnrolmentsAcrossPlans,
+            FilteredTotalCollectedLkrAcrossPlans = filteredTotalCollectedAcrossPlans
         };
     }
 
-    public async Task<JewelleryPlanDto?> GetPlanByIdAsync(Guid id, Guid staffId, CancellationToken ct = default)
+    public async Task<JewelleryPlanDto?> GetPlanByIdAsync(
+        Guid id,
+        Guid staffId,
+        DateOnly? fromDate = null,
+        DateOnly? toDate = null,
+        CancellationToken ct = default)
     {
         var (staff, isSuperAdmin, staffBranchIds) = await GetAuthorizedStaffAsync(staffId, ct);
 
@@ -160,6 +240,8 @@ public class JewelleryPlanService : IJewelleryPlanService
             .Include(p => p.Branch)
             .Include(p => p.Category)
             .Include(p => p.Enrolments)
+                .ThenInclude(e => e.Contributions)
+                    .ThenInclude(c => c.Payment)
             .FirstOrDefaultAsync(p => p.Id == id, ct);
 
         if (plan == null) return null;
@@ -187,6 +269,48 @@ public class JewelleryPlanService : IJewelleryPlanService
             if (overallProgress > 100m) overallProgress = 100m;
         }
 
+        var allEnrolments = plan.Enrolments.ToList();
+        var lifetimeUniqueCustomers = allEnrolments.Select(e => e.CustomerId).Distinct().Count();
+        var lifetimeTotalEnrolments = allEnrolments.Count;
+
+        var lifetimeTotalCollectedLkr = allEnrolments
+            .SelectMany(e => e.Contributions)
+            .Where(c => c.Payment == null || c.Payment.Status == PaymentStatus.Succeeded)
+            .GroupBy(c => c.PaymentId)
+            .Select(g => g.First().CurrencyAmount)
+            .Sum();
+
+        int? filteredUniqueCustomers = null;
+        int? filteredTotalEnrolments = null;
+        decimal? filteredTotalCollectedLkr = null;
+
+        if (fromDate.HasValue || toDate.HasValue)
+        {
+            var filteredEnrolments = allEnrolments
+                .Where(e => (!fromDate.HasValue || e.StartDate >= fromDate.Value) &&
+                            (!toDate.HasValue || e.StartDate <= toDate.Value))
+                .ToList();
+
+            filteredUniqueCustomers = filteredEnrolments.Select(e => e.CustomerId).Distinct().Count();
+            filteredTotalEnrolments = filteredEnrolments.Count;
+
+            DateTimeOffset? fromUtc = fromDate.HasValue
+                ? new DateTimeOffset(fromDate.Value.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero)
+                : null;
+            DateTimeOffset? toUtc = toDate.HasValue
+                ? new DateTimeOffset(toDate.Value.ToDateTime(TimeOnly.MaxValue), TimeSpan.Zero)
+                : null;
+
+            filteredTotalCollectedLkr = allEnrolments
+                .SelectMany(e => e.Contributions)
+                .Where(c => (c.Payment == null || c.Payment.Status == PaymentStatus.Succeeded) &&
+                            (!fromUtc.HasValue || c.ConfirmedAtUtc >= fromUtc.Value) &&
+                            (!toUtc.HasValue || c.ConfirmedAtUtc <= toUtc.Value))
+                .GroupBy(c => c.PaymentId)
+                .Select(g => g.First().CurrencyAmount)
+                .Sum();
+        }
+
         return MapToDto(
             plan,
             displayStatus,
@@ -194,7 +318,13 @@ public class JewelleryPlanService : IJewelleryPlanService
             activeEnrolmentsCount,
             totalNetAccumulatedGrams,
             totalTargetGramsAcrossEnrolments,
-            overallProgress);
+            overallProgress,
+            lifetimeUniqueCustomers,
+            lifetimeTotalEnrolments,
+            lifetimeTotalCollectedLkr,
+            filteredUniqueCustomers,
+            filteredTotalEnrolments,
+            filteredTotalCollectedLkr);
     }
 
     public async Task<JewelleryPlanDto> CreatePlanAsync(
@@ -272,6 +402,12 @@ public class JewelleryPlanService : IJewelleryPlanService
             throw new ArgumentException("Target gold weight must be a positive number of grams.");
         }
 
+        // 4b. Validate premium percentage
+        if (request.PremiumPercentage < 0 || request.PremiumPercentage >= 100)
+        {
+            throw new ArgumentException("Premium percentage must be greater than or equal to 0% and less than 100%.");
+        }
+
         // 5. Trim and validate name
         var planName = request.Name.Trim();
         if (planName.Length < 2 || planName.Length > 150)
@@ -294,6 +430,7 @@ public class JewelleryPlanService : IJewelleryPlanService
             TargetProductGoldWeightGrams = request.TargetProductGoldWeightGrams,
             Karat = 24, // Internal standard 24K
             AllowedDurationsMonths = validDurations,
+            PremiumPercentage = request.PremiumPercentage,
             StartDate = request.StartDate,
             IsActive = true,
             CancellationFeeType = CancellationFeeType.Percentage,
@@ -387,6 +524,12 @@ public class JewelleryPlanService : IJewelleryPlanService
             throw new ArgumentException("Target gold weight must be a positive number of grams.");
         }
 
+        // Validate premium percentage
+        if (request.PremiumPercentage < 0 || request.PremiumPercentage >= 100)
+        {
+            throw new ArgumentException("Premium percentage must be greater than or equal to 0% and less than 100%.");
+        }
+
         var planName = request.Name.Trim();
         if (planName.Length < 2 || planName.Length > 150)
         {
@@ -400,11 +543,12 @@ public class JewelleryPlanService : IJewelleryPlanService
             plan.ImageUrl,
             plan.TargetProductGoldWeightGrams,
             plan.AllowedDurationsMonths,
+            plan.PremiumPercentage,
             plan.StartDate,
             plan.Description
         };
 
-        // Note: Existing customer enrolments retain their agreed snapshot terms (target grams, selected duration, start date, deadline).
+        // Note: Existing customer enrolments retain their agreed snapshot terms (target grams, selected duration, start date, deadline, premium percentage).
         // Modifying the plan's values applies to future customer enrolments only.
         plan.Name = planName;
         plan.CategoryId = request.CategoryId;
@@ -413,6 +557,7 @@ public class JewelleryPlanService : IJewelleryPlanService
         plan.Description = (request.Description ?? string.Empty).Trim();
         plan.TargetProductGoldWeightGrams = request.TargetProductGoldWeightGrams;
         plan.AllowedDurationsMonths = validDurations;
+        plan.PremiumPercentage = request.PremiumPercentage;
         plan.StartDate = request.StartDate;
 
         await _db.SaveChangesAsync(ct);
@@ -683,6 +828,7 @@ public class JewelleryPlanService : IJewelleryPlanService
             return new PlanCustomerEnrolmentDto
             {
                 EnrolmentId = e.Id,
+                EnrolmentReference = $"ENR-{e.Id.ToString()[..8].ToUpperInvariant()}",
                 CustomerId = e.CustomerId,
                 CustomerName = e.Customer?.FullName ?? "Unknown Customer",
                 PhoneNumber = e.Customer?.PhoneNumber ?? string.Empty,
@@ -690,6 +836,7 @@ public class JewelleryPlanService : IJewelleryPlanService
                 JoiningDate = e.StartDate,
                 SelectedDurationMonths = e.SelectedDurationMonths,
                 Deadline = e.TargetEndDate,
+                PremiumPercentage = e.PremiumPercentage,
                 EnrolmentTargetGrams = targetGrams,
                 TotalConfirmedMoneyPaid = e.TotalContributedCurrency,
                 Currency = e.Branch?.Currency ?? "LKR",
@@ -906,7 +1053,13 @@ public class JewelleryPlanService : IJewelleryPlanService
         int activeEnrolments,
         decimal totalNetAccumulatedGrams,
         decimal totalTargetGramsAcrossEnrolments,
-        decimal overallProgressPercentage)
+        decimal overallProgressPercentage,
+        int lifetimeUniqueCustomersCount = 0,
+        int lifetimeTotalEnrolmentsCount = 0,
+        decimal lifetimeTotalCollectedLkr = 0m,
+        int? filteredUniqueCustomersCount = null,
+        int? filteredTotalEnrolmentsCount = null,
+        decimal? filteredTotalCollectedLkr = null)
     {
         return new JewelleryPlanDto
         {
@@ -923,6 +1076,7 @@ public class JewelleryPlanService : IJewelleryPlanService
             CategoryName = plan.Category?.Name ?? string.Empty,
             TargetProductGoldWeightGrams = plan.TargetProductGoldWeightGrams,
             Karat = plan.Karat,
+            PremiumPercentage = plan.PremiumPercentage,
             AllowedDurationsMonths = plan.AllowedDurationsMonths,
             StartDate = plan.StartDate,
             IsActive = plan.IsActive,
@@ -932,6 +1086,12 @@ public class JewelleryPlanService : IJewelleryPlanService
             TotalNetAccumulatedGrams = totalNetAccumulatedGrams,
             TotalTargetGramsAcrossEnrolments = totalTargetGramsAcrossEnrolments,
             OverallProgressPercentage = overallProgressPercentage,
+            LifetimeUniqueCustomersCount = lifetimeUniqueCustomersCount,
+            LifetimeTotalEnrolmentsCount = lifetimeTotalEnrolmentsCount,
+            LifetimeTotalCollectedLkr = lifetimeTotalCollectedLkr,
+            FilteredUniqueCustomersCount = filteredUniqueCustomersCount,
+            FilteredTotalEnrolmentsCount = filteredTotalEnrolmentsCount,
+            FilteredTotalCollectedLkr = filteredTotalCollectedLkr,
             CreatedAtUtc = plan.CreatedAtUtc,
             UpdatedAtUtc = plan.UpdatedAtUtc,
             DeactivatedAtUtc = plan.DeactivatedAtUtc,
