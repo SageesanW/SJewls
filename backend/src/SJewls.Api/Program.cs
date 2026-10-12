@@ -17,6 +17,40 @@ using SJewls.Domain.Entities;
 using SJewls.Infrastructure.Data;
 using SJewls.Infrastructure.Services;
 
+// Load .env file in local development if present
+var currentDir = Directory.GetCurrentDirectory();
+var envCandidatePaths = new[]
+{
+    Path.Combine(currentDir, ".env"),
+    Path.Combine(currentDir, "backend", ".env"),
+    Path.Combine(currentDir, "..", ".env"),
+    Path.Combine(currentDir, "..", "..", ".env"),
+    Path.Combine(AppContext.BaseDirectory, ".env")
+};
+
+foreach (var envPath in envCandidatePaths)
+{
+    if (File.Exists(envPath))
+    {
+        foreach (var line in File.ReadAllLines(envPath))
+        {
+            var trimmed = line.Trim();
+            if (string.IsNullOrWhiteSpace(trimmed) || trimmed.StartsWith("#")) continue;
+            var idx = trimmed.IndexOf('=');
+            if (idx > 0)
+            {
+                var key = trimmed[..idx].Trim();
+                var val = trimmed[(idx + 1)..].Trim().Trim('"').Trim('\'');
+                if (Environment.GetEnvironmentVariable(key) == null)
+                {
+                    Environment.SetEnvironmentVariable(key, val);
+                }
+            }
+        }
+        break;
+    }
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Railway / Container Port Binding (listens on 0.0.0.0:PORT when PORT is set)
@@ -27,8 +61,8 @@ if (!string.IsNullOrEmpty(port))
 }
 
 // 1. Database Configuration (Supabase PostgreSQL)
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-    ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
+var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
+    ?? builder.Configuration.GetConnectionString("DefaultConnection");
 
 builder.Services.AddDbContext<SJewlsDbContext>(options =>
 {
