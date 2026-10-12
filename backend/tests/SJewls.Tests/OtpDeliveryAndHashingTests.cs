@@ -176,10 +176,23 @@ public class OtpDeliveryAndHashingTests
         Assert.True(verifySuccess);
     }
 
-    [Fact]
-    public async Task OtpCode_PreservesLeadingZeros_AndInsertsIntoMessage()
+    [Theory]
+    [InlineData(0, "000000")]
+    [InlineData(7, "000007")]
+    [InlineData(7890, "007890")]
+    [InlineData(999999, "999999")]
+    public void OtpCode_PreservesLeadingZeros_FormatSpecifierD6(int number, string expected)
     {
-        // Arrange: configure test OTP with leading zeros
+        var formatted = number.ToString("D6");
+        Assert.Equal(expected, formatted);
+        Assert.Equal(6, formatted.Length);
+        Assert.True(formatted.All(char.IsDigit));
+    }
+
+    [Fact]
+    public async Task RequestOtpAsync_AlwaysGeneratesRandomOtp_WithLeadingZerosPreserved()
+    {
+        // Arrange
         using var db = CreateInMemoryDbContext();
         var fakeSms = new FakeSmsSender();
         var fakeEmail = new FakeEmailOtpProvider();
@@ -187,8 +200,7 @@ public class OtpDeliveryAndHashingTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ASPNETCORE_ENVIRONMENT"] = "Development",
-                ["App:Environment"] = "Development",
-                ["App:TestOtp"] = "007890" // starts with leading zeros
+                ["App:Environment"] = "Development"
             })
             .Build();
 
@@ -202,17 +214,20 @@ public class OtpDeliveryAndHashingTests
         Assert.True(result.Success);
         Assert.NotNull(fakeSms.LastMessage);
 
-        // Leading zeros MUST be preserved as string in message body
-        Assert.Contains("007890", fakeSms.LastMessage);
-        Assert.DoesNotContain("7890", fakeSms.LastMessage.Replace("007890", "MATCH"));
+        var parts = fakeSms.LastMessage.Split("Your SJewls verification code is ");
+        var codePart = parts[1].Split(". Valid for")[0];
 
-        // Verify that hash of "007890" is stored
+        // Must be exactly 6 numeric digits
+        Assert.Equal(6, codePart.Length);
+        Assert.True(codePart.All(char.IsDigit));
+
+        // Verify that hash of code is stored
         var challenge = await db.OtpChallenges.FirstOrDefaultAsync(o => o.ContactValue == phoneNumber);
         Assert.NotNull(challenge);
-        Assert.Equal(OtpService.HashOtp("007890"), challenge.Code);
+        Assert.Equal(OtpService.HashOtp(codePart), challenge.Code);
 
-        // Verify that submitting "007890" succeeds
-        var (verifySuccess, _, _, _, _) = await otpService.VerifyOtpAsync(phoneNumber, "007890");
+        // Verify that submitting the generated code succeeds
+        var (verifySuccess, _, _, _, _) = await otpService.VerifyOtpAsync(phoneNumber, codePart);
         Assert.True(verifySuccess);
     }
 

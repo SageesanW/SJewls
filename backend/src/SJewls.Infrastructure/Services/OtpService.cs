@@ -161,13 +161,9 @@ public class OtpService : IOtpService
         {
             otpCode = _otpOptions.DevCode!.Trim();
         }
-        else if (!isProduction && !string.IsNullOrWhiteSpace(_config["App:TestOtp"]))
-        {
-            otpCode = _config["App:TestOtp"]!.Trim();
-        }
         else
         {
-            // Preserve leading zeros by generating as formatted string
+            // Always generate a cryptographically secure, random 6-digit OTP code preserving leading zeros
             otpCode = RandomNumberGenerator.GetInt32(0, 1000000).ToString("D6");
         }
 
