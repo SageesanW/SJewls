@@ -397,8 +397,7 @@ public class OtpDeliveryAndHashingTests
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             provider.VerifyOAuthTokenOwnerAsync(httpClient, "test-access-token", expectedSender));
 
-        Assert.Contains("unauthorized-account@gmail.com", ex.Message);
-        Assert.Contains(expectedSender, ex.Message);
+        Assert.Contains("The OAuth account does not match Email:FromAddress", ex.Message);
     }
 
     [Fact]
@@ -426,4 +425,97 @@ public class OtpDeliveryAndHashingTests
 
         Assert.Contains("Email OAuth2 credentials are incomplete", ex.Message);
     }
+
+    [Fact]
+    public async Task OtpDevMode_InProduction_NeverBypassesRealDelivery()
+    {
+        // Arrange: Environment is Production, but someone erroneously configured Otp:EnableDevMode=true
+        var options = new DbContextOptionsBuilder<SJewlsDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
+            .Options;
+        using var db = new SJewlsDbContext(options);
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ASPNETCORE_ENVIRONMENT"] = "Production",
+                ["Otp:EnableDevMode"] = "true",
+                ["Otp:DevCode"] = "123456",
+                ["Otp:AllowedTestContacts"] = "+94771234567,dev@example.com"
+            })
+            .Build();
+
+        var fakeSms = new FakeSmsSender();
+        var fakeEmail = new FakeEmailOtpProvider();
+        var otpService = new OtpService(db, fakeSms, fakeEmail, config, NullLogger<OtpService>.Instance);
+
+        // Act
+        var result = await otpService.RequestOtpAsync("+94771234567");
+
+        // Assert: Real delivery sender MUST be invoked; DevCode bypass must NOT occur
+        Assert.True(result.Success);
+        Assert.Equal(1, fakeSms.SendCount);
+        Assert.NotNull(fakeSms.LastMessage);
+        Assert.DoesNotContain("123456", fakeSms.LastMessage); // Must be a cryptographically random OTP, not 123456
+    }
+
+    [Fact]
+    public async Task OtpDevMode_InDevelopment_BypassesDelivery_OnlyForAllowedTestContacts()
+    {
+        var options = new DbContextOptionsBuilder<SJewlsDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
+            .Options;
+        using var db = new SJewlsDbContext(options);
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ASPNETCORE_ENVIRONMENT"] = "Development",
+                ["Otp:EnableDevMode"] = "true",
+                ["Otp:DevCode"] = "789012",
+                ["Otp:AllowedTestContacts"] = "+94771234567,test@sjewls.lk"
+            })
+            .Build();
+
+        var fakeSms = new FakeSmsSender();
+        var fakeEmail = new FakeEmailOtpProvider();
+        var otpService = new OtpService(db, fakeSms, fakeEmail, config, NullLogger<OtpService>.Instance);
+
+        // 1. Allowed test contact uses dev code and skips provider dispatch
+        var allowResult = await otpService.RequestOtpAsync("+94771234567");
+        Assert.True(allowResult.Success);
+        Assert.Equal(0, fakeSms.SendCount); // Provider was not invoked
+
+        var verifyAllow = await otpService.VerifyOtpAsync("+94771234567", "789012");
+        Assert.True(verifyAllow.Success);
+
+        // 2. Non-allowed contact routes through real provider and does NOT use dev code
+        var nonAllowResult = await otpService.RequestOtpAsync("+94779999999");
+        Assert.True(nonAllowResult.Success);
+        Assert.Equal(1, fakeSms.SendCount); // Real delivery was invoked
+        Assert.NotNull(fakeSms.LastMessage);
+        Assert.DoesNotContain("789012", fakeSms.LastMessage);
+    }
+
+    [Fact]
+    public void EmailOptions_BindsRailwayKeys_AndResolvesEffectiveProperties()
+    {
+        var options = new EmailOptions
+        {
+            Provider = "GmailApi",
+            GmailClientId = "client-id-123",
+            GmailClientSecret = "client-secret-abc",
+            GmailRefreshToken = "refresh-token-xyz",
+            FromAddress = "w.sagee5@gmail.com"
+        };
+
+        Assert.True(options.IsGmailApi);
+        Assert.True(options.IsOAuth2);
+        Assert.Equal("client-id-123", options.EffectiveClientId);
+        Assert.Equal("client-secret-abc", options.EffectiveClientSecret);
+        Assert.Equal("refresh-token-xyz", options.EffectiveRefreshToken);
+    }
 }
+

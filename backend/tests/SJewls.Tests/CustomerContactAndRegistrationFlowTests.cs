@@ -42,7 +42,15 @@ public class CustomerContactAndRegistrationFlowTests
             {
                 ["ASPNETCORE_ENVIRONMENT"] = "Development",
                 ["App:Environment"] = "Development",
-                ["App:TestOtp"] = "123456",
+                ["Otp:EnableDevMode"] = "true",
+                ["Otp:DevCode"] = "123456",
+                ["Otp:AllowedTestContacts:0"] = "0769882118",
+                ["Otp:AllowedTestContacts:1"] = "anojan@sjewls.lk",
+                ["Otp:AllowedTestContacts:2"] = "+94770011223",
+                ["Otp:AllowedTestContacts:3"] = "+94778889999",
+                ["Otp:AllowedTestContacts:4"] = "adminpre@example.com",
+                ["Otp:AllowedTestContacts:5"] = "+94774443322",
+                ["Otp:AllowedTestContacts:6"] = "+94771122334",
                 ["Jwt:Secret"] = "super-secret-key-that-must-be-at-least-32-characters-long-sjewls-dev"
             })
             .Build();

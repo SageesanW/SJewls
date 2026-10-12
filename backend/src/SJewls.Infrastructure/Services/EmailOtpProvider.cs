@@ -137,35 +137,32 @@ $@"<!DOCTYPE html>
 
     private void ValidateEmailCredentials()
     {
-        var isOAuth2 = string.Equals(_options.AuthMechanism, "OAuth2", StringComparison.OrdinalIgnoreCase) ||
-                       (!string.IsNullOrWhiteSpace(_options.RefreshToken) && !string.IsNullOrWhiteSpace(_options.ClientId));
-
-        if (isOAuth2)
+        if (_options.IsGmailApi)
         {
-            if (string.IsNullOrWhiteSpace(_options.ClientId) ||
-                string.IsNullOrWhiteSpace(_options.ClientSecret) ||
-                string.IsNullOrWhiteSpace(_options.RefreshToken))
+            if (string.IsNullOrWhiteSpace(_options.EffectiveClientId) ||
+                string.IsNullOrWhiteSpace(_options.EffectiveClientSecret) ||
+                string.IsNullOrWhiteSpace(_options.EffectiveRefreshToken))
             {
                 throw new InvalidOperationException(
-                    "Email OAuth2 credentials are incomplete. Please configure Email:ClientId, Email:ClientSecret, " +
-                    "and Email:RefreshToken (authorized for the sender) via User Secrets or environment variables.");
+                    "Email OAuth2 credentials are incomplete. Please configure Email:GmailClientId (or Email:ClientId), " +
+                    "Email:GmailClientSecret (or Email:ClientSecret), and Email:GmailRefreshToken (or Email:RefreshToken) via User Secrets or environment variables.");
             }
         }
         else
         {
             var password = _options.Password?.Replace(" ", "").Trim();
-            if (string.IsNullOrWhiteSpace(password))
+            if (string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(_options.Host))
             {
                 throw new InvalidOperationException(
                     "Email credentials are not configured. Please configure Email:Password (Gmail App Password) " +
-                    "or Email:RefreshToken / Email:ClientId / Email:ClientSecret (Google OAuth2) via User Secrets or environment variable.");
+                    "and Email:Host, or configure Email:Provider = GmailApi with Email:GmailRefreshToken, Email:GmailClientId, and Email:GmailClientSecret via User Secrets or environment variables.");
             }
         }
     }
 
     private async Task SendMessageInternalAsync(string toEmail, MimeMessage message, CancellationToken cancellationToken)
     {
-        if (_options.IsOAuth2)
+        if (_options.IsGmailApi)
         {
             await SendViaGmailApiAsync(toEmail, message, cancellationToken);
             return;
@@ -193,8 +190,8 @@ $@"<!DOCTYPE html>
             .Replace('+', '-')
             .Replace('/', '_');
 
-        // 4. Send via Gmail REST API (users/{senderEmail}/messages/send)
-        var sendUrl = $"https://gmail.googleapis.com/gmail/v1/users/{Uri.EscapeDataString(senderEmail)}/messages/send";
+        // 4. Send via Gmail REST API: POST https://gmail.googleapis.com/gmail/v1/users/me/messages/send
+        var sendUrl = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
         using var sendRequest = new HttpRequestMessage(HttpMethod.Post, sendUrl)
         {
             Content = new StringContent(
@@ -245,7 +242,7 @@ $@"<!DOCTYPE html>
             };
 
             // Connect with STARTTLS
-            await client.ConnectAsync(_options.Host, _options.Port, SecureSocketOptions.StartTls, cancellationToken);
+            await client.ConnectAsync(_options.Host ?? "smtp.gmail.com", _options.Port, SecureSocketOptions.StartTls, cancellationToken);
 
             var password = _options.Password?.Replace(" ", "").Trim() ?? string.Empty;
             var username = GetSenderAddress();
@@ -285,9 +282,9 @@ $@"<!DOCTYPE html>
         {
             Content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
-                ["client_id"] = _options.ClientId!,
-                ["client_secret"] = _options.ClientSecret!,
-                ["refresh_token"] = _options.RefreshToken!,
+                ["client_id"] = _options.EffectiveClientId!,
+                ["client_secret"] = _options.EffectiveClientSecret!,
+                ["refresh_token"] = _options.EffectiveRefreshToken!,
                 ["grant_type"] = "refresh_token"
             })
         };
@@ -321,41 +318,56 @@ $@"<!DOCTYPE html>
     public async Task VerifyOAuthTokenOwnerAsync(HttpClient http, string accessToken, string expectedSenderEmail, CancellationToken cancellationToken = default)
     {
         string? authenticatedEmail = null;
+        string? audience = null;
 
-        // Try 1: Gmail API profile endpoint (most specific for Gmail sender)
+        // Try 1: Google tokeninfo endpoint (fast, validates client ID and token status without requiring extra scopes)
         try
         {
-            using var profileRequest = new HttpRequestMessage(HttpMethod.Get, "https://gmail.googleapis.com/gmail/v1/users/me/profile");
-            profileRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromSeconds(5));
 
-            var profileResponse = await http.SendAsync(profileRequest, cancellationToken);
-            if (profileResponse.IsSuccessStatusCode)
+            using var tokenInfoRequest = new HttpRequestMessage(HttpMethod.Get, $"https://oauth2.googleapis.com/tokeninfo?access_token={Uri.EscapeDataString(accessToken)}");
+            var tokenInfoResponse = await http.SendAsync(tokenInfoRequest, cts.Token);
+            if (tokenInfoResponse.IsSuccessStatusCode)
             {
-                var profileJson = await profileResponse.Content.ReadAsStringAsync(cancellationToken);
-                using var profileDoc = JsonDocument.Parse(profileJson);
-                if (profileDoc.RootElement.TryGetProperty("emailAddress", out var emailProp))
+                var tokenInfoJson = await tokenInfoResponse.Content.ReadAsStringAsync(cts.Token);
+                using var tokenInfoDoc = JsonDocument.Parse(tokenInfoJson);
+                if (tokenInfoDoc.RootElement.TryGetProperty("email", out var emailProp))
                 {
                     authenticatedEmail = emailProp.GetString();
+                }
+                if (tokenInfoDoc.RootElement.TryGetProperty("aud", out var audProp))
+                {
+                    audience = audProp.GetString();
+                }
+                else if (tokenInfoDoc.RootElement.TryGetProperty("azp", out var azpProp))
+                {
+                    audience = azpProp.GetString();
                 }
             }
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Gmail profile lookup skipped or failed during token validation.");
+            _logger.LogDebug(ex, "Google tokeninfo lookup skipped or failed during token validation.");
         }
 
-        // Try 2: Google tokeninfo endpoint fallback
+        // Try 2: Gmail API profile endpoint (used if token has gmail profile scope or in mock tests)
         if (string.IsNullOrWhiteSpace(authenticatedEmail))
         {
             try
             {
-                using var tokenInfoRequest = new HttpRequestMessage(HttpMethod.Get, $"https://oauth2.googleapis.com/tokeninfo?access_token={Uri.EscapeDataString(accessToken)}");
-                var tokenInfoResponse = await http.SendAsync(tokenInfoRequest, cancellationToken);
-                if (tokenInfoResponse.IsSuccessStatusCode)
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                cts.CancelAfter(TimeSpan.FromSeconds(5));
+
+                using var profileRequest = new HttpRequestMessage(HttpMethod.Get, "https://gmail.googleapis.com/gmail/v1/users/me/profile");
+                profileRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+                var profileResponse = await http.SendAsync(profileRequest, cts.Token);
+                if (profileResponse.IsSuccessStatusCode)
                 {
-                    var tokenInfoJson = await tokenInfoResponse.Content.ReadAsStringAsync(cancellationToken);
-                    using var tokenInfoDoc = JsonDocument.Parse(tokenInfoJson);
-                    if (tokenInfoDoc.RootElement.TryGetProperty("email", out var emailProp))
+                    var profileJson = await profileResponse.Content.ReadAsStringAsync(cts.Token);
+                    using var profileDoc = JsonDocument.Parse(profileJson);
+                    if (profileDoc.RootElement.TryGetProperty("emailAddress", out var emailProp))
                     {
                         authenticatedEmail = emailProp.GetString();
                     }
@@ -363,29 +375,48 @@ $@"<!DOCTYPE html>
             }
             catch (Exception ex)
             {
-                _logger.LogDebug(ex, "Google tokeninfo lookup skipped or failed during token validation.");
+                _logger.LogDebug(ex, "Gmail profile lookup skipped or failed during token validation.");
             }
         }
 
-        // Ensure the token owner strictly matches the expected sender email
+        // Validate client / audience matches configured client ID
+        if (!string.IsNullOrWhiteSpace(audience) && !string.IsNullOrWhiteSpace(_options.EffectiveClientId))
+        {
+            if (!string.Equals(audience, _options.EffectiveClientId, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogError("OAuth token audience mismatch: Token was issued for client {Audience}, but configured client is {ConfiguredClient}",
+                    audience, _options.EffectiveClientId);
+                throw new InvalidOperationException($"OAuth token was issued for client '{audience}', but configured client is '{_options.EffectiveClientId}'.");
+            }
+        }
+
+        // Ensure the token owner strictly matches the expected sender email if email claim was retrieved
+               // Check the sender against the token owner when available.
         if (!string.IsNullOrWhiteSpace(authenticatedEmail))
         {
-            if (!string.Equals(authenticatedEmail, expectedSenderEmail, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(
+                authenticatedEmail,
+                expectedSenderEmail,
+                StringComparison.OrdinalIgnoreCase))
             {
-                _logger.LogError("OAuth refresh token account mismatch: Token belongs to {TokenOwner}, but sender is configured as {Sender}",
-                    MaskEmail(authenticatedEmail), MaskEmail(expectedSenderEmail));
+                _logger.LogError(
+                    "OAuth account mismatch: Token owner {TokenOwner}, configured sender {Sender}",
+                    MaskEmail(authenticatedEmail),
+                    MaskEmail(expectedSenderEmail));
 
                 throw new InvalidOperationException(
-                    $"The configured OAuth refresh token belongs to '{authenticatedEmail}', but Email:FromAddress is '{expectedSenderEmail}'. " +
-                    $"The OAuth refresh token must belong to '{expectedSenderEmail}'.");
+                    "The OAuth account does not match Email:FromAddress. " +
+                    "Generate a refresh token using the configured sender account.");
             }
 
-            _logger.LogInformation("Verified Google OAuth2 refresh token ownership matches configured sender: {Sender}",
+            _logger.LogInformation(
+                "Google OAuth sender ownership verified for {Sender}",
                 MaskEmail(expectedSenderEmail));
         }
         else
         {
-            _logger.LogWarning("Could not retrieve email claim from Google OAuth tokeninfo/profile for verification. Proceeding with sender {Sender}",
+            _logger.LogInformation(
+                "Token owner email unavailable; sender ownership was not verified for {Sender}",
                 MaskEmail(expectedSenderEmail));
         }
     }
@@ -399,7 +430,10 @@ $@"<!DOCTYPE html>
 
         var parts = email.Split('@');
         var name = parts[0];
-        var maskedName = name.Length <= 2 ? name : $"{name[0]}***{name[^1]}";
+        var maskedName = name.Length <= 2
+            ? "***"
+            : $"{name[0]}***{name[^1]}";
+
         return $"{maskedName}@{parts[1]}";
     }
 }

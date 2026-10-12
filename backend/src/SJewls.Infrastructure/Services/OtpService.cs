@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using SJewls.Application.Common;
 using SJewls.Application.DTOs;
 using SJewls.Application.Interfaces;
@@ -58,6 +59,7 @@ public class OtpService : IOtpService
     private readonly IEmailOtpProvider _emailOtpProvider;
     private readonly IConfiguration _config;
     private readonly ILogger<OtpService> _logger;
+    private readonly OtpOptions _otpOptions;
 
     private const int OtpExpiryMinutes = 5;
     private const int ResendCooldownSeconds = 60;
@@ -68,13 +70,47 @@ public class OtpService : IOtpService
         ISmsSender smsSender,
         IEmailOtpProvider emailOtpProvider,
         IConfiguration config,
-        ILogger<OtpService> logger)
+        ILogger<OtpService> logger,
+        IOptions<OtpOptions>? otpOptions = null)
     {
         _db = db;
         _smsSender = smsSender;
         _emailOtpProvider = emailOtpProvider;
         _config = config;
         _logger = logger;
+
+        if (otpOptions?.Value != null)
+        {
+            _otpOptions = otpOptions.Value;
+        }
+        else
+        {
+            _otpOptions = new OtpOptions
+            {
+                EnableDevMode = string.Equals(config["Otp:EnableDevMode"], "true", StringComparison.OrdinalIgnoreCase),
+                DevCode = config["Otp:DevCode"]
+            };
+
+            var children = config.GetSection("Otp:AllowedTestContacts")
+                .GetChildren()
+                .Select(c => c.Value)
+                .Where(v => !string.IsNullOrWhiteSpace(v))
+                .Select(v => v!)
+                .ToList();
+            if (children.Count > 0)
+            {
+                _otpOptions.AllowedTestContacts = children;
+            }
+        }
+
+        // Support comma-delimited environment variable string if list is empty
+        var rawAllowed = config["Otp:AllowedTestContacts"];
+        if (!string.IsNullOrWhiteSpace(rawAllowed) && (_otpOptions.AllowedTestContacts == null || _otpOptions.AllowedTestContacts.Count == 0))
+        {
+            _otpOptions.AllowedTestContacts = rawAllowed
+                .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToList();
+        }
     }
 
     public async Task<RequestOtpResponse> RequestOtpAsync(string inputContact, string purpose = "LoginOrRegister", Guid? customerId = null)
@@ -110,11 +146,22 @@ public class OtpService : IOtpService
             };
         }
 
-        // Determine OTP code: In Dev/Demo use configured TestOtp if set, else cryptographically secure 6-digit random code
-        var isDevOrDemo = _config["ASPNETCORE_ENVIRONMENT"] == "Development" || _config["App:Environment"] == "Development";
-        string otpCode;
+        // Determine environment: Fail-safe production check
+        var isProduction = string.Equals(_config["ASPNETCORE_ENVIRONMENT"], "Production", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(_config["App:Environment"], "Production", StringComparison.OrdinalIgnoreCase);
 
-        if (isDevOrDemo && !string.IsNullOrWhiteSpace(_config["App:TestOtp"]))
+        // Dev mode requires explicit enablement, valid test code, non-production environment, and an allowlisted contact
+        var isDevModeActiveForContact = !isProduction &&
+                                       _otpOptions.EnableDevMode &&
+                                       !string.IsNullOrWhiteSpace(_otpOptions.DevCode) &&
+                                       _otpOptions.IsContactAllowlisted(normalizedContact);
+
+        string otpCode;
+        if (isDevModeActiveForContact)
+        {
+            otpCode = _otpOptions.DevCode!.Trim();
+        }
+        else if (!isProduction && !string.IsNullOrWhiteSpace(_config["App:TestOtp"]))
         {
             otpCode = _config["App:TestOtp"]!.Trim();
         }
@@ -179,9 +226,19 @@ public class OtpService : IOtpService
         _db.OtpChallenges.Add(challenge);
         await _db.SaveChangesAsync();
 
-        // Dispatch via the specific selected channel
+        // Dispatch via the specific selected channel (or skip delivery if dev mode is active for allowlisted contact)
         string responseMessage;
-        if (contactType == ContactType.Phone)
+        if (isDevModeActiveForContact)
+        {
+            responseMessage = contactType == ContactType.Phone
+                ? "Verification code sent to your phone number."
+                : "Verification code sent to your email address.";
+
+            _logger.LogInformation(
+                "Dev mode OTP challenge created for allowlisted contact {Contact} ({Type}) with purpose {Purpose}. Provider delivery skipped.",
+                MaskContact(normalizedContact), contactType, purpose);
+        }
+        else if (contactType == ContactType.Phone)
         {
             try
             {
@@ -210,7 +267,7 @@ public class OtpService : IOtpService
         {
             try
             {
-                // Real Gmail SMTP delivery via EmailOtpProvider using STARTTLS
+                // Real delivery via EmailOtpProvider using STARTTLS
                 await _emailOtpProvider.SendOtpEmailAsync(normalizedContact, otpCode, OtpExpiryMinutes);
                 responseMessage = "Verification code sent to your email address.";
             }
@@ -244,7 +301,7 @@ public class OtpService : IOtpService
             ContactType = contactType,
             ExpiresInSeconds = OtpExpiryMinutes * 60,
             CooldownSeconds = ResendCooldownSeconds,
-            DevOtp = isDevOrDemo ? otpCode : null,
+            DevOtp = (!isProduction && isDevModeActiveForContact) ? otpCode : null,
             IsExistingCustomer = isExistingCustomer,
             NextAction = nextAction
         };

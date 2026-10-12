@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Sockets;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -40,26 +42,86 @@ builder.Services.AddDbContext<SJewlsDbContext>(options =>
     }
 });
 
-// 2. Email Configuration (Gmail SMTP with STARTTLS)
+// 2. Email Configuration (Gmail API via HTTPS or SMTP fallback)
 builder.Services.AddOptions<EmailOptions>()
     .Bind(builder.Configuration.GetSection(EmailOptions.SectionName))
     .ValidateDataAnnotations()
-    .Validate(options => !string.IsNullOrWhiteSpace(options.Host), "Email:Host is required.")
-    .Validate(options => options.Port > 0 && options.Port <= 65535, "Email:Port must be between 1 and 65535.")
-    .Validate(options => !string.IsNullOrWhiteSpace(options.Username), "Email:Username is required.")
     .Validate(options => !string.IsNullOrWhiteSpace(options.FromAddress), "Email:FromAddress is required.")
     .Validate(options => !string.IsNullOrWhiteSpace(options.FromName), "Email:FromName is required.")
     .Validate(options =>
     {
-        if (options.IsOAuth2)
+        if (options.IsGmailApi)
         {
-            return !string.IsNullOrWhiteSpace(options.ClientId) &&
-                   !string.IsNullOrWhiteSpace(options.ClientSecret) &&
-                   !string.IsNullOrWhiteSpace(options.RefreshToken);
+            return !string.IsNullOrWhiteSpace(options.EffectiveClientId) &&
+                   !string.IsNullOrWhiteSpace(options.EffectiveClientSecret) &&
+                   !string.IsNullOrWhiteSpace(options.EffectiveRefreshToken);
         }
         return true;
-    }, "When Email:AuthMechanism is 'OAuth2', Email:ClientId, Email:ClientSecret, and Email:RefreshToken are required.")
+    }, "When Email:Provider is 'GmailApi', Email:GmailClientId (or Email:ClientId), Email:GmailClientSecret (or Email:ClientSecret), and Email:GmailRefreshToken (or Email:RefreshToken) are required.")
+    .Validate(options =>
+    {
+        if (!options.IsGmailApi)
+        {
+            var hasHost = !string.IsNullOrWhiteSpace(options.Host);
+            var hasPort = options.Port > 0 && options.Port <= 65535;
+            var hasUsername = !string.IsNullOrWhiteSpace(options.Username);
+            var hasPassword = !string.IsNullOrWhiteSpace(options.Password);
+            return hasHost && hasPort && hasUsername && hasPassword;
+        }
+        return true;
+    }, "When Email:Provider is 'Smtp', Email:Host, Email:Port, Email:Username, and Email:Password are required.")
     .ValidateOnStart();
+
+// 2.5 OTP Configuration & Dev Mode Protection
+builder.Services.AddOptions<OtpOptions>()
+    .Bind(builder.Configuration.GetSection(OtpOptions.SectionName))
+    .PostConfigure(options =>
+    {
+        var rawAllowed = builder.Configuration["Otp:AllowedTestContacts"];
+        if (!string.IsNullOrWhiteSpace(rawAllowed) && (options.AllowedTestContacts == null || options.AllowedTestContacts.Count == 0))
+        {
+            options.AllowedTestContacts = rawAllowed
+                .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToList();
+        }
+    })
+    .Validate(options =>
+    {
+        var isProduction = builder.Environment.IsProduction() ||
+            string.Equals(builder.Configuration["ASPNETCORE_ENVIRONMENT"], "Production", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(builder.Configuration["App:Environment"], "Production", StringComparison.OrdinalIgnoreCase);
+
+        if (isProduction && options.EnableDevMode)
+        {
+            return false;
+        }
+        return true;
+    }, "CRITICAL SECURITY ERROR: Otp:EnableDevMode cannot be enabled in a Production environment.")
+    .Validate(options =>
+    {
+        if (options.EnableDevMode)
+        {
+            return !string.IsNullOrWhiteSpace(options.DevCode) &&
+                   options.AllowedTestContacts != null &&
+                   options.AllowedTestContacts.Count > 0;
+        }
+        return true;
+    }, "When Otp:EnableDevMode is enabled, Otp:DevCode and at least one contact in Otp:AllowedTestContacts must be configured.")
+    .ValidateOnStart();
+
+// Startup guard: Fail application startup immediately if Dev Mode is enabled in Production
+var isProdEnvironment = builder.Environment.IsProduction() ||
+    string.Equals(builder.Configuration["ASPNETCORE_ENVIRONMENT"], "Production", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(builder.Configuration["App:Environment"], "Production", StringComparison.OrdinalIgnoreCase);
+
+var otpConfig = builder.Configuration.GetSection(OtpOptions.SectionName).Get<OtpOptions>() ?? new OtpOptions();
+var isDevModeEnabled = otpConfig.EnableDevMode ||
+    string.Equals(builder.Configuration["Otp:EnableDevMode"], "true", StringComparison.OrdinalIgnoreCase);
+
+if (isProdEnvironment && isDevModeEnabled)
+{
+    throw new InvalidOperationException("CRITICAL SECURITY ERROR: Otp:EnableDevMode cannot be enabled in a Production environment.");
+}
 
 // 3. SMS Configuration (Text.lk SMS Gateway)
 builder.Services.AddOptions<SmsOptions>()
@@ -83,7 +145,46 @@ builder.Services.AddScoped<ISmsSender>(sp =>
 });
 
 // 4. Register Application & Infrastructure Services
-builder.Services.AddHttpClient<EmailOtpProvider>();
+builder.Services.AddHttpClient<EmailOtpProvider>()
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+    {
+        ConnectTimeout = TimeSpan.FromSeconds(5),
+        ConnectCallback = async (context, cancellationToken) =>
+        {
+            var entry = await Dns.GetHostEntryAsync(context.DnsEndPoint.Host, cancellationToken);
+            var addresses = entry.AddressList
+                .OrderByDescending(a => a.AddressFamily == AddressFamily.InterNetwork)
+                .ToArray();
+
+            SocketException? lastEx = null;
+            foreach (var address in addresses)
+            {
+                var socket = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp)
+                {
+                    NoDelay = true
+                };
+
+                try
+                {
+                    using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    cts.CancelAfter(TimeSpan.FromSeconds(3));
+                    await socket.ConnectAsync(new IPEndPoint(address, context.DnsEndPoint.Port), cts.Token);
+                    return new NetworkStream(socket, ownsSocket: true);
+                }
+                catch (SocketException ex)
+                {
+                    lastEx = ex;
+                    socket.Dispose();
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    socket.Dispose();
+                }
+            }
+
+            throw lastEx ?? new SocketException((int)SocketError.HostNotFound);
+        }
+    });
 builder.Services.AddScoped<IEmailOtpProvider>(sp => sp.GetRequiredService<EmailOtpProvider>());
 builder.Services.AddScoped<IEmailSender>(sp => sp.GetRequiredService<EmailOtpProvider>()); // Real Gmail SMTP email delivery via MailKit
 builder.Services.AddScoped<ITokenService, TokenService>();
