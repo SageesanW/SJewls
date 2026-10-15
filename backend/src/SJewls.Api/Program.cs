@@ -239,6 +239,7 @@ builder.Services.AddHttpClient<IGoldRateService, GoldRateService>();
 builder.Services.AddScoped<ICustomerNotificationService, CustomerNotificationService>();
 builder.Services.AddScoped<ICustomerJewelleryPlanService, CustomerJewelleryPlanService>();
 builder.Services.AddScoped<IJewelleryPaymentFinalizationService, JewelleryPaymentFinalizationService>();
+builder.Services.AddScoped<IAdminJewelleryEnrolmentService, AdminJewelleryEnrolmentService>();
 
 
 // Rate Limiting for Auth Endpoints
@@ -502,6 +503,7 @@ app.MapAdminCustomerEndpoints();
 app.MapBranchEndpoints();
 app.MapJewelleryCategoryEndpoints();
 app.MapJewelleryPlanEndpoints();
+app.MapAdminJewelleryEnrolmentEndpoints();
 
 
 // Seed initial roles, default branch, and initial Super Admin if configured

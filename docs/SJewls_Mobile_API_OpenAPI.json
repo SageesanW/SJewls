@@ -619,8 +619,13 @@
             }
           },
           "409": {
-            "description": "Conflict",
+            "description": "Conflict - returned if previous enrolment exists without confirmRepeatEnrolment: true, or if an idempotency key conflict occurs",
             "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepeatEnrolmentConflictResponse"
+                }
+              },
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
@@ -1711,6 +1716,11 @@
           "idempotencyKey": {
             "type": "string",
             "nullable": true
+          },
+          "confirmRepeatEnrolment": {
+            "type": "boolean",
+            "default": false,
+            "description": "Explicit confirmation required if the customer has previously enrolled in this plan."
           }
         },
         "additionalProperties": false
@@ -2281,6 +2291,24 @@
           "currency": {
             "type": "string",
             "nullable": true
+          },
+          "hasPreviouslyJoined": {
+            "type": "boolean",
+            "description": "True if customer has any historical enrolments for this plan across all statuses."
+          },
+          "totalEnrolmentCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total count of all historical enrolments created by this customer for this plan."
+          },
+          "activeEnrolmentCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Count of currently Active enrolments for this plan by this customer."
+          },
+          "requiresRepeatJoinConfirmation": {
+            "type": "boolean",
+            "description": "True if explicit confirmation is required before creating an additional enrolment."
           }
         },
         "additionalProperties": false
@@ -2672,6 +2700,40 @@
           "code": {
             "minLength": 1,
             "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RepeatEnrolmentConflictResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "RepeatEnrolmentConfirmationRequired"
+          },
+          "message": {
+            "type": "string",
+            "example": "You have previously enrolled in this jewellery plan. Confirmation is required to create an additional separate enrolment."
+          },
+          "totalEnrolments": {
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "activeEnrolments": {
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "totalEnrolmentCount": {
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "activeEnrolmentCount": {
+            "type": "integer",
+            "format": "int32",
+            "example": 1
           }
         },
         "additionalProperties": false

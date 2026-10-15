@@ -74,10 +74,10 @@ export function Sidebar({
       enabled: true,
     },
     {
-      href: "#plan-customers",
+      href: "/jewellery-plans/customers",
       label: "Plan Customers",
       isActive: pathname === "/jewellery-plans/customers",
-      enabled: false,
+      enabled: true,
     },
     {
       href: "#payments",

@@ -221,6 +221,18 @@ public static class CustomerJewelleryPlanEndpoints
                 var enrolment = await service.CreateEnrolmentAsync(customerId, request, ct);
                 return Results.Created($"/api/v1/customer/jewellery-enrolments/{enrolment.EnrolmentId}", enrolment);
             }
+            catch (RepeatEnrolmentConfirmationRequiredException ex)
+            {
+                return Results.Conflict(new RepeatEnrolmentConflictResponse
+                {
+                    Code = ex.Code,
+                    Message = ex.Message,
+                    TotalEnrolments = ex.TotalEnrolmentCount,
+                    ActiveEnrolments = ex.ActiveEnrolmentCount,
+                    TotalEnrolmentCount = ex.TotalEnrolmentCount,
+                    ActiveEnrolmentCount = ex.ActiveEnrolmentCount
+                });
+            }
             catch (KeyNotFoundException ex)
             {
                 return Results.NotFound(new { message = ex.Message });
@@ -240,8 +252,9 @@ public static class CustomerJewelleryPlanEndpoints
         })
         .WithName("CustomerCreateEnrolment")
         .WithSummary("Confirm and join jewellery plan")
-        .WithDescription("Creates an active enrolment immediately without requiring an initial payment. Idempotent across retries with the same IdempotencyKey. Triggers an activation notification.")
+        .WithDescription("Creates an active enrolment immediately without requiring an initial payment. Idempotent across retries with the same IdempotencyKey. Triggers an activation notification. Requires explicit confirmation if the customer has previously enrolled in this plan.")
         .Produces<CustomerEnrolmentDto>(StatusCodes.Status201Created)
+        .Produces<RepeatEnrolmentConflictResponse>(StatusCodes.Status409Conflict)
         .ProducesProblem(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status404NotFound)
         .ProducesProblem(StatusCodes.Status409Conflict);

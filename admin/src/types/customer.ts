@@ -40,6 +40,7 @@ export interface EnrolmentContribution {
   confirmedAtUtc: string;
   status: string;
   paymentMethod: string;
+  paymentReference?: string;
 }
 
 export interface CustomerEnrolment {

@@ -515,10 +515,177 @@ public class AdminCustomerTests
         Assert.Single(active.Contributions);
         Assert.Equal(600000m, active.Contributions[0].CurrencyAmount);
         Assert.Equal("Succeeded", active.Contributions[0].Status);
+        Assert.Equal("TXN-TEST-001", active.Contributions[0].PaymentReference);
+        Assert.Equal("MockOnline", active.Contributions[0].PaymentMethod);
 
-        // Also verify GetCustomerByIdAsync retrieves them
+        // Also verify GetCustomerByIdAsync retrieves them with identical balance and contribution data
         var details = await service.GetCustomerByIdAsync(superAdminId, customer.Id);
         Assert.Equal(3, details.JewelleryEnrolments.Count);
+        var detailActive = details.JewelleryEnrolments.First(e => e.Id == active.Id);
+        Assert.Equal(active.TotalSavedGrams, detailActive.TotalSavedGrams);
+        Assert.Equal(active.TotalContributedCurrency, detailActive.TotalContributedCurrency);
+        Assert.Equal(active.RemainingGrams, detailActive.RemainingGrams);
+        Assert.Equal(active.ProgressPercentage, detailActive.ProgressPercentage);
+        Assert.Single(detailActive.Contributions);
+        Assert.Equal("TXN-TEST-001", detailActive.Contributions[0].PaymentReference);
+        Assert.Equal("MockOnline", detailActive.Contributions[0].PaymentMethod);
+    }
+
+    [Fact]
+    public async Task GetCustomerJewelleryEnrolments_RepeatEnrolmentsAndUnconfirmedPayments_StaySeparateAndAccurate()
+    {
+        var (db, service, superAdminId, _, branch1Id, _) = CreateTestContext();
+
+        var customer = new Customer
+        {
+            Id = Guid.NewGuid(),
+            FullName = "Kavitha Selvam",
+            PhoneNumber = "+94775551234",
+            Email = "kavitha@example.com",
+            Nic = "199456789012",
+            PrimaryBranchId = branch1Id,
+            IsActive = true
+        };
+        db.Customers.Add(customer);
+
+        var plan = new JewelleryPlan
+        {
+            Id = Guid.NewGuid(),
+            BranchId = branch1Id,
+            Name = "Gold Sovereign Plan",
+            Code = "GSP-01",
+            TargetProductGoldWeightGrams = 20m,
+            IsActive = true
+        };
+        db.JewelleryPlans.Add(plan);
+
+        // Enrolment 1: Target = 20g, Confirmed Payment = 160,000 (5g)
+        var enr1 = new JewelleryEnrolment
+        {
+            Id = Guid.NewGuid(),
+            CustomerId = customer.Id,
+            JewelleryPlanId = plan.Id,
+            BranchId = branch1Id,
+            StartDate = new DateOnly(2025, 1, 1),
+            TargetEndDate = new DateOnly(2026, 1, 1),
+            TargetProductWeightGrams = 20m,
+            SelectedDurationMonths = 12,
+            Status = JewelleryEnrolmentStatus.Active
+        };
+
+        var pay1 = new Payment
+        {
+            Id = Guid.NewGuid(),
+            CustomerId = customer.Id,
+            BranchId = branch1Id,
+            Amount = 160000m,
+            Currency = "LKR",
+            Method = PaymentMethod.MockOnline,
+            Status = PaymentStatus.Succeeded,
+            ProviderReference = "ENR1-PAY1"
+        };
+        var contrib1 = new JewelleryContribution
+        {
+            Id = Guid.NewGuid(),
+            JewelleryEnrolmentId = enr1.Id,
+            PaymentId = pay1.Id,
+            CurrencyAmount = 160000m,
+            GoldGrams = 5.0m,
+            AppliedRatePerGram = 32000m,
+            Karat = 24,
+            ConfirmedAtUtc = DateTimeOffset.UtcNow
+        };
+        enr1.Contributions.Add(contrib1);
+
+        // Enrolment 2 (Repeat Enrolment on same plan): Target = 20g
+        // Has 1 Succeeded (80,000, 2.5g) and 1 Pending payment (80,000, 2.5g)
+        var enr2 = new JewelleryEnrolment
+        {
+            Id = Guid.NewGuid(),
+            CustomerId = customer.Id,
+            JewelleryPlanId = plan.Id,
+            BranchId = branch1Id,
+            StartDate = new DateOnly(2025, 2, 1),
+            TargetEndDate = new DateOnly(2026, 2, 1),
+            TargetProductWeightGrams = 20m,
+            SelectedDurationMonths = 12,
+            Status = JewelleryEnrolmentStatus.Active
+        };
+
+        var pay2Succ = new Payment
+        {
+            Id = Guid.NewGuid(),
+            CustomerId = customer.Id,
+            BranchId = branch1Id,
+            Amount = 80000m,
+            Currency = "LKR",
+            Method = PaymentMethod.Cash,
+            Status = PaymentStatus.Succeeded,
+            ProviderReference = "ENR2-PAY-SUCC"
+        };
+        var contrib2Succ = new JewelleryContribution
+        {
+            Id = Guid.NewGuid(),
+            JewelleryEnrolmentId = enr2.Id,
+            PaymentId = pay2Succ.Id,
+            CurrencyAmount = 80000m,
+            GoldGrams = 2.5m,
+            AppliedRatePerGram = 32000m,
+            Karat = 24,
+            ConfirmedAtUtc = DateTimeOffset.UtcNow
+        };
+
+        var pay2Pending = new Payment
+        {
+            Id = Guid.NewGuid(),
+            CustomerId = customer.Id,
+            BranchId = branch1Id,
+            Amount = 80000m,
+            Currency = "LKR",
+            Method = PaymentMethod.MockOnline,
+            Status = PaymentStatus.Pending,
+            ProviderReference = "ENR2-PAY-PENDING"
+        };
+        var contrib2Pending = new JewelleryContribution
+        {
+            Id = Guid.NewGuid(),
+            JewelleryEnrolmentId = enr2.Id,
+            PaymentId = pay2Pending.Id,
+            CurrencyAmount = 80000m,
+            GoldGrams = 2.5m,
+            AppliedRatePerGram = 32000m,
+            Karat = 24,
+            ConfirmedAtUtc = DateTimeOffset.UtcNow
+        };
+        enr2.Contributions.Add(contrib2Succ);
+        enr2.Contributions.Add(contrib2Pending);
+
+        db.Payments.AddRange(pay1, pay2Succ, pay2Pending);
+        db.JewelleryEnrolments.AddRange(enr1, enr2);
+        await db.SaveChangesAsync();
+
+        var enrolments = await service.GetCustomerJewelleryEnrolmentsAsync(superAdminId, customer.Id);
+        Assert.Equal(2, enrolments.Count);
+
+        var item1 = enrolments.First(e => e.Id == enr1.Id);
+        var item2 = enrolments.First(e => e.Id == enr2.Id);
+
+        // Enrolment 1 checks
+        Assert.Equal(5.0m, item1.TotalSavedGrams);
+        Assert.Equal(160000m, item1.TotalContributedCurrency);
+        Assert.Equal(15.0m, item1.RemainingGrams);
+        Assert.Equal(25.0m, item1.ProgressPercentage); // 5/20 * 100
+        Assert.Single(item1.Contributions);
+        Assert.Equal("ENR1-PAY1", item1.Contributions[0].PaymentReference);
+
+        // Enrolment 2 checks (Pending is excluded from progress and totals)
+        Assert.Equal(2.5m, item2.TotalSavedGrams);
+        Assert.Equal(80000m, item2.TotalContributedCurrency);
+        Assert.Equal(17.5m, item2.RemainingGrams);
+        Assert.Equal(12.5m, item2.ProgressPercentage); // 2.5/20 * 100
+        Assert.Equal(2, item2.Contributions.Count);
+        Assert.Contains(item2.Contributions, c => c.Status == "Pending" && c.PaymentReference == "ENR2-PAY-PENDING");
+        Assert.Contains(item2.Contributions, c => c.Status == "Succeeded" && c.PaymentReference == "ENR2-PAY-SUCC");
     }
 }
 

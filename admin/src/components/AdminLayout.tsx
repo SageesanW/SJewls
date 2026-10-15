@@ -9,6 +9,7 @@ import { Menu, Building2, ShieldCheck, LogOut } from "lucide-react";
 
 interface AdminLayoutProps {
   children: React.ReactNode;
+  title?: string;
 }
 
 export function AdminLayout({ children }: AdminLayoutProps) {

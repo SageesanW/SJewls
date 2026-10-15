@@ -86,6 +86,7 @@ export default function JewelleryPlansPage() {
   const [viewCustomersPlan, setViewCustomersPlan] = useState<JewelleryPlan | null>(null);
   const [planCustomersData, setPlanCustomersData] = useState<PlanCustomersPagedResponse | null>(null);
   const [customersLoading, setCustomersLoading] = useState<boolean>(false);
+  const [customersError, setCustomersError] = useState<string | null>(null);
   const [customersSearch, setCustomersSearch] = useState<string>("");
   const [customersPage, setCustomersPage] = useState<number>(1);
   const [selectedCustomerContributions, setSelectedCustomerContributions] = useState<PlanCustomerEnrolment | null>(null);
@@ -174,6 +175,7 @@ export default function JewelleryPlansPage() {
   // Load customers for selected plan
   const fetchPlanCustomers = async (planId: string, page = 1, search = "") => {
     setCustomersLoading(true);
+    setCustomersError(null);
     try {
       const res = await adminApi.getJewelleryPlanCustomers(planId, {
         page,
@@ -183,6 +185,7 @@ export default function JewelleryPlansPage() {
       setPlanCustomersData(res);
     } catch (err: any) {
       console.error("Failed to fetch plan customers", err);
+      setCustomersError(err?.message || "Failed to load customer enrolments. Please check your connection and try again.");
     } finally {
       setCustomersLoading(false);
     }
@@ -193,6 +196,18 @@ export default function JewelleryPlansPage() {
       fetchPlanCustomers(viewCustomersPlan.id, customersPage, customersSearch);
     }
   }, [viewCustomersPlan, customersPage]);
+
+  // Window focus listener for fresh payment & enrolment data
+  useEffect(() => {
+    const onFocus = () => {
+      fetchPlans();
+      if (viewCustomersPlan) {
+        fetchPlanCustomers(viewCustomersPlan.id, customersPage, customersSearch);
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [viewCustomersPlan, customersPage, customersSearch, currentPage, pageSize, selectedCategoryFilter, statusFilter, selectedBranchId]);
 
   const handleCustomersSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1384,7 +1399,17 @@ export default function JewelleryPlansPage() {
                     <p className="text-xs text-gray-500">
                       Category: <span className="font-semibold text-gray-700">{viewCustomersPlan.categoryName}</span> | Target:{" "}
                       <span className="font-semibold text-gray-700">{viewCustomersPlan.targetProductGoldWeightGrams} g</span> | Overall Progress:{" "}
-                      <span className="font-semibold text-[#0B3D0B]">{viewCustomersPlan.overallProgressPercentage}%</span>
+                      <span className="font-semibold text-[#0B3D0B]">
+                        {planCustomersData?.overallProgressPercentage ?? viewCustomersPlan.overallProgressPercentage}%
+                      </span>
+                      {planCustomersData?.totalCollectedCurrency != null && (
+                        <>
+                          {" "}| Total Collected:{" "}
+                          <span className="font-semibold text-gray-900">
+                            {planCustomersData.items[0]?.currency || "LKR"} {planCustomersData.totalCollectedCurrency.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </>
+                      )}
                     </p>
                   </div>
                 </div>
@@ -1394,6 +1419,7 @@ export default function JewelleryPlansPage() {
                   onClick={() => {
                     setViewCustomersPlan(null);
                     setPlanCustomersData(null);
+                    setCustomersError(null);
                     setSelectedCustomerContributions(null);
                   }}
                   className="w-8 h-8 rounded-full bg-gray-200/60 hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-all cursor-pointer"
@@ -1402,11 +1428,26 @@ export default function JewelleryPlansPage() {
                 </button>
               </div>
 
-              {/* Sub-toolbar: Search & Count */}
+              {/* Sub-toolbar: Search & Count & Manual Refresh */}
               <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 bg-white">
-                <span className="text-xs font-bold text-gray-600">
-                  Total Enrolments: {planCustomersData?.totalCount ?? 0}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-bold text-gray-600">
+                    Total Enrolments: {planCustomersData?.totalCount ?? 0}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (viewCustomersPlan) {
+                        fetchPlanCustomers(viewCustomersPlan.id, customersPage, customersSearch);
+                      }
+                    }}
+                    title="Refresh enrolments"
+                    className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600 transition-all cursor-pointer flex items-center gap-1 text-xs"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${customersLoading ? "animate-spin text-[#0B3D0B]" : ""}`} />
+                    <span className="text-[11px] font-medium">Refresh</span>
+                  </button>
+                </div>
 
                 <form onSubmit={handleCustomersSearchSubmit} className="relative w-full sm:w-72">
                   <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -1420,25 +1461,43 @@ export default function JewelleryPlansPage() {
                 </form>
               </div>
 
-              {/* Table or Empty state */}
+              {/* Table, Loading, Error, or Empty state */}
               <div className="overflow-x-auto">
                 {customersLoading ? (
                   <div className="py-20 flex flex-col items-center justify-center gap-3">
                     <div className="w-8 h-8 border-3 border-[#0B3D0B] border-t-[#FFD700] rounded-full animate-spin" />
                     <span className="text-xs font-semibold text-gray-500">Loading customer enrolments...</span>
                   </div>
+                ) : customersError ? (
+                  <div className="py-16 text-center space-y-3">
+                    <AlertCircle className="w-10 h-10 text-red-500 mx-auto" />
+                    <h4 className="text-sm font-bold text-gray-800">Failed to Load Enrolments</h4>
+                    <p className="text-xs text-red-600 max-w-sm mx-auto">{customersError}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (viewCustomersPlan) {
+                          fetchPlanCustomers(viewCustomersPlan.id, customersPage, customersSearch);
+                        }
+                      }}
+                      className="px-4 py-1.5 rounded-xl bg-[#0B3D0B] text-white text-xs font-semibold hover:bg-[#0B3D0B]/90 cursor-pointer"
+                    >
+                      Retry
+                    </button>
+                  </div>
                 ) : !planCustomersData || planCustomersData.items.length === 0 ? (
                   <div className="py-16 text-center space-y-2">
                     <Users className="w-10 h-10 text-gray-300 mx-auto" />
                     <h4 className="text-sm font-bold text-gray-800">No Customers Enrolled Yet</h4>
                     <p className="text-xs text-gray-400 max-w-sm mx-auto">
-                      There are currently no active customer enrolments for this plan. Customers joining via mobile will appear here with live contribution progress.
+                      There are currently no customer enrolments matching this filter for this plan. Customers joining via mobile will appear here with live contribution progress.
                     </p>
                   </div>
                 ) : (
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="bg-gray-50 text-[11px] font-bold text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                        <th className="py-3 px-4">Enrolment ID</th>
                         <th className="py-3 px-4">Customer</th>
                         <th className="py-3 px-4">Joining Date</th>
                         <th className="py-3 px-4">Duration & Deadline</th>
@@ -1454,6 +1513,11 @@ export default function JewelleryPlansPage() {
                     <tbody className="divide-y divide-gray-100">
                       {planCustomersData.items.map((c) => (
                         <tr key={c.enrolmentId} className="hover:bg-gray-50/60 transition-colors">
+                          <td className="py-3.5 px-4 font-mono text-[11px] font-bold text-gray-800 whitespace-nowrap">
+                            <span className="px-2 py-0.5 rounded bg-gray-100 border border-gray-200">
+                              {c.enrolmentReference || `ENR-${c.enrolmentId.substring(0, 8).toUpperCase()}`}
+                            </span>
+                          </td>
                           <td className="py-3.5 px-4">
                             <div className="font-bold text-gray-900">{c.customerName}</div>
                             <div className="text-[11px] text-gray-400 flex items-center gap-1.5 mt-0.5">
@@ -1563,15 +1627,17 @@ export default function JewelleryPlansPage() {
                   <h4 className="font-bold text-gray-900 text-sm">
                     Contribution Ledger — {selectedCustomerContributions.customerName}
                   </h4>
-                  <span className="text-xs text-gray-500">
-                    Target: {selectedCustomerContributions.enrolmentTargetGrams} g | Saved:{" "}
-                    {selectedCustomerContributions.netAccumulatedGrams} g
-                  </span>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Enrolment: <span className="font-mono font-semibold text-gray-800">{selectedCustomerContributions.enrolmentReference || `ENR-${selectedCustomerContributions.enrolmentId.substring(0, 8).toUpperCase()}`}</span> | Target:{" "}
+                    <span className="font-semibold text-gray-700">{selectedCustomerContributions.enrolmentTargetGrams} g</span> | Saved:{" "}
+                    <span className="font-semibold text-emerald-800">{selectedCustomerContributions.netAccumulatedGrams} g</span> | Total Paid:{" "}
+                    <span className="font-semibold text-gray-800">{selectedCustomerContributions.currency} {selectedCustomerContributions.totalConfirmedMoneyPaid.toLocaleString()}</span>
+                  </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setSelectedCustomerContributions(null)}
-                  className="w-7 h-7 rounded-full bg-gray-200/60 hover:bg-gray-200 flex items-center justify-center text-gray-600"
+                  className="w-7 h-7 rounded-full bg-gray-200/60 hover:bg-gray-200 flex items-center justify-center text-gray-600 cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -1580,7 +1646,7 @@ export default function JewelleryPlansPage() {
               <div className="p-6 max-h-96 overflow-y-auto">
                 {selectedCustomerContributions.contributions.length === 0 ? (
                   <p className="text-xs text-gray-500 text-center py-8">
-                    No contribution transactions recorded for this enrolment yet.
+                    No confirmed contribution transactions recorded for this enrolment yet.
                   </p>
                 ) : (
                   <table className="w-full text-left text-xs border-collapse">
@@ -1590,25 +1656,35 @@ export default function JewelleryPlansPage() {
                         <th className="py-2 text-right">Amount</th>
                         <th className="py-2 text-right">Credited Gold</th>
                         <th className="py-2 text-right">Applied Rate (24K)</th>
+                        <th className="py-2 text-center">Method</th>
+                        <th className="py-2 text-left pl-3">Reference</th>
                         <th className="py-2 text-center">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {selectedCustomerContributions.contributions.map((tx) => (
                         <tr key={tx.id}>
-                          <td className="py-2.5 font-medium text-gray-700">
+                          <td className="py-2.5 font-medium text-gray-700 whitespace-nowrap">
                             {new Date(tx.confirmedAtUtc).toLocaleDateString()}
                           </td>
-                          <td className="py-2.5 text-right font-semibold text-gray-900">
+                          <td className="py-2.5 text-right font-semibold text-gray-900 whitespace-nowrap">
                             {tx.currency} {tx.currencyAmount.toLocaleString()}
                           </td>
-                          <td className="py-2.5 text-right font-bold text-emerald-800">
+                          <td className="py-2.5 text-right font-bold text-emerald-800 whitespace-nowrap">
                             +{tx.goldGrams} g
                           </td>
-                          <td className="py-2.5 text-right text-gray-600">
+                          <td className="py-2.5 text-right text-gray-600 whitespace-nowrap">
                             {tx.currency} {tx.appliedRatePerGram.toLocaleString()}/g
                           </td>
-                          <td className="py-2.5 text-center">
+                          <td className="py-2.5 text-center whitespace-nowrap">
+                            <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-[10px] font-semibold">
+                              {tx.paymentMethod || "MockOnline"}
+                            </span>
+                          </td>
+                          <td className="py-2.5 text-left pl-3 font-mono text-[11px] text-gray-600 whitespace-nowrap">
+                            {tx.paymentReference || "—"}
+                          </td>
+                          <td className="py-2.5 text-center whitespace-nowrap">
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
                               {tx.status}
                             </span>

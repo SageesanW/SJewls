@@ -2,7 +2,7 @@
   "openapi": "3.0.1",
   "info": {
     "title": "SJewls Admin & Staff Portal API",
-    "description": "API endpoints for the SJewls Admin Web Portal — Staff Authentication, Password Recovery, Staff User Management, Customer Management with Full Unmasked NIC, and Branch Statistics.",
+    "description": "API endpoints for the SJewls Admin Web Portal \u2014 Staff Authentication, Password Recovery, Staff User Management, Customer Management with Full Unmasked NIC, and Branch Statistics.",
     "version": "v1"
   },
   "servers": [
@@ -1604,7 +1604,7 @@
           "Admin Jewellery Plans"
         ],
         "summary": "Calculate Gold Rate Financial Quote",
-        "description": "Calculates gold contribution conversion using the current applicable 24K branch rate. Supports conversion by grams (grams × rate = payable money) and by money (money ÷ rate = credited grams) with strict 4-decimal gram precision and remainder checks.",
+        "description": "Calculates gold contribution conversion using the current applicable 24K branch rate. Supports conversion by grams (grams \u00d7 rate = payable money) and by money (money \u00f7 rate = credited grams) with strict 4-decimal gram precision and remainder checks.",
         "operationId": "AdminCalculateJewelleryFinancialQuote",
         "requestBody": {
           "content": {
@@ -1803,6 +1803,359 @@
         "responses": {
           "200": {
             "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/gold-rates": {
+      "post": {
+        "tags": [
+          "Admin Gold Rates"
+        ],
+        "summary": "Record Branch Gold Rate",
+        "description": "Records a branch gold rate in LKR per gram for calculations and customer quotes.",
+        "operationId": "AdminRecordGoldRate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordGoldRateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Admin Gold Rates"
+        ],
+        "summary": "Get Recorded Gold Rates",
+        "operationId": "AdminGetGoldRates",
+        "parameters": [
+          {
+            "name": "branchId",
+            "in": "query",
+            "style": "form",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/jewellery-enrolments/preview-assignment": {
+      "post": {
+        "tags": [
+          "Admin Jewellery Enrolments"
+        ],
+        "summary": "Preview Plan Assignment Eligibility and Repeat Status",
+        "description": "Checks customer and plan eligibility, verifies repeat enrolment count, and provides read-only target grams, premium, and offered durations.",
+        "operationId": "AdminPreviewPlanAssignment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminEnrolmentPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminEnrolmentPreviewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/jewellery-enrolments": {
+      "post": {
+        "tags": [
+          "Admin Jewellery Enrolments"
+        ],
+        "summary": "Assign Jewellery Savings Plan to Customer by Staff",
+        "description": "Creates a new active enrolment for an authorized customer without initial payment. Enforces read-only plan target grams, offered durations, branch eligibility, and repeat enrolment confirmation.",
+        "operationId": "AdminAssignJewelleryPlan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminAssignPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCustomerEnrolmentDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/jewellery-enrolments/{enrolmentId}": {
+      "get": {
+        "tags": [
+          "Admin Jewellery Enrolments"
+        ],
+        "summary": "Get Single Jewellery Enrolment Details",
+        "description": "Retrieves detailed snapshot terms, saved and remaining grams, progress, and contributions for a specific enrolment.",
+        "operationId": "AdminGetJewelleryEnrolmentById",
+        "parameters": [
+          {
+            "name": "enrolmentId",
+            "in": "path",
+            "required": true,
+            "style": "simple",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCustomerEnrolmentDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/jewellery-enrolments/{enrolmentId}/payments/preview": {
+      "post": {
+        "tags": [
+          "Admin Jewellery Enrolments"
+        ],
+        "summary": "Preview In-Store Cash Payment Calculation",
+        "description": "Calculates authoritative Buy Amount or Buy Gram breakdown using live 24K gold rate and enrolment premium snapshot without altering database state.",
+        "operationId": "AdminPreviewInStorePayment",
+        "parameters": [
+          {
+            "name": "enrolmentId",
+            "in": "path",
+            "required": true,
+            "style": "simple",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminRecordPaymentPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminRecordPaymentPreviewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/jewellery-enrolments/{enrolmentId}/payments": {
+      "post": {
+        "tags": [
+          "Admin Jewellery Enrolments"
+        ],
+        "summary": "Record In-Store Cash Received for Enrolment",
+        "description": "Authoritatively records cash received in store on today's branch date. Applies live gold rate, credits gold grams atomically, updates balances, and marks enrolment Completed if target is reached.",
+        "operationId": "AdminRecordInStorePayment",
+        "parameters": [
+          {
+            "name": "enrolmentId",
+            "in": "path",
+            "required": true,
+            "style": "simple",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminRecordPaymentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminRecordPaymentResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Admin Jewellery Enrolments"
+        ],
+        "summary": "Get Payment History for Enrolment",
+        "description": "Retrieves all confirmed payments and gold contributions for a specific enrolment.",
+        "operationId": "AdminGetJewelleryEnrolmentPayments",
+        "parameters": [
+          {
+            "name": "enrolmentId",
+            "in": "path",
+            "required": true,
+            "style": "simple",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EnrolmentContributionDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
           }
         }
       }
@@ -2514,6 +2867,10 @@
           "paymentMethod": {
             "type": "string",
             "nullable": true
+          },
+          "paymentReference": {
+            "type": "string",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -3027,6 +3384,10 @@
             "type": "number",
             "format": "double"
           },
+          "totalCollectedCurrency": {
+            "type": "number",
+            "format": "double"
+          },
           "items": {
             "type": "array",
             "items": {
@@ -3414,6 +3775,379 @@
           }
         },
         "additionalProperties": false
+      },
+      "AdminRecordPaymentResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          },
+          "paymentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "paymentReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "amountPaid": {
+            "type": "number",
+            "format": "double"
+          },
+          "currency": {
+            "type": "string",
+            "nullable": true
+          },
+          "netCreditedGrams": {
+            "type": "number",
+            "format": "double"
+          },
+          "appliedRatePerGram": {
+            "type": "number",
+            "format": "double"
+          },
+          "appliedPremiumPercentage": {
+            "type": "number",
+            "format": "double"
+          },
+          "newTotalSavedGrams": {
+            "type": "number",
+            "format": "double"
+          },
+          "remainingGrams": {
+            "type": "number",
+            "format": "double"
+          },
+          "progressPercentage": {
+            "type": "number",
+            "format": "double"
+          },
+          "planCompleted": {
+            "type": "boolean"
+          },
+          "recordedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AdminRecordPaymentPreviewResponse": {
+        "type": "object",
+        "properties": {
+          "enrolmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "enrolmentReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "customerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "customerName": {
+            "type": "string",
+            "nullable": true
+          },
+          "planName": {
+            "type": "string",
+            "nullable": true
+          },
+          "mode": {
+            "type": "string",
+            "nullable": true
+          },
+          "ratePerGram": {
+            "type": "number",
+            "format": "double"
+          },
+          "currency": {
+            "type": "string",
+            "nullable": true
+          },
+          "rateAsOf": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "rateSource": {
+            "type": "string",
+            "nullable": true
+          },
+          "premiumPercentage": {
+            "type": "number",
+            "format": "double"
+          },
+          "baseGoldGrams": {
+            "type": "number",
+            "format": "double"
+          },
+          "premiumGrams": {
+            "type": "number",
+            "format": "double"
+          },
+          "chargeableGoldGrams": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "netCreditedGrams": {
+            "type": "number",
+            "format": "double"
+          },
+          "amountPayable": {
+            "type": "number",
+            "format": "double"
+          },
+          "currentSavedGrams": {
+            "type": "number",
+            "format": "double"
+          },
+          "targetGrams": {
+            "type": "number",
+            "format": "double"
+          },
+          "remainingGramsBeforePayment": {
+            "type": "number",
+            "format": "double"
+          },
+          "remainingGramsAfterPayment": {
+            "type": "number",
+            "format": "double"
+          },
+          "willReachCompletion": {
+            "type": "boolean"
+          },
+          "willExceedTarget": {
+            "type": "boolean"
+          },
+          "paymentDate": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AdminEnrolmentPreviewResponse": {
+        "type": "object",
+        "properties": {
+          "customerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "customerName": {
+            "type": "string",
+            "nullable": true
+          },
+          "phoneNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "customerBranchId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "customerBranchName": {
+            "type": "string",
+            "nullable": true
+          },
+          "planId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "planName": {
+            "type": "string",
+            "nullable": true
+          },
+          "categoryName": {
+            "type": "string",
+            "nullable": true
+          },
+          "targetProductGoldWeightGrams": {
+            "type": "number",
+            "format": "double"
+          },
+          "premiumPercentage": {
+            "type": "number",
+            "format": "double"
+          },
+          "allowedDurationsMonths": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "nullable": true
+          },
+          "planStartDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "isPlanActive": {
+            "type": "boolean"
+          },
+          "totalExistingEnrolments": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "activeExistingEnrolments": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "requiresRepeatConfirmation": {
+            "type": "boolean",
+            "readOnly": true
+          },
+          "isEligible": {
+            "type": "boolean"
+          },
+          "ineligibilityReason": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "RecordGoldRateRequest": {
+        "type": "object",
+        "properties": {
+          "branchId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "karat": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ratePerGram": {
+            "type": "number",
+            "format": "double"
+          },
+          "effectiveFromUtc": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "AdminRecordPaymentPreviewRequest": {
+        "required": [
+          "mode"
+        ],
+        "type": "object",
+        "properties": {
+          "mode": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "enteredAmount": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "requestedGrams": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "AdminEnrolmentPreviewRequest": {
+        "required": [
+          "customerId",
+          "planId"
+        ],
+        "type": "object",
+        "properties": {
+          "customerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "planId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AdminAssignPlanRequest": {
+        "required": [
+          "customerId",
+          "planId",
+          "selectedDurationMonths"
+        ],
+        "type": "object",
+        "properties": {
+          "customerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "planId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "selectedDurationMonths": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "confirmRepeatEnrolment": {
+            "type": "boolean"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "AdminRecordPaymentRequest": {
+        "required": [
+          "mode"
+        ],
+        "type": "object",
+        "properties": {
+          "mode": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "enteredAmount": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "requestedGrams": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "confirmedReceived": {
+            "type": "boolean"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
       }
     },
     "securitySchemes": {
@@ -3427,7 +4161,7 @@
   },
   "security": [
     {
-      "Bearer": [ ]
+      "Bearer": []
     }
   ]
 }

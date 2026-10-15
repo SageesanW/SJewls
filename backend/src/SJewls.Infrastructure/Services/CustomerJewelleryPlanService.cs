@@ -1,8 +1,10 @@
+using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using SJewls.Application.Common;
 using SJewls.Application.DTOs;
+using SJewls.Application.Exceptions;
 using SJewls.Application.Interfaces;
 using SJewls.Domain.Entities;
 using SJewls.Domain.Enums;
@@ -147,6 +149,8 @@ public class CustomerJewelleryPlanService : ICustomerJewelleryPlanService
 
     #region Enrolment Confirmation & Creation
 
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> _enrolmentLocks = new();
+
     public async Task<EnrolmentPreviewResponse> PreviewEnrolmentAsync(
         Guid customerId,
         EnrolmentPreviewRequest request,
@@ -184,6 +188,15 @@ public class CustomerJewelleryPlanService : ICustomerJewelleryPlanService
         var proposedJoiningDate = branchToday;
         var proposedDeadline = proposedJoiningDate.AddMonths(request.SelectedDurationMonths);
 
+        // Query historical and active enrolments for this customer and requested plan
+        var existingEnrolments = _db.JewelleryEnrolments
+            .AsNoTracking()
+            .Where(e => e.CustomerId == customerId && e.JewelleryPlanId == plan.Id);
+
+        var totalEnrolmentCount = await existingEnrolments.CountAsync(ct);
+        var activeEnrolmentCount = await existingEnrolments.CountAsync(e => e.Status == JewelleryEnrolmentStatus.Active, ct);
+        var hasPreviouslyJoined = totalEnrolmentCount > 0;
+
         return new EnrolmentPreviewResponse
         {
             PlanId = plan.Id,
@@ -196,7 +209,11 @@ public class CustomerJewelleryPlanService : ICustomerJewelleryPlanService
             PremiumPercentage = plan.PremiumPercentage,
             ProposedJoiningDate = proposedJoiningDate,
             ProposedDeadline = proposedDeadline,
-            Currency = "LKR"
+            Currency = "LKR",
+            HasPreviouslyJoined = hasPreviouslyJoined,
+            TotalEnrolmentCount = totalEnrolmentCount,
+            ActiveEnrolmentCount = activeEnrolmentCount,
+            RequiresRepeatJoinConfirmation = hasPreviouslyJoined
         };
     }
 
@@ -208,23 +225,32 @@ public class CustomerJewelleryPlanService : ICustomerJewelleryPlanService
         var customer = await GetActiveCustomerAsync(customerId, ct);
         var branchToday = GetBranchToday(customer.PrimaryBranch?.Timezone);
 
-        // Idempotency check: If an enrolment with this idempotency key already exists for this customer, return it
+        // 1. Idempotency check: Resolve valid retry of an already successful request
+        // BEFORE treating its resulting enrolment as a previous enrolment requiring confirmation.
         if (!string.IsNullOrWhiteSpace(request.IdempotencyKey))
         {
+            var trimmedKey = request.IdempotencyKey.Trim();
             var existingEnrolment = await _db.JewelleryEnrolments
                 .Include(e => e.Customer)
                 .Include(e => e.Branch)
-                .FirstOrDefaultAsync(e => e.CustomerId == customerId && e.IdempotencyKey == request.IdempotencyKey.Trim(), ct);
+                .FirstOrDefaultAsync(e => e.CustomerId == customerId && e.IdempotencyKey == trimmedKey, ct);
 
             if (existingEnrolment != null)
             {
+                // Follow existing payload-conflict handling when a key is reused with different request contents.
+                if (existingEnrolment.JewelleryPlanId != request.PlanId ||
+                    existingEnrolment.SelectedDurationMonths != request.SelectedDurationMonths)
+                {
+                    throw new InvalidOperationException("The idempotency key has already been used with a different enrolment request payload.");
+                }
+
                 _logger.LogInformation("Idempotent enrolment request deduplicated for customer {CustomerId}, key {Key}",
                     customerId, request.IdempotencyKey);
                 return MapToEnrolmentDto(existingEnrolment, customer, branchToday);
             }
         }
 
-        // Revalidate plan availability
+        // 2. Revalidate plan availability & eligibility
         var plan = await _db.JewelleryPlans
             .Include(p => p.Category)
             .FirstOrDefaultAsync(p => p.Id == request.PlanId, ct)
@@ -250,44 +276,108 @@ public class CustomerJewelleryPlanService : ICustomerJewelleryPlanService
             throw new ArgumentException($"The selected duration of {request.SelectedDurationMonths} months is not offered by this plan.");
         }
 
-        var joiningDate = branchToday;
-        var deadline = joiningDate.AddMonths(request.SelectedDurationMonths);
-
-        var enrolment = new JewelleryEnrolment
+        // 3. Concurrency protection per customer and plan:
+        // Ensures two simultaneous first-join requests cannot silently bypass repeat-enrolment confirmation.
+        var lockKey = $"{customerId:N}_{plan.Id:N}";
+        var semaphore = _enrolmentLocks.GetOrAdd(lockKey, _ => new SemaphoreSlim(1, 1));
+        await semaphore.WaitAsync(ct);
+        try
         {
-            CustomerId = customerId,
-            JewelleryPlanId = plan.Id,
-            BranchId = customer.PrimaryBranchId,
-            IdempotencyKey = string.IsNullOrWhiteSpace(request.IdempotencyKey) ? null : request.IdempotencyKey.Trim(),
-            Currency = "LKR",
-            PlanNameSnapshot = plan.Name,
-            CategoryNameSnapshot = plan.Category?.Name ?? string.Empty,
-            ImageUrlSnapshot = plan.ImageUrl,
-            TargetProductWeightGrams = plan.TargetProductGoldWeightGrams,
-            SelectedDurationMonths = request.SelectedDurationMonths,
-            PremiumPercentage = plan.PremiumPercentage,
-            StartDate = joiningDate,
-            TargetEndDate = deadline,
-            TotalSavedGrams = 0m,
-            TotalContributedCurrency = 0m,
-            Status = JewelleryEnrolmentStatus.Active
-        };
+            // Re-check idempotency key under lock in case a concurrent request with the same key just completed
+            if (!string.IsNullOrWhiteSpace(request.IdempotencyKey))
+            {
+                var trimmedKey = request.IdempotencyKey.Trim();
+                var existingEnrolment = await _db.JewelleryEnrolments
+                    .Include(e => e.Customer)
+                    .Include(e => e.Branch)
+                    .FirstOrDefaultAsync(e => e.CustomerId == customerId && e.IdempotencyKey == trimmedKey, ct);
 
-        _db.JewelleryEnrolments.Add(enrolment);
-        await _db.SaveChangesAsync(ct);
+                if (existingEnrolment != null)
+                {
+                    if (existingEnrolment.JewelleryPlanId != request.PlanId ||
+                        existingEnrolment.SelectedDurationMonths != request.SelectedDurationMonths)
+                    {
+                        throw new InvalidOperationException("The idempotency key has already been used with a different enrolment request payload.");
+                    }
 
-        // Persist activation notification
-        await _notificationService.CreateNotificationAsync(
-            customerId,
-            "Jewellery Plan Activated",
-            $"Your enrolment in {plan.Name} ({plan.TargetProductGoldWeightGrams}g) for {request.SelectedDurationMonths} months has been successfully activated.",
-            "enrolment",
-            ct);
+                    return MapToEnrolmentDto(existingEnrolment, customer, branchToday);
+                }
+            }
 
-        _logger.LogInformation("Customer {CustomerId} created enrolment {EnrolmentId} for plan {PlanId}",
-            customerId, enrolment.Id, plan.Id);
+            // 4. Repeat enrolment verification against database:
+            // Check all historical enrolments (active, completed, closed, etc.) and active count separately
+            var existingEnrolmentsQuery = _db.JewelleryEnrolments
+                .Where(e => e.CustomerId == customerId && e.JewelleryPlanId == plan.Id);
 
-        return MapToEnrolmentDto(enrolment, customer, branchToday);
+            var totalEnrolments = await existingEnrolmentsQuery.CountAsync(ct);
+            var activeEnrolments = await existingEnrolmentsQuery.CountAsync(e => e.Status == JewelleryEnrolmentStatus.Active, ct);
+
+            if (totalEnrolments > 0 && !request.ConfirmRepeatEnrolment)
+            {
+                throw new RepeatEnrolmentConfirmationRequiredException(totalEnrolments, activeEnrolments);
+            }
+
+            var joiningDate = branchToday;
+            var deadline = joiningDate.AddMonths(request.SelectedDurationMonths);
+
+            var enrolment = new JewelleryEnrolment
+            {
+                CustomerId = customerId,
+                JewelleryPlanId = plan.Id,
+                BranchId = customer.PrimaryBranchId,
+                IdempotencyKey = string.IsNullOrWhiteSpace(request.IdempotencyKey) ? null : request.IdempotencyKey.Trim(),
+                Currency = "LKR",
+                PlanNameSnapshot = plan.Name,
+                CategoryNameSnapshot = plan.Category?.Name ?? string.Empty,
+                ImageUrlSnapshot = plan.ImageUrl,
+                TargetProductWeightGrams = plan.TargetProductGoldWeightGrams,
+                SelectedDurationMonths = request.SelectedDurationMonths,
+                PremiumPercentage = plan.PremiumPercentage,
+                StartDate = joiningDate,
+                TargetEndDate = deadline,
+                TotalSavedGrams = 0m,
+                TotalContributedCurrency = 0m,
+                Status = JewelleryEnrolmentStatus.Active
+            };
+
+            var isRelational = _db.Database.IsRelational();
+            await using var transaction = isRelational ? await _db.Database.BeginTransactionAsync(ct) : null;
+            try
+            {
+                _db.JewelleryEnrolments.Add(enrolment);
+                await _db.SaveChangesAsync(ct);
+
+                if (transaction != null)
+                {
+                    await transaction.CommitAsync(ct);
+                }
+            }
+            catch
+            {
+                if (transaction != null)
+                {
+                    await transaction.RollbackAsync(ct);
+                }
+                throw;
+            }
+
+            // Persist activation notification
+            await _notificationService.CreateNotificationAsync(
+                customerId,
+                "Jewellery Plan Activated",
+                $"Your enrolment in {plan.Name} ({plan.TargetProductGoldWeightGrams}g) for {request.SelectedDurationMonths} months has been successfully activated.",
+                "enrolment",
+                ct);
+
+            _logger.LogInformation("Customer {CustomerId} created enrolment {EnrolmentId} for plan {PlanId}",
+                customerId, enrolment.Id, plan.Id);
+
+            return MapToEnrolmentDto(enrolment, customer, branchToday);
+        }
+        finally
+        {
+            semaphore.Release();
+        }
     }
 
     #endregion
@@ -304,6 +394,8 @@ public class CustomerJewelleryPlanService : ICustomerJewelleryPlanService
         var branchToday = GetBranchToday(customer.PrimaryBranch?.Timezone);
 
         var query = _db.JewelleryEnrolments
+            .Include(e => e.Contributions)
+                .ThenInclude(c => c.Payment)
             .Where(e => e.CustomerId == customerId)
             .OrderByDescending(e => e.CreatedAtUtc)
             .AsNoTracking();
@@ -334,6 +426,8 @@ public class CustomerJewelleryPlanService : ICustomerJewelleryPlanService
         var branchToday = GetBranchToday(customer.PrimaryBranch?.Timezone);
 
         var enrolment = await _db.JewelleryEnrolments
+            .Include(e => e.Contributions)
+                .ThenInclude(c => c.Payment)
             .AsNoTracking()
             .FirstOrDefaultAsync(e => e.Id == enrolmentId, ct)
             ?? throw new KeyNotFoundException($"Enrolment '{enrolmentId}' was not found.");
@@ -380,7 +474,8 @@ public class CustomerJewelleryPlanService : ICustomerJewelleryPlanService
             AppliedRatePerGram = c.AppliedRatePerGram,
             ConfirmedAtUtc = c.ConfirmedAtUtc,
             Status = c.Payment?.Status.ToString() ?? "Succeeded",
-            PaymentMethod = c.Payment?.Method.ToString() ?? "Online"
+            PaymentMethod = c.Payment?.Method.ToString() ?? "Online",
+            PaymentReference = c.Payment?.ProviderReference ?? string.Empty
         }).ToList();
     }
 
@@ -709,7 +804,18 @@ public class CustomerJewelleryPlanService : ICustomerJewelleryPlanService
         DateOnly branchToday)
     {
         var targetGrams = e.TargetProductWeightGrams;
-        var netGrams = e.TotalSavedGrams;
+        var confirmedContribs = e.Contributions != null
+            ? e.Contributions.Where(c => c.Payment == null || c.Payment.Status == PaymentStatus.Succeeded).ToList()
+            : new List<JewelleryContribution>();
+
+        var netGrams = (e.Contributions != null && e.Contributions.Any())
+            ? confirmedContribs.Sum(c => c.GoldGrams)
+            : e.TotalSavedGrams;
+
+        var confirmedMoney = (e.Contributions != null && e.Contributions.Any())
+            ? confirmedContribs.GroupBy(c => c.PaymentId).Select(g => g.First().CurrencyAmount).Sum()
+            : e.TotalContributedCurrency;
+
         var remaining = Math.Max(0m, targetGrams - netGrams);
         var progress = targetGrams > 0 ? Math.Round((netGrams / targetGrams) * 100m, 2) : 0m;
         if (progress > 100m) progress = 100m;
@@ -743,7 +849,7 @@ public class CustomerJewelleryPlanService : ICustomerJewelleryPlanService
             Deadline = e.TargetEndDate,
             PremiumPercentage = e.PremiumPercentage,
             Currency = e.Currency,
-            TotalConfirmedMoneyPaid = e.TotalContributedCurrency,
+            TotalConfirmedMoneyPaid = confirmedMoney,
             NetAccumulatedGoldGrams = netGrams,
             RemainingGrams = remaining,
             IndividualProgressPercentage = progress,

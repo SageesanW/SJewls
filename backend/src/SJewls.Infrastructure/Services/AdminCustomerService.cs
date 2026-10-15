@@ -321,12 +321,25 @@ public class AdminCustomerService : IAdminCustomerService
         var planName = !string.IsNullOrWhiteSpace(e.PlanNameSnapshot) ? e.PlanNameSnapshot : (e.JewelleryPlan?.Name ?? "Jewellery Plan");
         var categoryName = !string.IsNullOrWhiteSpace(e.CategoryNameSnapshot) ? e.CategoryNameSnapshot : (e.JewelleryPlan?.Category?.Name ?? string.Empty);
         var planCode = e.JewelleryPlan?.Code ?? "JEW";
-        var remainingGrams = Math.Max(0m, e.TargetProductWeightGrams - e.TotalSavedGrams);
+
+        var confirmedContribs = e.Contributions
+            .Where(c => c.Payment == null || c.Payment.Status == PaymentStatus.Succeeded)
+            .ToList();
+
+        var netGrams = e.Contributions.Any()
+            ? confirmedContribs.Sum(c => c.GoldGrams)
+            : e.TotalSavedGrams;
+
+        var confirmedMoney = e.Contributions.Any()
+            ? confirmedContribs.GroupBy(c => c.PaymentId).Select(g => g.First().CurrencyAmount).Sum()
+            : e.TotalContributedCurrency;
+
+        var remainingGrams = Math.Max(0m, e.TargetProductWeightGrams - netGrams);
 
         decimal progress = 0m;
         if (e.TargetProductWeightGrams > 0)
         {
-            progress = Math.Min(100m, Math.Round((e.TotalSavedGrams / e.TargetProductWeightGrams) * 100m, 1));
+            progress = Math.Min(100m, Math.Round((netGrams / e.TargetProductWeightGrams) * 100m, 1));
         }
 
         var contributions = e.Contributions
@@ -341,22 +354,25 @@ public class AdminCustomerService : IAdminCustomerService
                 Karat = c.Karat,
                 ConfirmedAtUtc = c.ConfirmedAtUtc,
                 Status = c.Payment?.Status.ToString() ?? "Succeeded",
-                PaymentMethod = c.Payment?.Method.ToString() ?? "Online"
+                PaymentMethod = c.Payment?.Method.ToString() ?? "Online",
+                PaymentReference = c.Payment?.ProviderReference ?? string.Empty
             })
             .ToList();
 
         return new AdminCustomerEnrolmentDto
         {
             Id = e.Id,
-            EnrolmentReference = $"ENR-{e.Id.ToString()[..8].ToUpperInvariant()}",
+            EnrolmentReference = !string.IsNullOrWhiteSpace(e.IdempotencyKey) && e.IdempotencyKey.StartsWith("ENR-")
+                ? e.IdempotencyKey
+                : $"ENR-{e.Id.ToString()[..8].ToUpperInvariant()}",
             PlanId = e.JewelleryPlanId,
             PlanName = planName,
             PlanCode = planCode,
             CategoryName = categoryName,
             TargetWeightGrams = e.TargetProductWeightGrams,
-            TotalSavedGrams = e.TotalSavedGrams,
+            TotalSavedGrams = netGrams,
             RemainingGrams = remainingGrams,
-            TotalContributedCurrency = e.TotalContributedCurrency,
+            TotalContributedCurrency = confirmedMoney,
             Currency = e.Currency ?? "LKR",
             PremiumPercentage = e.PremiumPercentage,
             SelectedDurationMonths = e.SelectedDurationMonths,

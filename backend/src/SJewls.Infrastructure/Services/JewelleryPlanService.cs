@@ -102,7 +102,10 @@ public class JewelleryPlanService : IJewelleryPlanService
                 .ToList();
 
             var totalTargetGramsAcrossEnrolments = relevantEnrolments.Sum(e => e.TargetProductWeightGrams);
-            var totalNetAccumulatedGrams = relevantEnrolments.Sum(e => e.TotalSavedGrams);
+            var totalNetAccumulatedGrams = relevantEnrolments.Sum(e =>
+                e.Contributions.Any()
+                    ? e.Contributions.Where(c => c.Payment == null || c.Payment.Status == PaymentStatus.Succeeded).Sum(c => c.GoldGrams)
+                    : e.TotalSavedGrams);
             var activeEnrolmentsCount = relevantEnrolments.Count(e => e.Status == JewelleryEnrolmentStatus.Active);
 
             decimal overallProgress = 0m;
@@ -259,7 +262,10 @@ public class JewelleryPlanService : IJewelleryPlanService
             .ToList();
 
         var totalTargetGramsAcrossEnrolments = relevantEnrolments.Sum(e => e.TargetProductWeightGrams);
-        var totalNetAccumulatedGrams = relevantEnrolments.Sum(e => e.TotalSavedGrams);
+        var totalNetAccumulatedGrams = relevantEnrolments.Sum(e =>
+            e.Contributions.Any()
+                ? e.Contributions.Where(c => c.Payment == null || c.Payment.Status == PaymentStatus.Succeeded).Sum(c => c.GoldGrams)
+                : e.TotalSavedGrams);
         var activeEnrolmentsCount = relevantEnrolments.Count(e => e.Status == JewelleryEnrolmentStatus.Active);
 
         decimal overallProgress = 0m;
@@ -775,18 +781,36 @@ public class JewelleryPlanService : IJewelleryPlanService
             }
         }
 
-        var allEnrolments = await _db.JewelleryEnrolments
+        var allPlanEnrolments = await _db.JewelleryEnrolments
+            .Include(e => e.Contributions)
+                .ThenInclude(c => c.Payment)
             .Where(e => e.JewelleryPlanId == planId && e.Status != JewelleryEnrolmentStatus.Cancelled)
-            .Select(e => new { e.TargetProductWeightGrams, e.TotalSavedGrams })
+            .AsNoTracking()
             .ToListAsync(ct);
 
-        var totalTargetGrams = allEnrolments.Sum(e => e.TargetProductWeightGrams);
-        var totalSavedGrams = allEnrolments.Sum(e => e.TotalSavedGrams);
+        var totalTargetGrams = allPlanEnrolments.Sum(e => e.TargetProductWeightGrams);
+        var totalSavedGrams = allPlanEnrolments.Sum(e =>
+            e.Contributions.Any()
+                ? e.Contributions.Where(c => c.Payment == null || c.Payment.Status == PaymentStatus.Succeeded).Sum(c => c.GoldGrams)
+                : e.TotalSavedGrams);
+
         decimal overallProgress = 0m;
         if (totalTargetGrams > 0)
         {
             overallProgress = Math.Round((totalSavedGrams / totalTargetGrams) * 100m, 1);
             if (overallProgress > 100m) overallProgress = 100m;
+        }
+
+        var totalCollectedCurrency = allPlanEnrolments
+            .SelectMany(e => e.Contributions)
+            .Where(c => c.Payment == null || c.Payment.Status == PaymentStatus.Succeeded)
+            .GroupBy(c => c.PaymentId)
+            .Select(g => g.First().CurrencyAmount)
+            .Sum();
+
+        if (totalCollectedCurrency == 0m && allPlanEnrolments.Any(e => e.TotalContributedCurrency > 0))
+        {
+            totalCollectedCurrency = allPlanEnrolments.Sum(e => e.TotalContributedCurrency);
         }
 
         var totalCount = await query.CountAsync(ct);
@@ -800,7 +824,18 @@ public class JewelleryPlanService : IJewelleryPlanService
         var dtos = items.Select(e =>
         {
             var targetGrams = e.TargetProductWeightGrams;
-            var netGrams = e.TotalSavedGrams;
+            var confirmedContribs = e.Contributions
+                .Where(c => c.Payment == null || c.Payment.Status == PaymentStatus.Succeeded)
+                .ToList();
+
+            var netGrams = e.Contributions.Any()
+                ? confirmedContribs.Sum(c => c.GoldGrams)
+                : e.TotalSavedGrams;
+
+            var confirmedMoney = e.Contributions.Any()
+                ? confirmedContribs.GroupBy(c => c.PaymentId).Select(g => g.First().CurrencyAmount).Sum()
+                : e.TotalContributedCurrency;
+
             var remaining = Math.Max(0m, targetGrams - netGrams);
 
             decimal individualProgress = 0m;
@@ -815,20 +850,23 @@ public class JewelleryPlanService : IJewelleryPlanService
                 {
                     Id = c.Id,
                     CurrencyAmount = c.CurrencyAmount,
-                    Currency = e.Branch?.Currency ?? "LKR",
+                    Currency = e.Branch?.Currency ?? e.Currency ?? "LKR",
                     GoldGrams = c.GoldGrams,
                     AppliedRatePerGram = c.AppliedRatePerGram,
                     Karat = c.Karat,
                     ConfirmedAtUtc = c.ConfirmedAtUtc,
                     Status = c.Payment?.Status.ToString() ?? "Succeeded",
-                    PaymentMethod = c.Payment?.Method.ToString() ?? "Online"
+                    PaymentMethod = c.Payment?.Method.ToString() ?? "Online",
+                    PaymentReference = c.Payment?.ProviderReference ?? string.Empty
                 })
                 .ToList();
 
             return new PlanCustomerEnrolmentDto
             {
                 EnrolmentId = e.Id,
-                EnrolmentReference = $"ENR-{e.Id.ToString()[..8].ToUpperInvariant()}",
+                EnrolmentReference = !string.IsNullOrWhiteSpace(e.IdempotencyKey) && e.IdempotencyKey.StartsWith("ENR-")
+                    ? e.IdempotencyKey
+                    : $"ENR-{e.Id.ToString()[..8].ToUpperInvariant()}",
                 CustomerId = e.CustomerId,
                 CustomerName = e.Customer?.FullName ?? "Unknown Customer",
                 PhoneNumber = e.Customer?.PhoneNumber ?? string.Empty,
@@ -838,8 +876,8 @@ public class JewelleryPlanService : IJewelleryPlanService
                 Deadline = e.TargetEndDate,
                 PremiumPercentage = e.PremiumPercentage,
                 EnrolmentTargetGrams = targetGrams,
-                TotalConfirmedMoneyPaid = e.TotalContributedCurrency,
-                Currency = e.Branch?.Currency ?? "LKR",
+                TotalConfirmedMoneyPaid = confirmedMoney,
+                Currency = e.Branch?.Currency ?? e.Currency ?? "LKR",
                 NetAccumulatedGrams = netGrams,
                 RemainingGrams = remaining,
                 IndividualProgressPercentage = individualProgress,
@@ -856,6 +894,7 @@ public class JewelleryPlanService : IJewelleryPlanService
             PlanTargetGrams = plan.TargetProductGoldWeightGrams,
             Currency = plan.Branch?.Currency ?? "LKR",
             OverallProgressPercentage = overallProgress,
+            TotalCollectedCurrency = totalCollectedCurrency,
             Items = dtos,
             TotalCount = totalCount,
             Page = page,

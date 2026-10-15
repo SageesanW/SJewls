@@ -81,10 +81,12 @@ export interface EnrolmentContribution {
   confirmedAtUtc: string;
   status: string;
   paymentMethod: string;
+  paymentReference?: string;
 }
 
 export interface PlanCustomerEnrolment {
   enrolmentId: string;
+  enrolmentReference?: string;
   customerId: string;
   customerName: string;
   phoneNumber: string;
@@ -110,6 +112,7 @@ export interface PlanCustomersPagedResponse {
   planTargetGrams: number;
   currency: string;
   overallProgressPercentage: number;
+  totalCollectedCurrency?: number;
   items: PlanCustomerEnrolment[];
   totalCount: number;
   page: number;
@@ -135,4 +138,97 @@ export interface FinancialQuoteResponse {
   remainingTargetGrams: number | null;
   willExceedTarget: boolean;
   quoteExpiresAtUtc: string;
+}
+
+export interface AdminAssignPlanRequest {
+  customerId: string;
+  planId: string;
+  selectedDurationMonths: number;
+  confirmRepeatEnrolment?: boolean;
+  idempotencyKey?: string;
+}
+
+export interface AdminEnrolmentPreviewRequest {
+  customerId: string;
+  planId: string;
+}
+
+export interface AdminEnrolmentPreviewResponse {
+  customerId: string;
+  customerName: string;
+  phoneNumber: string;
+  email: string;
+  customerBranchId: string;
+  customerBranchName: string;
+  planId: string;
+  planName: string;
+  categoryName: string;
+  targetProductGoldWeightGrams: number;
+  premiumPercentage: number;
+  allowedDurationsMonths: number[];
+  planStartDate: string;
+  isPlanActive: boolean;
+  totalExistingEnrolments: number;
+  activeExistingEnrolments: number;
+  requiresRepeatConfirmation: boolean;
+  isEligible: boolean;
+  ineligibilityReason?: string | null;
+}
+
+export interface AdminRecordPaymentPreviewRequest {
+  mode: "BuyAmount" | "BuyGram";
+  enteredAmount?: number;
+  requestedGrams?: number;
+}
+
+export interface AdminRecordPaymentPreviewResponse {
+  enrolmentId: string;
+  enrolmentReference: string;
+  customerId: string;
+  customerName: string;
+  planName: string;
+  mode: "BuyAmount" | "BuyGram";
+  ratePerGram: number;
+  currency: string;
+  rateAsOf: string;
+  rateSource: string;
+  premiumPercentage: number;
+  baseGoldGrams: number;
+  premiumGrams: number;
+  chargeableGoldGrams?: number | null;
+  netCreditedGrams: number;
+  amountPayable: number;
+  currentSavedGrams: number;
+  targetGrams: number;
+  remainingGramsBeforePayment: number;
+  remainingGramsAfterPayment: number;
+  willReachCompletion: boolean;
+  willExceedTarget: boolean;
+  paymentDate: string;
+}
+
+export interface AdminRecordPaymentRequest {
+  mode: "BuyAmount" | "BuyGram";
+  enteredAmount?: number;
+  requestedGrams?: number;
+  notes?: string;
+  confirmedReceived: boolean;
+  idempotencyKey?: string;
+}
+
+export interface AdminRecordPaymentResult {
+  success: boolean;
+  message: string;
+  paymentId: string;
+  paymentReference: string;
+  amountPaid: number;
+  currency: string;
+  netCreditedGrams: number;
+  appliedRatePerGram: number;
+  appliedPremiumPercentage: number;
+  newTotalSavedGrams: number;
+  remainingGrams: number;
+  progressPercentage: number;
+  planCompleted: boolean;
+  recordedAtUtc: string;
 }

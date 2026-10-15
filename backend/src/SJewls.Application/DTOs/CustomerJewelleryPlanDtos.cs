@@ -55,6 +55,26 @@ public class EnrolmentPreviewResponse
     public DateOnly ProposedJoiningDate { get; set; }
     public DateOnly ProposedDeadline { get; set; }
     public string Currency { get; set; } = "LKR";
+
+    /// <summary>
+    /// Indicates whether the customer has previously enrolled in this jewellery plan across any status.
+    /// </summary>
+    public bool HasPreviouslyJoined { get; set; }
+
+    /// <summary>
+    /// Total count of all historical enrolments created by this customer for this plan (active, completed, closed, etc.).
+    /// </summary>
+    public int TotalEnrolmentCount { get; set; }
+
+    /// <summary>
+    /// Count of currently Active enrolments for this plan by this customer.
+    /// </summary>
+    public int ActiveEnrolmentCount { get; set; }
+
+    /// <summary>
+    /// Indicates whether explicit confirmation is required before creating an additional enrolment in this plan.
+    /// </summary>
+    public bool RequiresRepeatJoinConfirmation { get; set; }
 }
 
 public class CreateCustomerEnrolmentRequest
@@ -70,6 +90,22 @@ public class CreateCustomerEnrolmentRequest
     /// Idempotency key supplied by the client to guarantee single enrolment creation across retries.
     /// </summary>
     public string? IdempotencyKey { get; set; }
+
+    /// <summary>
+    /// Explicit confirmation flag required when the customer has previously enrolled in this plan.
+    /// Defaults to false.
+    /// </summary>
+    public bool ConfirmRepeatEnrolment { get; set; } = false;
+}
+
+public class RepeatEnrolmentConflictResponse
+{
+    public string Code { get; set; } = "RepeatEnrolmentConfirmationRequired";
+    public string Message { get; set; } = "You have previously enrolled in this jewellery plan. Confirmation is required to create an additional separate enrolment.";
+    public int TotalEnrolments { get; set; }
+    public int ActiveEnrolments { get; set; }
+    public int TotalEnrolmentCount { get; set; }
+    public int ActiveEnrolmentCount { get; set; }
 }
 
 public class CustomerEnrolmentDto
@@ -117,6 +153,7 @@ public class CustomerEnrolmentPaymentDto
     public DateTimeOffset ConfirmedAtUtc { get; set; }
     public string Status { get; set; } = "Succeeded";
     public string PaymentMethod { get; set; } = "Online";
+    public string PaymentReference { get; set; } = string.Empty;
 }
 
 #endregion

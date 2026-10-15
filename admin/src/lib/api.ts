@@ -385,5 +385,42 @@ export const adminApi = {
       body: JSON.stringify(data),
     });
   },
+
+  // Admin Jewellery Enrolments & In-Store Payments
+  async previewPlanAssignment(data: import("../types/jewelleryPlan").AdminEnrolmentPreviewRequest): Promise<import("../types/jewelleryPlan").AdminEnrolmentPreviewResponse> {
+    return fetchWithAuth<import("../types/jewelleryPlan").AdminEnrolmentPreviewResponse>("/api/v1/admin/jewellery-enrolments/preview-assignment", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async assignJewelleryPlan(data: import("../types/jewelleryPlan").AdminAssignPlanRequest): Promise<import("../types/customer").CustomerEnrolment> {
+    return fetchWithAuth<import("../types/customer").CustomerEnrolment>("/api/v1/admin/jewellery-enrolments", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async previewInStorePayment(enrolmentId: string, data: import("../types/jewelleryPlan").AdminRecordPaymentPreviewRequest): Promise<import("../types/jewelleryPlan").AdminRecordPaymentPreviewResponse> {
+    return fetchWithAuth<import("../types/jewelleryPlan").AdminRecordPaymentPreviewResponse>(`/api/v1/admin/jewellery-enrolments/${enrolmentId}/payments/preview`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async recordInStorePayment(enrolmentId: string, data: import("../types/jewelleryPlan").AdminRecordPaymentRequest): Promise<import("../types/jewelleryPlan").AdminRecordPaymentResult> {
+    return fetchWithAuth<import("../types/jewelleryPlan").AdminRecordPaymentResult>(`/api/v1/admin/jewellery-enrolments/${enrolmentId}/payments`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async getEnrolmentById(enrolmentId: string): Promise<import("../types/customer").CustomerEnrolment> {
+    return fetchWithAuth<import("../types/customer").CustomerEnrolment>(`/api/v1/admin/jewellery-enrolments/${enrolmentId}`);
+  },
+
+  async getEnrolmentPayments(enrolmentId: string): Promise<import("../types/jewelleryPlan").EnrolmentContribution[]> {
+    return fetchWithAuth<import("../types/jewelleryPlan").EnrolmentContribution[]>(`/api/v1/admin/jewellery-enrolments/${enrolmentId}/payments`);
+  },
 };
 

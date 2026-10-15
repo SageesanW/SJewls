@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { AdminLayout } from "../../components/AdminLayout";
 import { adminApi, ApiError } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
@@ -167,6 +168,33 @@ export default function CustomersPage() {
   useEffect(() => {
     fetchCustomers();
   }, [fetchCustomers]);
+
+  // Refresh customer profile and synchronise selected enrolment if open
+  const refreshCustomerDetail = async (customerId: string) => {
+    try {
+      const detail = await adminApi.getCustomerDetail(customerId);
+      setDetailCustomer(detail);
+      setSelectedEnrolmentForPayments((prev) => {
+        if (!prev) return null;
+        return detail.jewelleryEnrolments?.find((e) => e.id === prev.id) || prev;
+      });
+    } catch (err) {
+      console.error("Failed to refresh customer details", err);
+    }
+  };
+
+  // Window focus listener for fresh customer payments & enrolment balances
+  useEffect(() => {
+    const onFocus = () => {
+      fetchStatistics();
+      fetchCustomers();
+      if (detailCustomer) {
+        refreshCustomerDetail(detailCustomer.id);
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [fetchStatistics, fetchCustomers, detailCustomer]);
 
   // Check if current user is permitted to manage status for a customer
   const canManageCustomerStatus = (c: CustomerListItem): boolean => {
@@ -798,14 +826,14 @@ export default function CustomersPage() {
                         <td className="py-3.5 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             {/* View Detail Button */}
-                            <button
-                              onClick={() => handleOpenDetail(c.id)}
+                            <Link
+                              href={`/customers/${c.id}`}
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-[#0B3D0B] bg-emerald-50 hover:bg-[#0B3D0B] hover:text-white transition-all cursor-pointer border border-[#0B3D0B]/20"
                               title="View full customer profile and verification details"
                             >
                               <Eye className="w-3.5 h-3.5" />
                               <span>View</span>
-                            </button>
+                            </Link>
 
                             {/* Activate / Deactivate Button (Permission Controlled) */}
                             {canManage && (
@@ -1231,12 +1259,24 @@ export default function CustomersPage() {
                     Customer Profile & Authorized Details
                   </h2>
                 </div>
-                <button
-                  onClick={handleCloseDetail}
-                  className="p-1 rounded-lg text-emerald-200 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  {detailCustomer && (
+                    <button
+                      type="button"
+                      onClick={() => refreshCustomerDetail(detailCustomer.id)}
+                      title="Refresh Customer Details"
+                      className="p-1 rounded-lg text-emerald-200 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button
+                    onClick={handleCloseDetail}
+                    className="p-1 rounded-lg text-emerald-200 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
               {/* Body */}
@@ -1652,6 +1692,7 @@ export default function CustomersPage() {
                           <th className="px-3 py-2.5 text-center whitespace-nowrap">Karat</th>
                           <th className="px-3 py-2.5 text-right whitespace-nowrap">Applied Rate</th>
                           <th className="px-3 py-2.5 text-center whitespace-nowrap">Method</th>
+                          <th className="px-3 py-2.5 text-left pl-3 whitespace-nowrap">Reference</th>
                           <th className="px-3 py-2.5 text-center whitespace-nowrap">Status</th>
                         </tr>
                       </thead>
@@ -1677,6 +1718,9 @@ export default function CustomersPage() {
                               <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-[10px] font-semibold">
                                 {c.paymentMethod}
                               </span>
+                            </td>
+                            <td className="px-3 py-2.5 whitespace-nowrap text-left pl-3 font-mono text-[11px] text-gray-600">
+                              {c.paymentReference || "—"}
                             </td>
                             <td className="px-3 py-2.5 whitespace-nowrap text-center">
                               <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">

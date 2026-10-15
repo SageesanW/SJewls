@@ -156,6 +156,7 @@ public class PlanCustomersPagedResponse
     public decimal PlanTargetGrams { get; set; }
     public string Currency { get; set; } = "LKR";
     public decimal OverallProgressPercentage { get; set; }
+    public decimal TotalCollectedCurrency { get; set; }
 
     public List<PlanCustomerEnrolmentDto> Items { get; set; } = new();
     public int TotalCount { get; set; }
@@ -202,6 +203,7 @@ public class EnrolmentContributionDto
     public DateTimeOffset ConfirmedAtUtc { get; set; }
     public string Status { get; set; } = "Succeeded";
     public string PaymentMethod { get; set; } = "Online";
+    public string PaymentReference { get; set; } = string.Empty;
 }
 
 public class FinancialQuoteRequest

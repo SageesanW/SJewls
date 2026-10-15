@@ -256,7 +256,7 @@ Fetches full details of a specific plan.
 ### 6.2 Enrolment Confirmation & Creation
 
 #### `POST /api/v1/customer/jewellery-enrolments/preview`
-Returns a confirmation summary before the customer confirms enrolment.
+Returns a confirmation summary before the customer confirms enrolment, including repeat enrolment detection and historical counts.
 
 **Request:**
 ```json
@@ -277,21 +277,43 @@ Returns a confirmation summary before the customer confirms enrolment.
   "selectedDurationMonths": 12,
   "premiumPercentage": 5.0,
   "proposedJoiningDate": "2026-10-10",
-  "calculatedDeadline": "2027-10-10",
+  "proposedDeadline": "2027-10-10",
   "currency": "LKR",
-  "description": "Accumulate 8 grams of gold over your chosen timeline."
+  "hasPreviouslyJoined": true,
+  "totalEnrolmentCount": 1,
+  "activeEnrolmentCount": 1,
+  "requiresRepeatJoinConfirmation": true
 }
 ```
+
+> [!IMPORTANT]
+> **Mobile Repeat-Join Handover Logic:**  
+> When `requiresRepeatJoinConfirmation: true` (or `hasPreviouslyJoined: true`), the mobile application must present a confirmation dialog to the customer:  
+> > *"You have already joined this plan. Would you like to create another investment? Your existing investment will remain separate."*  
+>
+> **Dialog Actions:**  
+> - **Cancel:** Closes the modal without creating an enrolment.  
+> - **Join Again:** Calls `POST /api/v1/customer/jewellery-enrolments` with `confirmRepeatEnrolment: true` (and a fresh `idempotencyKey`).
 
 #### `POST /api/v1/customer/jewellery-enrolments`
 Confirms and creates an active enrolment immediately without requiring an initial payment.
 
-**Request:**
+**Request (First Join):**
 ```json
 {
   "planId": "aaaa1111-bbbb-2222-cccc-333333333333",
   "selectedDurationMonths": 12,
   "idempotencyKey": "mobile-enrol-UUID-or-timestamp"
+}
+```
+
+**Request (Confirmed Repeat Join):**
+```json
+{
+  "planId": "aaaa1111-bbbb-2222-cccc-333333333333",
+  "selectedDurationMonths": 12,
+  "idempotencyKey": "mobile-enrol-new-unique-UUID",
+  "confirmRepeatEnrolment": true
 }
 ```
 
@@ -320,10 +342,29 @@ Confirms and creates an active enrolment immediately without requiring an initia
 }
 ```
 
+**Response `409 Conflict` (Confirmation Required):**  
+If a customer has previously joined and `confirmRepeatEnrolment` is `false` or omitted, the backend rejects creation:
+```json
+{
+  "code": "RepeatEnrolmentConfirmationRequired",
+  "message": "You have previously enrolled in this jewellery plan. Confirmation is required to create an additional separate enrolment.",
+  "totalEnrolments": 1,
+  "activeEnrolments": 1,
+  "totalEnrolmentCount": 1,
+  "activeEnrolmentCount": 1
+}
+```
+
+> [!WARNING]
+> **Creation 409 Fallback Handling:**  
+> The mobile app must also handle this 409 response by showing the confirmation dialog, because a customer's enrolments may change between viewing the preview and submitting the creation request (e.g., from another active session).
+
 > [!TIP]
-> **Idempotency:**  
-> If network connectivity drops after tapping "Confirm", resending the exact same `idempotencyKey` returns the existing enrolment safely without creating a duplicate.  
-> To deliberately join the same plan a second time, supply a new unique `idempotencyKey`.
+> **Idempotency & Concurrency:**  
+> - Retrying a previously successful request with the same `idempotencyKey` immediately returns the original enrolment DTO without requiring confirmation, creating duplicates, or sending extra notifications.  
+> - Deliberate repeat enrolments must use a **new unique idempotency key** and pass `"confirmRepeatEnrolment": true`.  
+> - Reusing an idempotency key with conflicting parameters (e.g. different duration or plan) returns HTTP 409 Payload Conflict.  
+> - Simultaneous first-join requests are serialized concurrency-safely: one creates the initial enrolment, and the concurrent request receives HTTP 409 `RepeatEnrolmentConfirmationRequired`.
 
 ---
 
