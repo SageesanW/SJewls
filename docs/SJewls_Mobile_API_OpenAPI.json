@@ -2,17 +2,17 @@
   "openapi": "3.0.1",
   "info": {
     "title": "SJewls Customer Mobile API",
-    "description": "API endpoints for the SJewls Customer Mobile Application — Contact Verification, OTP Request & Verification, Profile Completion, Self-Service Account Closure, and Active Branches.",
+    "description": "Complete API specification for the SJewls Customer Mobile Application \u2014 Customer Authentication & OTP Verification, Profile Completion, Self-Service Account Closure, Active Store Branches, Jewellery Plan & Category Browsing, Plan Enrolment Previews & Creation, Contribution Ledger, Gold Rate & Payment Quotes, Deferred Payment Initiation, and Customer Notifications.",
     "version": "v1"
   },
   "servers": [
     {
       "url": "http://localhost:5230",
-      "description": "Current Host"
+      "description": "Local Development Server"
     },
     {
-      "url": "http://localhost:5230",
-      "description": "Local Server"
+      "url": "/",
+      "description": "Current Host"
     }
   ],
   "paths": {
@@ -89,7 +89,7 @@
           "Customer Authentication"
         ],
         "summary": "Request verification OTP via Phone (Text.lk SMS) or Email (Gmail SMTP)",
-        "description": "Generates and dispatches a 6-digit verification code to the specified contact.\n\n**Delivery Modes:**\n• **Email Address**: Dispatched via real Gmail SMTP (`smtp.gmail.com:587`, STARTTLS) from `w.sagee5@gmail.com` with subject 'Your SJewls verification code'. Returns 200 OK only after the SMTP server explicitly accepts the message. If delivery fails (e.g., SMTP auth/network failure), the challenge is immediately invalidated and a safe 400 error is returned (no fallback to mock).\n• **Phone Number**: Dispatched via real Text.lk SMS Gateway (`https://app.text.lk/api/v3/sms/send`, Bearer auth) with sender ID `TextLKDemo`. Returns 200 OK only after the SMS gateway accepts delivery. On failure, the challenge is immediately invalidated and a safe 400 error is returned.\n\n**Outcomes & Error Responses:**\n• `200 OK`: Verification code successfully accepted by delivery provider. Valid for 5 minutes (resend cooldown 60 seconds).\n• `400 Bad Request`: Active resend cooldown in effect, invalid phone/email format, or provider delivery failure.",
+        "description": "Generates and dispatches a 6-digit verification code to the specified contact.\n\n**Delivery Modes:**\n\u2022 **Email Address**: Dispatched via real Gmail SMTP (`smtp.gmail.com:587`, STARTTLS) from `w.sagee5@gmail.com` with subject 'Your SJewls verification code'. Returns 200 OK only after the SMTP server explicitly accepts the message. If delivery fails (e.g., SMTP auth/network failure), the challenge is immediately invalidated and a safe 400 error is returned (no fallback to mock).\n\u2022 **Phone Number**: Dispatched via real Text.lk SMS Gateway (`https://app.text.lk/api/v3/sms/send`, Bearer auth) with sender ID `TextLKDemo`. Returns 200 OK only after the SMS gateway accepts delivery. On failure, the challenge is immediately invalidated and a safe 400 error is returned.\n\n**Outcomes & Error Responses:**\n\u2022 `200 OK`: Verification code successfully accepted by delivery provider. Valid for 5 minutes (resend cooldown 60 seconds).\n\u2022 `400 Bad Request`: Active resend cooldown in effect, invalid phone/email format, or provider delivery failure.",
         "operationId": "RequestOtp",
         "requestBody": {
           "content": {
@@ -131,7 +131,7 @@
           "Customer Authentication"
         ],
         "summary": "Verify submitted OTP code and authenticate or continue registration",
-        "description": "Verifies the submitted 6-digit OTP against active challenges.\n\n**Outcomes & Responses:**\n• `200 OK (nextAction: 'Dashboard')`: Customer exists and profile is complete. Returns JWT access token, refresh token, and customer details.\n• `200 OK (nextAction: 'CompleteProfile')`: Customer is new or profile is incomplete. Returns temporary 1-hour `registrationToken`.\n• `400 Bad Request`: Verification code incorrect (attempts decremented, max 5 allowed), challenge expired (after 5 minutes), or challenge already consumed.\n• `401 Unauthorized`: Customer account is deactivated or closed.",
+        "description": "Verifies the submitted 6-digit OTP against active challenges.\n\n**Outcomes & Responses:**\n\u2022 `200 OK (nextAction: 'Dashboard')`: Customer exists and profile is complete. Returns JWT access token, refresh token, and customer details.\n\u2022 `200 OK (nextAction: 'CompleteProfile')`: Customer is new or profile is incomplete. Returns temporary 1-hour `registrationToken`.\n\u2022 `400 Bad Request`: Verification code incorrect (attempts decremented, max 5 allowed), challenge expired (after 5 minutes), or challenge already consumed.\n\u2022 `401 Unauthorized`: Customer account is deactivated or closed.",
         "operationId": "VerifyOtp",
         "requestBody": {
           "content": {
@@ -215,6 +215,16 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -267,6 +277,7 @@
           "Customer Authentication"
         ],
         "summary": "Revoke refresh token and log out",
+        "description": "Revokes the specified refresh token, terminating the active mobile session.",
         "operationId": "Logout",
         "requestBody": {
           "content": {
@@ -280,15 +291,417 @@
         },
         "responses": {
           "200": {
-            "description": "Success"
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogoutResponse"
+                }
+              }
+            }
           }
         }
+      }
+    },
+    "/api/v1/customer/jewellery-enrolments/preview": {
+      "post": {
+        "tags": [
+          "Customer Jewellery Enrolments"
+        ],
+        "summary": "Preview enrolment confirmation summary",
+        "description": "Returns a proposed enrolment confirmation summary containing plan snapshot, target grams, premium percentage, proposed joining date and deadline.",
+        "operationId": "CustomerPreviewEnrolment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrolmentPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrolmentPreviewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/customer/jewellery-enrolments": {
+      "post": {
+        "tags": [
+          "Customer Jewellery Enrolments"
+        ],
+        "summary": "Confirm and join jewellery plan",
+        "description": "Creates an active enrolment immediately without requiring an initial payment. Idempotent across retries with the same IdempotencyKey. Triggers an activation notification. Requires explicit confirmation if the customer has previously enrolled in this plan.",
+        "operationId": "CustomerCreateEnrolment",
+        "parameters": [
+          {
+            "name": "X-Idempotency-Key",
+            "in": "header",
+            "description": "Optional client-generated UUID idempotency key to prevent duplicate enrolment creations across network retries.",
+            "style": "simple",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCustomerEnrolmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerEnrolmentDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepeatEnrolmentConflictResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Customer Jewellery Enrolments"
+        ],
+        "summary": "List customer enrolments (My Investments)",
+        "description": "Retrieves paginated jewellery plan enrolments for the authenticated customer, showing target grams, net accumulated gold, remaining grams, and contribution availability.",
+        "operationId": "CustomerGetEnrolments",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (1-based index, default: 1).",
+            "required": true,
+            "style": "form",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Number of items per page (default: 20, max: 50).",
+            "required": true,
+            "style": "form",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerEnrolmentsPagedResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/customer/jewellery-enrolments/{enrolmentId}": {
+      "get": {
+        "tags": [
+          "Customer Jewellery Enrolments"
+        ],
+        "summary": "Get enrolment details",
+        "description": "Retrieves full details and progress metrics for a specific enrolment owned by the customer.",
+        "operationId": "CustomerGetEnrolmentDetails",
+        "parameters": [
+          {
+            "name": "enrolmentId",
+            "in": "path",
+            "required": true,
+            "style": "simple",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerEnrolmentDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/customer/jewellery-enrolments/{enrolmentId}/payments": {
+      "get": {
+        "tags": [
+          "Customer Jewellery Enrolments"
+        ],
+        "summary": "List enrolment contribution history",
+        "description": "Retrieves the confirmed contribution and payment ledger history for this jewellery plan enrolment.",
+        "operationId": "CustomerGetEnrolmentPayments",
+        "parameters": [
+          {
+            "name": "enrolmentId",
+            "in": "path",
+            "required": true,
+            "style": "simple",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CustomerEnrolmentPaymentDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
       }
     },
     "/api/v1/customer/jewellery-categories": {
       "get": {
         "tags": [
-          "Customer Jewellery Plans & Enrolments"
+          "Customer Jewellery Plans"
         ],
         "summary": "Browse active jewellery categories",
         "description": "Retrieves active jewellery categories for the customer's registered branch, including counts of currently available plans.",
@@ -327,13 +740,18 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
       }
     },
     "/api/v1/customer/jewellery-categories/{categoryId}/plans": {
       "get": {
         "tags": [
-          "Customer Jewellery Plans & Enrolments"
+          "Customer Jewellery Plans"
         ],
         "summary": "Browse available plans in category",
         "description": "Returns currently available jewellery plans for a specific category. Plans whose admin start date is in the future are strictly excluded.",
@@ -384,13 +802,18 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
       }
     },
     "/api/v1/customer/jewellery-plans": {
       "get": {
         "tags": [
-          "Customer Jewellery Plans & Enrolments"
+          "Customer Jewellery Plans"
         ],
         "summary": "Browse available jewellery plans",
         "description": "Retrieves active, currently available jewellery plans for the customer's branch, optionally filtered by category.",
@@ -399,6 +822,7 @@
           {
             "name": "categoryId",
             "in": "query",
+            "description": "Optional category filter. When provided, returns only active plans belonging to this category.",
             "style": "form",
             "schema": {
               "type": "string",
@@ -440,13 +864,18 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
       }
     },
     "/api/v1/customer/jewellery-plans/{planId}": {
       "get": {
         "tags": [
-          "Customer Jewellery Plans & Enrolments"
+          "Customer Jewellery Plans"
         ],
         "summary": "Get jewellery plan details",
         "description": "Retrieves details of an individual plan including target gold grams, offered durations, and premium percentage.",
@@ -474,58 +903,6 @@
               }
             }
           },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/customer/jewellery-enrolments/preview": {
-      "post": {
-        "tags": [
-          "Customer Jewellery Plans & Enrolments"
-        ],
-        "summary": "Preview enrolment confirmation summary",
-        "description": "Returns a proposed enrolment confirmation summary containing plan snapshot, target grams, premium percentage, proposed joining date and deadline.",
-        "operationId": "CustomerPreviewEnrolment",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EnrolmentPreviewRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EnrolmentPreviewResponse"
-                }
-              }
-            }
-          },
           "400": {
             "description": "Bad Request",
             "content": {
@@ -536,6 +913,26 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -545,264 +942,19 @@
                 }
               }
             }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
           }
-        }
-      }
-    },
-    "/api/v1/customer/jewellery-enrolments": {
-      "post": {
-        "tags": [
-          "Customer Jewellery Plans & Enrolments"
-        ],
-        "summary": "Confirm and join jewellery plan",
-        "description": "Creates an active enrolment immediately without requiring an initial payment. Idempotent across retries with the same IdempotencyKey. Triggers an activation notification.",
-        "operationId": "CustomerCreateEnrolment",
-        "parameters": [
-          {
-            "name": "X-Idempotency-Key",
-            "in": "header",
-            "style": "simple",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateCustomerEnrolmentRequest"
-              }
-            }
-          },
-          "required": true
         },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomerEnrolmentDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict - returned if previous enrolment exists without confirmRepeatEnrolment: true, or if an idempotency key conflict occurs",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RepeatEnrolmentConflictResponse"
-                }
-              },
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      },
-      "get": {
-        "tags": [
-          "Customer Jewellery Plans & Enrolments"
-        ],
-        "summary": "List customer enrolments (My Investments)",
-        "description": "Retrieves paginated jewellery plan enrolments for the authenticated customer, showing target grams, net accumulated gold, remaining grams, and contribution availability.",
-        "operationId": "CustomerGetEnrolments",
-        "parameters": [
+        "security": [
           {
-            "name": "page",
-            "in": "query",
-            "required": true,
-            "style": "form",
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "pageSize",
-            "in": "query",
-            "required": true,
-            "style": "form",
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
+            "Bearer": []
           }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomerEnrolmentsPagedResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/customer/jewellery-enrolments/{enrolmentId}": {
-      "get": {
-        "tags": [
-          "Customer Jewellery Plans & Enrolments"
-        ],
-        "summary": "Get enrolment details",
-        "description": "Retrieves full details and progress metrics for a specific enrolment owned by the customer.",
-        "operationId": "CustomerGetEnrolmentDetails",
-        "parameters": [
-          {
-            "name": "enrolmentId",
-            "in": "path",
-            "required": true,
-            "style": "simple",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomerEnrolmentDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/customer/jewellery-enrolments/{enrolmentId}/payments": {
-      "get": {
-        "tags": [
-          "Customer Jewellery Plans & Enrolments"
-        ],
-        "summary": "List enrolment contribution history",
-        "description": "Retrieves the confirmed contribution and payment ledger history for this jewellery plan enrolment.",
-        "operationId": "CustomerGetEnrolmentPayments",
-        "parameters": [
-          {
-            "name": "enrolmentId",
-            "in": "path",
-            "required": true,
-            "style": "simple",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/CustomerEnrolmentPaymentDto"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
+        ]
       }
     },
     "/api/v1/customer/jewellery-enrolments/{enrolmentId}/preview": {
       "post": {
         "tags": [
-          "Customer Jewellery Plans & Enrolments"
+          "Customer Jewellery Quotes & Payments"
         ],
         "summary": "Preview gold payment calculation breakdown",
         "description": "Calculates an informational calculation preview for Buy Gram or Buy Amount mode without altering balances or creating a quote.",
@@ -850,6 +1002,16 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -890,13 +1052,18 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
       }
     },
     "/api/v1/customer/jewellery-enrolments/{enrolmentId}/quotes": {
       "post": {
         "tags": [
-          "Customer Jewellery Plans & Enrolments"
+          "Customer Jewellery Quotes & Payments"
         ],
         "summary": "Lock time-limited payment quote (Pay Now)",
         "description": "Locks an authoritative payment quote for 5 minutes at the latest applicable gold rate. Guarantees payable amount and credited grams during validity.",
@@ -944,6 +1111,16 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -984,13 +1161,18 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
       }
     },
     "/api/v1/customer/jewellery-quotes/{quoteId}": {
       "get": {
         "tags": [
-          "Customer Jewellery Plans & Enrolments"
+          "Customer Jewellery Quotes & Payments"
         ],
         "summary": "Get payment quote status",
         "description": "Retrieves the status, values, and expiry of a locked payment quote.",
@@ -1028,6 +1210,16 @@
               }
             }
           },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -1038,13 +1230,18 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
       }
     },
     "/api/v1/customer/jewellery-quotes/{quoteId}/pay": {
       "post": {
         "tags": [
-          "Customer Jewellery Plans & Enrolments"
+          "Customer Jewellery Quotes & Payments"
         ],
         "summary": "Initiate payment for locked quote (Gateway Deferred)",
         "description": "Gateway integration is deferred. Returns PaymentProviderNotConfigured (HTTP 501). No fake checkout URL is generated, and balances remain unchanged.",
@@ -1082,6 +1279,16 @@
               }
             }
           },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -1102,13 +1309,18 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
       }
     },
     "/api/v1/customer/notifications": {
       "get": {
         "tags": [
-          "Customer Jewellery Plans & Enrolments"
+          "Customer Notifications"
         ],
         "summary": "Get customer notifications",
         "description": "Retrieves paginated notifications for the customer (such as jewellery plan activations and completions).",
@@ -1117,6 +1329,7 @@
           {
             "name": "page",
             "in": "query",
+            "description": "Page number (1-based index, default: 1).",
             "required": true,
             "style": "form",
             "schema": {
@@ -1127,6 +1340,7 @@
           {
             "name": "pageSize",
             "in": "query",
+            "description": "Number of items per page (default: 20, max: 50).",
             "required": true,
             "style": "form",
             "schema": {
@@ -1156,13 +1370,18 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
       }
     },
     "/api/v1/customer/notifications/{notificationId}/read": {
       "post": {
         "tags": [
-          "Customer Jewellery Plans & Enrolments"
+          "Customer Notifications"
         ],
         "summary": "Mark notification as read",
         "description": "Marks an individual customer notification as read.",
@@ -1181,7 +1400,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Success"
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationActionResponse"
+                }
+              }
+            }
           },
           "401": {
             "description": "Unauthorized",
@@ -1203,20 +1429,32 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
       }
     },
     "/api/v1/customer/notifications/read-all": {
       "post": {
         "tags": [
-          "Customer Jewellery Plans & Enrolments"
+          "Customer Notifications"
         ],
         "summary": "Mark all notifications as read",
         "description": "Marks all unread notifications for the customer as read.",
         "operationId": "CustomerMarkAllNotificationsAsRead",
         "responses": {
           "200": {
-            "description": "Success"
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationActionResponse"
+                }
+              }
+            }
           },
           "401": {
             "description": "Unauthorized",
@@ -1228,7 +1466,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
       }
     },
     "/api/v1/customers/me": {
@@ -1270,7 +1513,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
       }
     },
     "/api/v1/customers/me/contacts/otp/request": {
@@ -1279,7 +1527,7 @@
           "Customer Profile & Contacts"
         ],
         "summary": "Request OTP to verify secondary profile contact (Email or Phone)",
-        "description": "Sends a 6-digit OTP to the customer's unverified secondary contact (email or phone).\n\n**Delivery Modes:**\n• **Email Address**: Dispatched via real Gmail SMTP (`smtp.gmail.com:587`, STARTTLS) from `w.sagee5@gmail.com`. Invalidates challenge and returns safe 400 error on delivery failure.\n• **Phone Number**: Dispatched via real Text.lk SMS Gateway (`https://app.text.lk/api/v3/sms/send`, Bearer auth) with sender ID `TextLKDemo`. Invalidates challenge and returns safe 400 error on delivery failure.\n\n**Outcomes & Error Responses:**\n• `200 OK`: Verification code successfully dispatched.\n• `400 Bad Request`: Delivery failure or invalid contact.\n• `404 Not Found`: Customer or pending contact not found.\n• `409 Conflict`: Contact already verified.",
+        "description": "Sends a 6-digit OTP to the customer's unverified secondary contact (email or phone).\n\n**Delivery Modes:**\n\u2022 **Email Address**: Dispatched via real Gmail SMTP (`smtp.gmail.com:587`, STARTTLS) from `w.sagee5@gmail.com`. Invalidates challenge and returns safe 400 error on delivery failure.\n\u2022 **Phone Number**: Dispatched via real Text.lk SMS Gateway (`https://app.text.lk/api/v3/sms/send`, Bearer auth) with sender ID `TextLKDemo`. Invalidates challenge and returns safe 400 error on delivery failure.\n\n**Outcomes & Error Responses:**\n\u2022 `200 OK`: Verification code successfully dispatched.\n\u2022 `400 Bad Request`: Delivery failure or invalid contact.\n\u2022 `404 Not Found`: Customer or pending contact not found.\n\u2022 `409 Conflict`: Contact already verified.",
         "operationId": "RequestSecondaryContactOtp",
         "requestBody": {
           "content": {
@@ -1312,6 +1560,16 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -1332,7 +1590,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
       }
     },
     "/api/v1/customers/me/contacts/otp/verify": {
@@ -1355,10 +1618,27 @@
         },
         "responses": {
           "200": {
-            "description": "Success"
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifySecondaryContactResponse"
+                }
+              }
+            }
           },
           "400": {
             "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1377,7 +1657,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
       }
     },
     "/api/v1/customers/me/account-closure/otp/request": {
@@ -1419,6 +1704,16 @@
               }
             }
           },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -1429,7 +1724,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
       }
     },
     "/api/v1/customers/me/account-closure/confirm": {
@@ -1481,6 +1781,16 @@
               }
             }
           },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -1491,7 +1801,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
       }
     },
     "/api/v1/health": {
@@ -1718,9 +2033,7 @@
             "nullable": true
           },
           "confirmRepeatEnrolment": {
-            "type": "boolean",
-            "default": false,
-            "description": "Explicit confirmation required if the customer has previously enrolled in this plan."
+            "type": "boolean"
           }
         },
         "additionalProperties": false
@@ -1842,6 +2155,10 @@
             "nullable": true
           },
           "paymentMethod": {
+            "type": "string",
+            "nullable": true
+          },
+          "paymentReference": {
             "type": "string",
             "nullable": true
           }
@@ -2293,22 +2610,18 @@
             "nullable": true
           },
           "hasPreviouslyJoined": {
-            "type": "boolean",
-            "description": "True if customer has any historical enrolments for this plan across all statuses."
+            "type": "boolean"
           },
           "totalEnrolmentCount": {
             "type": "integer",
-            "format": "int32",
-            "description": "Total count of all historical enrolments created by this customer for this plan."
+            "format": "int32"
           },
           "activeEnrolmentCount": {
             "type": "integer",
-            "format": "int32",
-            "description": "Count of currently Active enrolments for this plan by this customer."
+            "format": "int32"
           },
           "requiresRepeatJoinConfirmation": {
-            "type": "boolean",
-            "description": "True if explicit confirmation is required before creating an additional enrolment."
+            "type": "boolean"
           }
         },
         "additionalProperties": false
@@ -2436,6 +2749,34 @@
         },
         "additionalProperties": false
       },
+      "LogoutResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "NotificationActionResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          },
+          "markedCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "PaymentInitiationResponse": {
         "type": "object",
         "properties": {
@@ -2490,7 +2831,7 @@
             "nullable": true
           }
         },
-        "additionalProperties": { }
+        "additionalProperties": {}
       },
       "RefreshTokenRequest": {
         "required": [
@@ -2517,6 +2858,36 @@
             "nullable": true
           },
           "expiresInSeconds": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RepeatEnrolmentConflictResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          },
+          "totalEnrolments": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "activeEnrolments": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalEnrolmentCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "activeEnrolmentCount": {
             "type": "integer",
             "format": "int32"
           }
@@ -2704,36 +3075,15 @@
         },
         "additionalProperties": false
       },
-      "RepeatEnrolmentConflictResponse": {
+      "VerifySecondaryContactResponse": {
         "type": "object",
         "properties": {
-          "code": {
-            "type": "string",
-            "example": "RepeatEnrolmentConfirmationRequired"
+          "success": {
+            "type": "boolean"
           },
           "message": {
             "type": "string",
-            "example": "You have previously enrolled in this jewellery plan. Confirmation is required to create an additional separate enrolment."
-          },
-          "totalEnrolments": {
-            "type": "integer",
-            "format": "int32",
-            "example": 1
-          },
-          "activeEnrolments": {
-            "type": "integer",
-            "format": "int32",
-            "example": 1
-          },
-          "totalEnrolmentCount": {
-            "type": "integer",
-            "format": "int32",
-            "example": 1
-          },
-          "activeEnrolmentCount": {
-            "type": "integer",
-            "format": "int32",
-            "example": 1
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -2748,9 +3098,38 @@
       }
     }
   },
-  "security": [
+  "tags": [
     {
-      "Bearer": [ ]
+      "name": "Branches",
+      "description": "Active store locations for customer registration and branch lookups."
+    },
+    {
+      "name": "Customer Authentication",
+      "description": "Customer onboarding, phone & email verification, profile completion, session management, and logout."
+    },
+    {
+      "name": "Customer Jewellery Enrolments",
+      "description": "Preview and confirm jewellery plan enrolments (My Investments), and view contribution history."
+    },
+    {
+      "name": "Customer Jewellery Plans",
+      "description": "Browse active jewellery plan categories and plans available for the customer's branch."
+    },
+    {
+      "name": "Customer Jewellery Quotes & Payments",
+      "description": "Gold rate calculation previews, locked payment quotes (Pay Now), and deferred payment initiation."
+    },
+    {
+      "name": "Customer Notifications",
+      "description": "Customer notification feed, read receipts, and bulk mark-as-read."
+    },
+    {
+      "name": "Customer Profile & Contacts",
+      "description": "Authenticated customer profile, secondary contact verification, and self-service account closure."
+    },
+    {
+      "name": "System",
+      "description": "Health check and database connectivity verification."
     }
   ]
 }

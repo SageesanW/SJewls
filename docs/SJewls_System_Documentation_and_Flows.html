@@ -1,0 +1,1487 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SJewls — Interactive Architecture, Flows & API Documentation</title>
+  <!-- Mermaid.js for Dynamic Diagram Rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      
+      /* Dark Theme (Default) */
+      --bg-primary: #0a0e17;
+      --bg-secondary: #111827;
+      --bg-tertiary: #1f2937;
+      --bg-card: rgba(17, 24, 39, 0.75);
+      --bg-card-hover: rgba(31, 41, 55, 0.85);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-focus: #f59e0b;
+      --text-primary: #f9fafb;
+      --text-secondary: #9ca3af;
+      --text-muted: #6b7280;
+      --accent-gold: #f59e0b;
+      --accent-gold-glow: rgba(245, 158, 11, 0.25);
+      --accent-blue: #3b82f6;
+      --accent-emerald: #10b981;
+      --accent-rose: #f43f5e;
+      --accent-purple: #8b5cf6;
+      --badge-get: #0284c7;
+      --badge-post: #059669;
+      --badge-put: #d97706;
+      --badge-delete: #dc2626;
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+    }
+
+    [data-theme="light"] {
+      --bg-primary: #f8fafc;
+      --bg-secondary: #ffffff;
+      --bg-tertiary: #f1f5f9;
+      --bg-card: rgba(255, 255, 255, 0.85);
+      --bg-card-hover: rgba(248, 250, 252, 0.95);
+      --border-color: rgba(0, 0, 0, 0.08);
+      --border-focus: #d97706;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #94a3b8;
+      --accent-gold: #d97706;
+      --accent-gold-glow: rgba(217, 119, 6, 0.18);
+      --accent-blue: #2563eb;
+      --accent-emerald: #059669;
+      --accent-rose: #e11d48;
+      --accent-purple: #7c3aed;
+      --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.08);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
+      --shadow-lg: 0 10px 20px -3px rgba(0, 0, 0, 0.1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      overflow-x: hidden;
+      transition: background-color 0.25s ease, color 0.25s ease;
+    }
+
+    /* Top Sticky Header */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 0.75rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: var(--text-primary);
+    }
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      color: #000;
+      font-weight: 800;
+      font-size: 1.1rem;
+      box-shadow: 0 0 12px var(--accent-gold-glow);
+    }
+    .brand-title {
+      font-weight: 700;
+      font-size: 1.15rem;
+      letter-spacing: -0.02em;
+    }
+    .brand-subtitle {
+      font-size: 0.75rem;
+      color: var(--accent-gold);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Header Controls */
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .search-box {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .search-box input {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      border-radius: 9999px;
+      padding: 0.45rem 1rem 0.45rem 2.25rem;
+      font-size: 0.85rem;
+      width: 220px;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+    .search-box input:focus {
+      outline: none;
+      border-color: var(--border-focus);
+      width: 280px;
+      box-shadow: 0 0 0 3px var(--accent-gold-glow);
+    }
+    .search-box svg {
+      position: absolute;
+      left: 0.8rem;
+      width: 14px;
+      height: 14px;
+      color: var(--text-muted);
+    }
+    .theme-toggle-btn {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 0.45rem 0.85rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+    .theme-toggle-btn:hover {
+      background: var(--bg-card-hover);
+    }
+
+    /* Subnav Tabs */
+    .subnav {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      gap: 0.5rem;
+      padding: 0.5rem 2rem;
+      overflow-x: auto;
+      white-space: nowrap;
+      position: sticky;
+      top: 57px;
+      z-index: 90;
+    }
+    .nav-tab {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      padding: 0.5rem 1rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: all 0.2s;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .nav-tab:hover {
+      color: var(--text-primary);
+      background: var(--bg-tertiary);
+    }
+    .nav-tab.active {
+      color: #000;
+      background: var(--accent-gold);
+      box-shadow: 0 2px 8px var(--accent-gold-glow);
+    }
+
+    /* Main Container */
+    main {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    /* Section Wrappers */
+    .doc-section {
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+    .doc-section.active {
+      display: block;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .section-title {
+      font-size: 1.75rem;
+      font-weight: 800;
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .section-desc {
+      color: var(--text-secondary);
+      font-size: 1rem;
+      margin-bottom: 2rem;
+      max-width: 900px;
+    }
+
+    /* Glass Cards */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: var(--shadow-md);
+      transition: border-color 0.2s;
+    }
+    .card:hover {
+      border-color: rgba(245, 158, 11, 0.4);
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .card-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    /* Archify Diagram Iframe Wrapper */
+    .diagram-frame-wrapper {
+      position: relative;
+      width: 100%;
+      height: 750px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--border-color);
+      box-shadow: var(--shadow-lg);
+      background: #0d1117;
+      margin-bottom: 2rem;
+    }
+    .diagram-frame-wrapper iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+    .diagram-toolbar {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      z-index: 10;
+      display: flex;
+      gap: 0.5rem;
+    }
+    .diagram-btn {
+      background: rgba(17, 24, 39, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #fff;
+      padding: 0.4rem 0.8rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-weight: 500;
+    }
+    .diagram-btn:hover {
+      background: #f59e0b;
+      color: #000;
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      font-family: var(--font-mono);
+    }
+    .badge-get { background: rgba(2, 132, 199, 0.2); color: #38bdf8; border: 1px solid rgba(2, 132, 199, 0.4); }
+    .badge-post { background: rgba(5, 150, 105, 0.2); color: #34d399; border: 1px solid rgba(5, 150, 105, 0.4); }
+    .badge-put { background: rgba(217, 119, 6, 0.2); color: #fbbf24; border: 1px solid rgba(217, 119, 6, 0.4); }
+    .badge-delete { background: rgba(220, 38, 38, 0.2); color: #f87171; border: 1px solid rgba(220, 38, 38, 0.4); }
+    .badge-auth { background: rgba(139, 92, 246, 0.2); color: #c084fc; border: 1px solid rgba(139, 92, 246, 0.4); }
+    .badge-public { background: rgba(107, 114, 128, 0.2); color: #9ca3af; border: 1px solid rgba(107, 114, 128, 0.4); }
+
+    /* API Catalogue Table & Accordions */
+    .api-filter-bar {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .filter-chip {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      padding: 0.35rem 0.85rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .filter-chip:hover {
+      color: var(--text-primary);
+    }
+    .filter-chip.active {
+      background: var(--text-primary);
+      color: var(--bg-primary);
+      border-color: var(--text-primary);
+    }
+
+    .api-accordion {
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      margin-bottom: 0.75rem;
+      background: var(--bg-secondary);
+      overflow: hidden;
+      transition: all 0.2s;
+    }
+    .api-accordion:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    .api-accordion-header {
+      padding: 0.85rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+      gap: 1rem;
+    }
+    .api-route-box {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex: 1;
+    }
+    .api-path {
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .api-desc {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      margin-left: 1rem;
+    }
+    .api-accordion-content {
+      padding: 1.25rem;
+      border-top: 1px solid var(--border-color);
+      background: var(--bg-primary);
+      display: none;
+    }
+    .api-accordion.open .api-accordion-content {
+      display: block;
+    }
+    .api-details-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .detail-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      padding: 0.85rem;
+      border-radius: 6px;
+    }
+    .detail-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 0.25rem;
+    }
+    .detail-val {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: var(--text-primary);
+    }
+
+    /* Code Blocks */
+    pre code {
+      display: block;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: #38bdf8;
+      overflow-x: auto;
+      margin-top: 0.5rem;
+    }
+
+    /* Financial Calculator */
+    .calculator-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      align-items: start;
+    }
+    @media (max-width: 900px) {
+      .calculator-grid { grid-template-columns: 1fr; }
+    }
+    .calc-input-group {
+      margin-bottom: 1.25rem;
+    }
+    .calc-label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 0.4rem;
+    }
+    .calc-input {
+      width: 100%;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 0.6rem 0.9rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-family: var(--font-mono);
+    }
+    .calc-input:focus {
+      outline: none;
+      border-color: var(--accent-gold);
+    }
+    .calc-toggle {
+      display: flex;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border-color);
+      margin-bottom: 1.5rem;
+    }
+    .calc-toggle-btn {
+      flex: 1;
+      padding: 0.6rem;
+      text-align: center;
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.85rem;
+      transition: all 0.2s;
+    }
+    .calc-toggle-btn.active {
+      background: var(--accent-gold);
+      color: #000;
+    }
+    .result-box {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(217, 119, 6, 0.05));
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px dashed var(--border-color);
+    }
+    .result-row:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+    .result-highlight {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: var(--accent-gold);
+      font-family: var(--font-mono);
+    }
+
+    /* Mermaid Container */
+    .mermaid-box {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+      overflow-x: auto;
+      text-align: center;
+    }
+
+    /* ERD Cards Grid */
+    .erd-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.5rem;
+    }
+    .erd-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .erd-header {
+      background: var(--bg-tertiary);
+      padding: 0.75rem 1rem;
+      font-weight: 700;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .erd-fields {
+      padding: 0.75rem 1rem;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+    }
+    .erd-field-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.25rem 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .erd-field-name { color: var(--text-primary); }
+    .erd-field-type { color: #94a3b8; }
+    .erd-pk { color: var(--accent-gold); font-weight: 700; }
+    .erd-fk { color: #38bdf8; font-weight: 700; }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border-color);
+      padding: 2rem;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      margin-top: 4rem;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sticky Top Header -->
+  <header>
+    <a href="#" class="brand">
+      <div class="brand-icon">SJ</div>
+      <div>
+        <div class="brand-title">SJewls Architecture Portal</div>
+        <div class="brand-subtitle">Interactive System Guide &amp; Flows</div>
+      </div>
+    </a>
+    <div class="header-controls">
+      <div class="search-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input type="text" id="globalSearch" placeholder="Search 59 APIs, DTOs, Flows..." onkeyup="filterContent()">
+      </div>
+      <button class="theme-toggle-btn" onclick="toggleTheme()">
+        <span id="themeIcon">☀️</span> <span id="themeLabel">Light</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Sticky Navigation Tabs -->
+  <nav class="subnav">
+    <button class="nav-tab active" onclick="switchSection('architecture')">🏛️ System Architecture</button>
+    <button class="nav-tab" onclick="switchSection('beginner')">🌱 Beginner Concepts</button>
+    <button class="nav-tab" onclick="switchSection('catalogue')">⚡ 59 APIs Catalogue</button>
+    <button class="nav-tab" onclick="switchSection('traces')">🔗 Call Chains &amp; DI</button>
+    <button class="nav-tab" onclick="switchSection('workflows')">🔄 Workflows (A–J)</button>
+    <button class="nav-tab" onclick="switchSection('calculator')">💰 Financial Calculator</button>
+    <button class="nav-tab" onclick="switchSection('erd')">📊 Database ERD (15 Tables)</button>
+    <button class="nav-tab" onclick="switchSection('lifecycles')">🚦 Status Lifecycles</button>
+    <button class="nav-tab" onclick="switchSection('config')">⚙️ Configuration Map</button>
+    <button class="nav-tab" onclick="switchSection('findings')">🔍 Findings &amp; Scope</button>
+  </nav>
+
+  <main>
+
+    <!-- SECTION 1: ARCHITECTURE DIAGRAM -->
+    <section id="sec-architecture" class="doc-section active">
+      <h1 class="section-title">🏛️ Interactive System Architecture</h1>
+      <p class="section-desc">
+        Explore the live landscape of SJewls: the Next.js 16 Admin portal, Customer mobile app, .NET 9 Minimal API host, PostgreSQL/S3 data stores, and external transports (GoldAPI.io, Text.lk SMS, Gmail SMTP). Rendered using the <strong>Archify</strong> visual engine.
+      </p>
+
+      <div class="diagram-frame-wrapper">
+        <div class="diagram-toolbar">
+          <a href="SJewls_Architecture_Diagram.html" target="_blank" class="diagram-btn">⛶ Open Fullscreen</a>
+          <button class="diagram-btn" onclick="reloadFrame()">🔄 Reset View</button>
+        </div>
+        <iframe id="archFrame" src="SJewls_Architecture_Diagram.html?embed=1"></iframe>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Runtime Ownership &amp; System Inventory</div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
+          <div>
+            <h4 style="color: var(--accent-gold); margin-bottom: 0.5rem;">1. Presentation &amp; Clients</h4>
+            <p style="font-size: 0.9rem; color: var(--text-secondary);">
+              <strong>Admin Web Portal:</strong> Built with Next.js 16 (App Router) &amp; Tailwind CSS. Uses Staff JWT Bearer tokens with RBAC claims.<br>
+              <strong>Mobile Client:</strong> React Native / Expo contract using Customer JWT Bearer tokens and SHA-256 OTP authentication.
+            </p>
+          </div>
+          <div>
+            <h4 style="color: #38bdf8; margin-bottom: 0.5rem;">2. Core .NET 9 API Host</h4>
+            <p style="font-size: 0.9rem; color: var(--text-secondary);">
+              Hosted in a Linux container on Railway. Exposes 59 Minimal API routes, OpenAPI schemas via Scalar (<code style="color: var(--accent-gold)">/scalar/mobile</code> &amp; <code style="color: var(--accent-gold)">/scalar/admin</code>), Global Exception Middleware, and strict Rate Limiting.
+            </p>
+          </div>
+          <div>
+            <h4 style="color: #34d399; margin-bottom: 0.5rem;">3. Persistence &amp; Single Source of Truth</h4>
+            <p style="font-size: 0.9rem; color: var(--text-secondary);">
+              <strong>Supabase PostgreSQL:</strong> 15 tables mapped with EF Core 9. All contributions execute through <code style="color: var(--accent-emerald)">IJewelleryPaymentFinalizationService</code> inside an atomic database transaction.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 2: BEGINNER CONCEPTS -->
+    <section id="sec-beginner" class="doc-section">
+      <h1 class="section-title">🌱 Beginner Introduction &amp; Core Concepts</h1>
+      <p class="section-desc">
+        Understanding the modern web application stack and .NET Clean Architecture principles through concrete examples in SJewls.
+      </p>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem;">
+        <div class="card">
+          <div class="card-title" style="color: var(--accent-gold);">Frontend vs. Backend</div>
+          <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.5rem;">
+            <strong>Frontend:</strong> Code that runs on the user's device (browser or phone). In SJewls, this is <code style="color: var(--text-primary)">admin/src/app</code> (Next.js) and the React Native mobile client.<br><br>
+            <strong>Backend:</strong> The secure C# server (<code style="color: var(--text-primary)">SJewls.Api</code>) that validates rules, manages transactions, queries PostgreSQL, and hashes secrets.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-title" style="color: #38bdf8;">User Interface vs. C# Interface</div>
+          <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.5rem;">
+            <strong>User Interface (UI):</strong> The visual screen with buttons, inputs, and tables (e.g. <code style="color: var(--text-primary)">admin/src/app/jewellery-plans/page.tsx</code>).<br><br>
+            <strong>C# Interface:</strong> A code contract in C# (e.g. <code style="color: var(--text-primary)">ICustomerAuthService</code>) declaring available methods without code. A service class then implements it.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-title" style="color: #34d399;">DTO &amp; Dependency Injection</div>
+          <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.5rem;">
+            <strong>DTO (Data Transfer Object):</strong> A plain C# class carrying data over HTTP (e.g. <code style="color: var(--text-primary)">CheckContactRequest</code>).<br><br>
+            <strong>Dependency Injection (DI):</strong> .NET automatically injects service classes into endpoints at runtime rather than creating them with <code style="color: var(--text-primary)">new</code>.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-title" style="color: #c084fc;">EF Core, DbContext &amp; Migrations</div>
+          <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.5rem;">
+            <strong>EF Core:</strong> Object-Relational Mapper that turns C# objects into SQL.<br><br>
+            <strong>DbContext (<code style="color: var(--text-primary)">SJewlsDbContext</code>):</strong> The active database session.<br><br>
+            <strong>Migrations:</strong> C# scripts updating PostgreSQL tables automatically.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 3: 59 APIS CATALOGUE -->
+    <section id="sec-catalogue" class="doc-section">
+      <h1 class="section-title">⚡ Complete 59-API Catalogue</h1>
+      <p class="section-desc">
+        Exhaustive inventory of all registered Minimal API endpoints in SJewls. Click any endpoint to inspect its required inputs, output DTO, authentication policy, and database entities.
+      </p>
+
+      <div class="api-filter-bar">
+        <span class="filter-chip active" onclick="filterApis('all', this)">All APIs (59)</span>
+        <span class="filter-chip" onclick="filterApis('customer', this)">Customer / Mobile (29)</span>
+        <span class="filter-chip" onclick="filterApis('admin', this)">Admin / Staff (30)</span>
+        <span class="filter-chip" onclick="filterApis('get', this)">GET</span>
+        <span class="filter-chip" onclick="filterApis('post', this)">POST</span>
+        <span class="filter-chip" onclick="filterApis('put', this)">PUT</span>
+        <span class="filter-chip" onclick="filterApis('delete', this)">DELETE</span>
+      </div>
+
+      <div id="apiListContainer">
+        <!-- Rendered dynamically by JavaScript -->
+      </div>
+    </section>
+
+    <!-- SECTION 4: CALL CHAINS & DI -->
+    <section id="sec-traces" class="doc-section">
+      <h1 class="section-title">🔗 Call Chains &amp; Dependency Injection</h1>
+      <p class="section-desc">
+        Trace how incoming requests pass through .NET Minimal API route handlers, application service interfaces, concrete implementations, and atomic EF Core database transactions.
+      </p>
+
+      <div class="card">
+        <div class="card-title">1. In-Store Payment Recording Trace (Admin Staff)</div>
+        <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">
+          Shows how a cashier entering a cash payment triggers gold rate verification, sequence incrementing, and atomic ledger commitment.
+        </p>
+        <div class="mermaid-box">
+          <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Staff as Cashier / Manager
+    participant UI as Admin Payments Screen
+    participant Api as AdminJewelleryEnrolmentEndpoints
+    participant Service as AdminJewelleryEnrolmentService
+    participant Finalizer as JewelleryPaymentFinalizationService
+    participant Gold as GoldRateService
+    participant DB as SJewlsDbContext (Postgres)
+    participant Notif as CustomerNotificationService
+
+    Staff->>UI: Enters LKR 50,000 cash payment & clicks "Record Payment"
+    UI->>Api: POST /api/v1/admin/jewellery-enrolments/{id}/payments/record
+    Api->>Service: RecordInStorePaymentAsync(enrolmentId, request, staffId)
+    Service->>Gold: GetLiveRateAsync() (checks 15m cache or calls GoldAPI.io)
+    Gold-->>Service: Rate = LKR 32,500 / gram
+    Service->>Service: Calculate BaseGrams, PremiumGrams, CreditedGrams
+    Service->>Finalizer: FinalizePaymentAtomicAsync(parameters)
+    
+    rect rgb(30, 41, 59)
+        Note over Finalizer,DB: Atomic Database Transaction
+        Finalizer->>DB: Lock Enrolment row (SELECT FOR UPDATE)
+        Finalizer->>DB: Query max PaymentSequenceNumber (e.g. returns 2)
+        Finalizer->>DB: INSERT into PaymentIntents (Status = "Succeeded")
+        Finalizer->>DB: INSERT into JewelleryContributions (Seq #3, CreditedGrams)
+        Finalizer->>DB: UPDATE CustomerJewelleryEnrolments (Add grams, add money)
+        alt Plan Target Reached
+            Finalizer->>DB: UPDATE CustomerJewelleryEnrolments SET Status = "Completed"
+            Finalizer->>Notif: Create "Plan Completed!" Notification
+        end
+        Finalizer->>DB: Commit Transaction
+    end
+
+    Finalizer-->>Service: Return RecordedPaymentSummary
+    Service-->>Api: AdminRecordedPaymentResponse DTO
+    Api-->>UI: HTTP 201 Created
+          </pre>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">2. Customer Plan Enrolment Trace with Repeat Protection</div>
+        <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">
+          Illustrates the repeat-enrolment protection preventing a customer from accidentally joining the same plan twice unless explicitly confirmed.
+        </p>
+        <div class="mermaid-box">
+          <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Customer as Mobile Customer
+    participant UI as Mobile App Screen
+    participant Api as CustomerJewelleryPlanEndpoints
+    participant Service as CustomerJewelleryPlanService
+    participant DB as SJewlsDbContext (Postgres)
+
+    Customer->>UI: Selects "Bridal 50g Plan", taps "Join Plan"
+    UI->>Api: POST /api/v1/customer/jewellery-enrolments (confirmRepeat = false)
+    Api->>Service: CreateEnrolmentAsync(customerId, request)
+    Service->>DB: Query CustomerJewelleryEnrolments for active duplicate
+    
+    alt Existing Active Enrolment Exists AND confirmRepeat == false
+        Service-->>Api: Throws RepeatEnrolmentConflictException
+        Api-->>UI: HTTP 409 Conflict (RepeatEnrolmentConflictResponse)
+        UI-->>Customer: Displays Modal: "You already have this plan active. Proceed anyway?"
+        Customer->>UI: Taps "Yes, Proceed"
+        UI->>Api: Re-submits POST with confirmRepeatEnrolment = true
+        Api->>Service: CreateEnrolmentAsync(customerId, requestWithConfirm)
+    end
+
+    Service->>DB: Snapshot Plan TargetGrams & Premium%
+    Service->>DB: INSERT CustomerJewelleryEnrolments (Status = "Active", Balance = 0)
+    Service->>DB: SaveChangesAsync()
+    Service-->>Api: CustomerJewelleryEnrolmentDetailDto
+    Api-->>UI: HTTP 201 Created
+          </pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 5: WORKFLOWS A-J -->
+    <section id="sec-workflows" class="doc-section">
+      <h1 class="section-title">🔄 Main Business Workflows (A through J)</h1>
+      <p class="section-desc">
+        Complete step-by-step logic, backend decision branching, failure paths, and database updates for all 10 core business workflows.
+      </p>
+
+      <div class="card">
+        <div class="card-title">Workflow A: Customer OTP Login &amp; Registration Flowchart</div>
+        <div class="mermaid-box">
+          <pre class="mermaid">
+flowchart TD
+    Start([Customer Enters Mobile/Email]) --> CheckContact[POST /api/v1/customer/auth/check-contact]
+    CheckContact --> ReqOtp[POST /api/v1/customer/auth/request-otp]
+
+    ReqOtp --> CooldownCheck{Cooldown Active?<br/>> 60s since last?}
+    CooldownCheck -- Yes (< 60s) --> Error429[HTTP 429 Too Many Requests]
+    CooldownCheck -- No --> DailyLimit{Daily Count > 5?}
+
+    DailyLimit -- Yes --> ErrorLimit[HTTP 400 Max Daily OTPs Exceeded]
+    DailyLimit -- No --> GenOtp[Generate 6-digit OTP<br/>Compute SHA-256 Hash<br/>Store Expiry = 5 mins]
+
+    GenOtp --> SendTransport{Contact Type?}
+    SendTransport -- "+94..." Mobile --> SendSMS[Dispatch SMS via Text.lk API]
+    SendTransport -- "name@..." Email --> SendEmail[Dispatch Email via Gmail SMTP]
+
+    SendSMS --> EnterCode[Customer Receives Code & Enters in UI]
+    SendEmail --> EnterCode
+
+    EnterCode --> VerifyOtp[POST /api/v1/customer/auth/verify-otp]
+    VerifyOtp --> HashCheck{Hash matches & Not Expired?}
+    
+    HashCheck -- Invalid --> IncrAttempts[Increment Failed Attempts]
+    IncrAttempts --> MaxAttempts{Attempts >= 3?}
+    MaxAttempts -- Yes --> InvalidateOtp[Invalidate OTP Challenge]
+    MaxAttempts -- No --> Error400[HTTP 400 Invalid OTP Code]
+
+    HashCheck -- Valid --> LookupCust{Customer Record Exists & Complete?}
+    
+    LookupCust -- Fully Registered --> IssueTokens[Issue Customer JWT & Refresh Token]
+    IssueTokens --> RetLogin[Return Action: 'Login'] --> Dashboard([Mobile Home Dashboard])
+
+    LookupCust -- New or Incomplete --> IssueRegToken[Issue Short-Lived Registration Token]
+    IssueRegToken --> RetComp[Return Action: 'CompleteProfile']
+    RetComp --> CompForm[Customer fills Full Name, NIC, Branch]
+    CompForm --> CallComplete[POST /api/v1/customer/auth/complete-profile]
+    CallComplete --> RetLogin
+          </pre>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Summary of Workflows B through J</div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-top: 1rem;">
+          <div class="detail-card">
+            <div class="detail-label">Workflow B: Staff Auth</div>
+            <p style="font-size: 0.85rem; color: var(--text-secondary);">
+              Staff login via username/email &amp; password. Verifies password hash. Returns JWT with claims (<code style="color: var(--accent-gold)">ManagePlans</code>, <code style="color: var(--accent-gold)">ManagePayments</code>, <code style="color: var(--accent-gold)">ViewEnrolments</code>) and assigned branch IDs.
+            </p>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">Workflow C: Customer Management</div>
+            <p style="font-size: 0.85rem; color: var(--text-secondary);">
+              Admin in-store registration validates unique NIC and mobile. Closing an account marks <code style="color: var(--accent-rose)">Status = Closed</code> while keeping historical investment ledgers intact for legal compliance.
+            </p>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">Workflow D: Plan Administration</div>
+            <p style="font-size: 0.85rem; color: var(--text-secondary);">
+              Admin defines target grams, offered duration options, and premium %. Modifying a plan never alters active enrolments; target grams &amp; premium % are snapshotted permanently at enrolment.
+            </p>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">Workflow E: Mobile Enrolment</div>
+            <p style="font-size: 0.85rem; color: var(--text-secondary);">
+              Customer joins plan from mobile. Repeat check guards against duplicate joins. Enrolment is created in <code style="color: var(--accent-emerald)">Active</code> status immediately with 0 initial deposit.
+            </p>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">Workflow F: Admin Plan Assignment</div>
+            <p style="font-size: 0.85rem; color: var(--text-secondary);">
+              Staff selects customer and plan in-store. Target grams is read-only from the plan definition. Plan appears immediately in customer's mobile "My Investments".
+            </p>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">Workflow G &amp; H: Payment Finalization</div>
+            <p style="font-size: 0.85rem; color: var(--text-secondary);">
+              In-store cash/card payment creates immutable <code style="color: var(--text-primary)">JewelleryContribution</code>, increments sequential payment number, updates gold balance, and triggers completion notification when target is met.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 6: FINANCIAL CALCULATOR -->
+    <section id="sec-calculator" class="doc-section">
+      <h1 class="section-title">💰 Interactive Financial Calculator</h1>
+      <p class="section-desc">
+        Compare the <strong>Buy Gram</strong> and <strong>Buy Amount</strong> mathematical formulas against the live code implementation. Enter values below to see real-time calculations.
+      </p>
+
+      <div class="card">
+        <div class="calculator-grid">
+          <div>
+            <div class="calc-toggle">
+              <button id="btnBuyGram" class="calc-toggle-btn active" onclick="setCalcMode('buyGram')">Buy Gram Mode (Specify Grams)</button>
+              <button id="btnBuyAmount" class="calc-toggle-btn" onclick="setCalcMode('buyAmount')">Buy Amount Mode (Specify LKR)</button>
+            </div>
+
+            <div class="calc-input-group">
+              <label class="calc-label">24K Gold Rate (LKR per Gram)</label>
+              <input type="number" id="calcRate" class="calc-input" value="32500" step="100" oninput="calculate()">
+            </div>
+
+            <div class="calc-input-group">
+              <label class="calc-label">Plan Premium Percentage (%)</label>
+              <input type="number" id="calcPremium" class="calc-input" value="5.0" step="0.5" oninput="calculate()">
+            </div>
+
+            <div class="calc-input-group" id="inputGramGroup">
+              <label class="calc-label">Requested Gold to Credit (Grams)</label>
+              <input type="number" id="calcGrams" class="calc-input" value="2.0000" step="0.5" oninput="calculate()">
+            </div>
+
+            <div class="calc-input-group" id="inputAmountGroup" style="display: none;">
+              <label class="calc-label">Payment Amount to Pay (LKR)</label>
+              <input type="number" id="calcAmount" class="calc-input" value="65000" step="1000" oninput="calculate()">
+            </div>
+
+            <div class="calc-input-group">
+              <label class="calc-label">Plan Target Grams (e.g. 20g Plan)</label>
+              <input type="number" id="calcTarget" class="calc-input" value="20.0000" step="5" oninput="calculate()">
+            </div>
+          </div>
+
+          <div>
+            <div class="result-box">
+              <h3 style="color: var(--accent-gold); margin-bottom: 1rem; font-size: 1.1rem;">Live Ledger Projection</h3>
+              
+              <div class="result-row">
+                <span style="color: var(--text-secondary);">Calculation Mode:</span>
+                <span id="resMode" style="font-weight: 700; color: var(--text-primary);">Buy Gram</span>
+              </div>
+
+              <div class="result-row">
+                <span style="color: var(--text-secondary);">Total Amount to Pay (LKR):</span>
+                <span id="resAmount" class="result-highlight">LKR 68,250.00</span>
+              </div>
+
+              <div class="result-row">
+                <span style="color: var(--text-secondary);">Net Gold Credited to Plan:</span>
+                <span id="resGramsCredited" class="result-highlight" style="color: #34d399;">2.0000 g</span>
+              </div>
+
+              <div class="result-row">
+                <span style="color: var(--text-secondary);">Premium Fee:</span>
+                <span id="resPremiumFee" style="font-family: var(--font-mono); color: #fbbf24;">0.1000 g (LKR 3,250.00)</span>
+              </div>
+
+              <div class="result-row">
+                <span style="color: var(--text-secondary);">Remaining Target to Complete:</span>
+                <span id="resRemaining" style="font-family: var(--font-mono); font-weight: 700;">18.0000 g</span>
+              </div>
+
+              <div class="result-row">
+                <span style="color: var(--text-secondary);">Plan Progress:</span>
+                <span id="resProgress" style="font-family: var(--font-mono); font-weight: 700; color: #38bdf8;">10.00%</span>
+              </div>
+            </div>
+
+            <div style="margin-top: 1.25rem; font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
+              <strong>Agreed C# Formula Verification:</strong><br>
+              • Buy Gram: <code style="color: var(--accent-gold)">AmountPayable = (G + (G * p / 100)) * Rate</code><br>
+              • Buy Amount: <code style="color: var(--accent-gold)">CreditedGrams = (A / Rate) - ((A / Rate) * p / 100)</code>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 7: DATABASE ERD -->
+    <section id="sec-erd" class="doc-section">
+      <h1 class="section-title">📊 Database Entity-Relationship Diagram</h1>
+      <p class="section-desc">
+        Complete schema of the 15 PostgreSQL tables mapped in <code style="color: var(--accent-gold)">SJewlsDbContext</code>. Highlighting primary keys, foreign keys, snapshot fields, and audit invariants.
+      </p>
+
+      <div class="erd-grid">
+        <div class="erd-card">
+          <div class="erd-header">
+            <span>Customer</span>
+            <span class="badge badge-auth">Core Entity</span>
+          </div>
+          <div class="erd-fields">
+            <div class="erd-field-row"><span class="erd-field-name"><span class="erd-pk">PK</span> Id</span><span class="erd-field-type">uuid</span></div>
+            <div class="erd-field-row"><span class="erd-field-name">FullName</span><span class="erd-field-type">text</span></div>
+            <div class="erd-field-row"><span class="erd-field-name">NIC (Unique)</span><span class="erd-field-type">varchar(20)</span></div>
+            <div class="erd-field-row"><span class="erd-field-name">Status</span><span class="erd-field-type">Active|Closed</span></div>
+            <div class="erd-field-row"><span class="erd-field-name"><span class="erd-fk">FK</span> PreferredBranchId</span><span class="erd-field-type">uuid?</span></div>
+            <div class="erd-field-row"><span class="erd-field-name">CreatedAtUtc</span><span class="erd-field-type">timestamp</span></div>
+          </div>
+        </div>
+
+        <div class="erd-card">
+          <div class="erd-header">
+            <span>CustomerJewelleryEnrolment</span>
+            <span class="badge badge-post">Agreement</span>
+          </div>
+          <div class="erd-fields">
+            <div class="erd-field-row"><span class="erd-field-name"><span class="erd-pk">PK</span> Id</span><span class="erd-field-type">uuid</span></div>
+            <div class="erd-field-row"><span class="erd-field-name"><span class="erd-fk">FK</span> CustomerId</span><span class="erd-field-type">uuid</span></div>
+            <div class="erd-field-row"><span class="erd-field-name"><span class="erd-fk">FK</span> PlanId</span><span class="erd-field-type">uuid</span></div>
+            <div class="erd-field-row"><span class="erd-field-name"><span class="erd-fk">FK</span> BranchId</span><span class="erd-field-type">uuid</span></div>
+            <div class="erd-field-row"><span class="erd-field-name">TargetGramsSnapshot</span><span class="erd-field-type">decimal(18,4)</span></div>
+            <div class="erd-field-row"><span class="erd-field-name">Premium%Snapshot</span><span class="erd-field-type">decimal(5,2)</span></div>
+            <div class="erd-field-row"><span class="erd-field-name">NetAccumulatedGoldGrams</span><span class="erd-field-type">decimal(18,4)</span></div>
+            <div class="erd-field-row"><span class="erd-field-name">TotalConfirmedMoneyPaid</span><span class="erd-field-type">decimal(18,2)</span></div>
+            <div class="erd-field-row"><span class="erd-field-name">Status</span><span class="erd-field-type">Active|Completed</span></div>
+          </div>
+        </div>
+
+        <div class="erd-card">
+          <div class="erd-header">
+            <span>JewelleryContribution</span>
+            <span class="badge badge-get">Ledger</span>
+          </div>
+          <div class="erd-fields">
+            <div class="erd-field-row"><span class="erd-field-name"><span class="erd-pk">PK</span> Id</span><span class="erd-field-type">uuid</span></div>
+            <div class="erd-field-row"><span class="erd-field-name"><span class="erd-fk">FK</span> EnrolmentId</span><span class="erd-field-type">uuid</span></div>
+            <div class="erd-field-row"><span class="erd-field-name"><span class="erd-fk">FK</span> PaymentIntentId</span><span class="erd-field-type">uuid</span></div>
+            <div class="erd-field-row"><span class="erd-field-name">PaymentSequenceNumber</span><span class="erd-field-type">int (1,2,3..)</span></div>
+            <div class="erd-field-row"><span class="erd-field-name">AmountPaid</span><span class="erd-field-type">decimal(18,2)</span></div>
+            <div class="erd-field-row"><span class="erd-field-name">GoldGramsCredited</span><span class="erd-field-type">decimal(18,4)</span></div>
+            <div class="erd-field-row"><span class="erd-field-name">RatePerGram24KSnapshot</span><span class="erd-field-type">decimal(18,2)</span></div>
+            <div class="erd-field-row"><span class="erd-field-name">PaymentMethod</span><span class="erd-field-type">Cash|Card|Bank</span></div>
+            <div class="erd-field-row"><span class="erd-field-name">PaidAtUtc</span><span class="erd-field-type">timestamp</span></div>
+          </div>
+        </div>
+
+        <div class="erd-card">
+          <div class="erd-header">
+            <span>JewelleryPlan</span>
+            <span class="badge badge-put">Product</span>
+          </div>
+          <div class="erd-fields">
+            <div class="erd-field-row"><span class="erd-field-name"><span class="erd-pk">PK</span> Id</span><span class="erd-field-type">uuid</span></div>
+            <div class="erd-field-row"><span class="erd-field-name"><span class="erd-fk">FK</span> CategoryId</span><span class="erd-field-type">uuid</span></div>
+            <div class="erd-field-row"><span class="erd-field-name">Name</span><span class="erd-field-type">text</span></div>
+            <div class="erd-field-row"><span class="erd-field-name">TargetGrams</span><span class="erd-field-type">decimal(18,4)</span></div>
+            <div class="erd-field-row"><span class="erd-field-name">OfferedDurations</span><span class="erd-field-type">int[]</span></div>
+            <div class="erd-field-row"><span class="erd-field-name">PremiumPercentage</span><span class="erd-field-type">decimal(5,2)</span></div>
+            <div class="erd-field-row"><span class="erd-field-name">Status</span><span class="erd-field-type">Active|Deactivated</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 8: STATUS LIFECYCLES -->
+    <section id="sec-lifecycles" class="doc-section">
+      <h1 class="section-title">🚦 Status &amp; Lifecycle State Machines</h1>
+      <p class="section-desc">
+        Visual transition diagrams for Customer Accounts, Plan Availability, Enrolments, and Payment Quotes.
+      </p>
+
+      <div class="card">
+        <div class="card-title">Enrolment &amp; Payment Quote Lifecycles</div>
+        <div class="mermaid-box">
+          <pre class="mermaid">
+stateDiagram-v2
+    [*] --> ActiveEnrolment : Customer / Admin creates enrolment (Balance = 0)
+    ActiveEnrolment --> ActiveEnrolment : In-store payment recorded (Remaining > 0)
+    ActiveEnrolment --> Completed : Target reached (Remaining <= 0)
+    Completed --> Fulfilled : Customer claims jewellery at branch
+
+    state "Payment Quote (5-Min Lock)" as Quote {
+        [*] --> QuoteCreated : Quote generated at live 24K rate
+        QuoteCreated --> QuoteExpired : 5 minutes elapse without payment
+        QuoteCreated --> IntentSucceeded : Cash/Card confirmed by staff
+        IntentSucceeded --> ContributionPosted : Ledger balance updated atomically
+    }
+          </pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 9: CONFIGURATION MAP -->
+    <section id="sec-config" class="doc-section">
+      <h1 class="section-title">⚙️ Configuration &amp; Deployment Map</h1>
+      <p class="section-desc">
+        Summary of environment variables and configuration keys used in local development and Railway production.
+      </p>
+
+      <div class="card">
+        <div class="card-title">Environment Variables &amp; Keys</div>
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 1rem;">
+            <thead>
+              <tr style="border-bottom: 2px solid var(--border-color); text-align: left; color: var(--text-muted);">
+                <th style="padding: 0.75rem;">Key Name</th>
+                <th style="padding: 0.75rem;">Purpose</th>
+                <th style="padding: 0.75rem;">Synthetic Placeholder</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom: 1px solid var(--border-color);">
+                <td style="padding: 0.75rem; font-family: var(--font-mono); color: var(--accent-gold);">ConnectionStrings:DefaultConnection</td>
+                <td style="padding: 0.75rem;">PostgreSQL connection string for Supabase database.</td>
+                <td style="padding: 0.75rem; font-family: var(--font-mono); color: var(--text-muted);">Host=aws-0.pooler.supabase.com;Port=5432;...</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border-color);">
+                <td style="padding: 0.75rem; font-family: var(--font-mono); color: var(--accent-gold);">JwtSettings:SecretKey</td>
+                <td style="padding: 0.75rem;">256-bit symmetric key for signing staff and customer JWTs.</td>
+                <td style="padding: 0.75rem; font-family: var(--font-mono); color: var(--text-muted);">your-secure-jwt-256-bit-secret-key-min-32-chars***</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border-color);">
+                <td style="padding: 0.75rem; font-family: var(--font-mono); color: var(--accent-gold);">GoldRateSettings:ApiKey</td>
+                <td style="padding: 0.75rem;">GoldAPI.io key for fetching live 24K XAU in LKR.</td>
+                <td style="padding: 0.75rem; font-family: var(--font-mono); color: var(--text-muted);">goldapi-xxxxxxxxxxxx-io</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border-color);">
+                <td style="padding: 0.75rem; font-family: var(--font-mono); color: var(--accent-gold);">SmsSettings:ApiKey</td>
+                <td style="padding: 0.75rem;">Text.lk SMS gateway key for Sri Lanka SMS OTP delivery.</td>
+                <td style="padding: 0.75rem; font-family: var(--font-mono); color: var(--text-muted);">textlk_api_key_xxxxxxxx</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border-color);">
+                <td style="padding: 0.75rem; font-family: var(--font-mono); color: var(--accent-gold);">EmailSettings:AppPassword</td>
+                <td style="padding: 0.75rem;">Google App Password for Gmail SMTP OTPs and resets.</td>
+                <td style="padding: 0.75rem; font-family: var(--font-mono); color: var(--text-muted);">xxxx xxxx xxxx xxxx</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border-color);">
+                <td style="padding: 0.75rem; font-family: var(--font-mono); color: var(--accent-gold);">OtpSettings:BypassInDevelopment</td>
+                <td style="padding: 0.75rem;">Returns dev OTP code "123456" in responses during testing.</td>
+                <td style="padding: 0.75rem; font-family: var(--font-mono); color: var(--text-muted);">true (dev) / false (prod)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 10: FINDINGS & LIMITATIONS -->
+    <section id="sec-findings" class="doc-section">
+      <h1 class="section-title">🔍 Findings, Verification &amp; Limitations</h1>
+      <p class="section-desc">
+        Categorized audit findings distinguishing verified code features from deferred roadmap items.
+      </p>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem;">
+        <div class="card" style="border-left: 4px solid #34d399;">
+          <div class="card-title" style="color: #34d399;">✅ Confirmed from Code</div>
+          <ul style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.75rem; padding-left: 1.25rem; line-height: 1.7;">
+            <li><strong>Atomic Ledger:</strong> Payment recording runs inside an atomic EF Core transaction, ensuring enrolment balances and contributions remain 100% consistent.</li>
+            <li><strong>Repeat Guard:</strong> Both Mobile and Admin enrolment reject duplicate active plans with HTTP 409 unless confirmed.</li>
+            <li><strong>Separate Scalar Specs:</strong> Admin and Mobile APIs have isolated Swagger docs at <code style="color: var(--text-primary)">/scalar/admin</code> and <code style="color: var(--text-primary)">/scalar/mobile</code>.</li>
+          </ul>
+        </div>
+
+        <div class="card" style="border-left: 4px solid #fbbf24;">
+          <div class="card-title" style="color: #fbbf24;">⏸️ Inferred &amp; Deferred</div>
+          <ul style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.75rem; padding-left: 1.25rem; line-height: 1.7;">
+            <li><strong>Online Payment Gateway:</strong> Mobile checkout initiation returns <code style="color: var(--text-primary)">HTTP 501 NotImplemented</code> (<code style="color: var(--text-primary)">PaymentProviderNotConfigured</code>). In-store staff payments are currently the primary rail.</li>
+            <li><strong>Gold Markup Spread:</strong> Future rate adjustment percentage is deferred; the live rate is used directly.</li>
+            <li><strong>Push Notifications:</strong> In-app notifications are active in PostgreSQL, but push tokens (FCM/APNs) are not yet dispatched.</li>
+          </ul>
+        </div>
+
+        <div class="card" style="border-left: 4px solid #38bdf8;">
+          <div class="card-title" style="color: #38bdf8;">🌐 Runtime Verification Needed</div>
+          <ul style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.75rem; padding-left: 1.25rem; line-height: 1.7;">
+            <li><strong>GoldAPI.io Quota:</strong> Ensure 15-minute in-memory caching duration is sufficient for production load.</li>
+            <li><strong>Text.lk Telco Sender Mask:</strong> Verify that the sender mask <code style="color: var(--text-primary)">SJewls</code> is registered with Sri Lankan telcos.</li>
+            <li><strong>Supabase Storage Policies:</strong> Ensure S3 bucket policies restrict public receipt downloads.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <p>SJewls Architecture Portal — Generated via Archify &amp; .NET 9 Static Inspection. Strictly Read-Only.</p>
+  </footer>
+
+  <script>
+    // 59 Implemented Endpoints Dataset
+    const apiEndpoints = [
+      // Customer Auth & Profile (7)
+      { method: 'POST', path: '/api/v1/customer/auth/check-contact', desc: 'Check if mobile/email exists and account status', module: 'customer', auth: 'Public', input: '{ "contact": "+94771234567" }', output: '{ "exists": true, "status": "Active" }', handler: 'AuthEndpoints.cs', service: 'ICustomerAuthService.CheckContactAsync' },
+      { method: 'POST', path: '/api/v1/customer/auth/request-otp', desc: 'Request 6-digit OTP code via SMS or Email', module: 'customer', auth: 'Public', input: '{ "contact": "+94771234567" }', output: '{ "otpId": "...", "expiresInSeconds": 300 }', handler: 'AuthEndpoints.cs', service: 'ICustomerAuthService.RequestOtpAsync' },
+      { method: 'POST', path: '/api/v1/customer/auth/verify-otp', desc: 'Verify 6-digit OTP code and retrieve tokens', module: 'customer', auth: 'Public', input: '{ "otpId": "...", "code": "123456" }', output: '{ "action": "Login", "accessToken": "..." }', handler: 'AuthEndpoints.cs', service: 'ICustomerAuthService.VerifyOtpAsync' },
+      { method: 'POST', path: '/api/v1/customer/auth/complete-profile', desc: 'Complete registration with full name & NIC', module: 'customer', auth: 'RegToken', input: '{ "fullName": "Jane Doe", "nic": "199012345678" }', output: '{ "accessToken": "...", "customer": { ... } }', handler: 'AuthEndpoints.cs', service: 'ICustomerAuthService.CompleteProfileAsync' },
+      { method: 'POST', path: '/api/v1/customer/auth/refresh-token', desc: 'Exchange refresh token for new access token', module: 'customer', auth: 'Public', input: '{ "refreshToken": "..." }', output: '{ "accessToken": "..." }', handler: 'AuthEndpoints.cs', service: 'ICustomerAuthService.RefreshTokenAsync' },
+      { method: 'POST', path: '/api/v1/customer/auth/logout', desc: 'Revoke active refresh token session', module: 'customer', auth: 'Customer JWT', input: '{ "refreshToken": "..." }', output: '204 NoContent', handler: 'AuthEndpoints.cs', service: 'ICustomerAuthService.LogoutAsync' },
+      { method: 'GET', path: '/api/v1/customer/profile', desc: 'Fetch customer profile and linked contacts', module: 'customer', auth: 'Customer JWT', input: 'None', output: '{ "id": "...", "fullName": "Jane Doe" }', handler: 'CustomerEndpoints.cs', service: 'SJewlsDbContext.Customers' },
+
+      // Branches (2)
+      { method: 'GET', path: '/api/v1/customer/branches', desc: 'Public branch directory for mobile registration', module: 'customer', auth: 'Public', input: 'None', output: '[{ "id": "...", "name": "Main Branch" }]', handler: 'BranchEndpoints.cs', service: 'IBranchService.GetAllActiveAsync' },
+      { method: 'GET', path: '/api/v1/admin/branches', desc: 'List all branches with management metadata', module: 'admin', auth: 'Staff JWT', input: '?includeInactive=false', output: '[{ "id": "...", "name": "Main Branch" }]', handler: 'BranchEndpoints.cs', service: 'IBranchService.GetAllAsync' },
+      { method: 'POST', path: '/api/v1/admin/branches', desc: 'Create a new physical jewellery branch', module: 'admin', auth: 'Staff (ManageBranches)', input: '{ "name": "Kandy", "code": "KDY01" }', output: '{ "id": "...", "name": "Kandy" }', handler: 'BranchEndpoints.cs', service: 'IBranchService.CreateAsync' },
+      { method: 'GET', path: '/api/v1/admin/branches/{id}', desc: 'Get branch details by ID', module: 'admin', auth: 'Staff JWT', input: 'Path: id', output: '{ "id": "...", "name": "..." }', handler: 'BranchEndpoints.cs', service: 'IBranchService.GetByIdAsync' },
+      { method: 'PUT', path: '/api/v1/admin/branches/{id}', desc: 'Update branch contact details and address', module: 'admin', auth: 'Staff (ManageBranches)', input: '{ "name": "Updated" }', output: '{ "id": "..." }', handler: 'BranchEndpoints.cs', service: 'IBranchService.UpdateAsync' },
+      { method: 'DELETE', path: '/api/v1/admin/branches/{id}', desc: 'Soft-deactivate a branch', module: 'admin', auth: 'Staff (ManageBranches)', input: 'Path: id', output: '204 NoContent', handler: 'BranchEndpoints.cs', service: 'IBranchService.DeleteAsync' },
+
+      // Staff Auth & Users (11)
+      { method: 'POST', path: '/api/v1/admin/auth/login', desc: 'Staff login via username/email & password', module: 'admin', auth: 'Public', input: '{ "usernameOrEmail": "admin", "password": "***" }', output: '{ "accessToken": "...", "permissions": [...] }', handler: 'AdminAuthEndpoints.cs', service: 'IStaffAuthService.LoginAsync' },
+      { method: 'POST', path: '/api/v1/admin/auth/refresh-token', desc: 'Refresh staff JWT token session', module: 'admin', auth: 'Public', input: '{ "refreshToken": "..." }', output: '{ "accessToken": "..." }', handler: 'AdminAuthEndpoints.cs', service: 'IStaffAuthService.RefreshTokenAsync' },
+      { method: 'POST', path: '/api/v1/admin/auth/logout', desc: 'Revoke staff session tokens', module: 'admin', auth: 'Staff JWT', input: '{ "refreshToken": "..." }', output: '204 NoContent', handler: 'AdminAuthEndpoints.cs', service: 'IStaffAuthService.LogoutAsync' },
+      { method: 'POST', path: '/api/v1/admin/auth/forgot-password', desc: 'Send password reset link to staff email', module: 'admin', auth: 'Public', input: '{ "email": "staff@sjewls.com" }', output: '{ "message": "Instructions sent" }', handler: 'AdminAuthEndpoints.cs', service: 'IStaffAuthService.ForgotPasswordAsync' },
+      { method: 'POST', path: '/api/v1/admin/auth/reset-password', desc: 'Confirm staff password reset with token', module: 'admin', auth: 'Public', input: '{ "token": "...", "newPassword": "***" }', output: '{ "message": "Password reset" }', handler: 'AdminAuthEndpoints.cs', service: 'IStaffAuthService.ResetPasswordAsync' },
+      { method: 'GET', path: '/api/v1/admin/auth/me', desc: 'Get active staff member profile and claims', module: 'admin', auth: 'Staff JWT', input: 'None', output: '{ "id": "...", "username": "admin" }', handler: 'AdminAuthEndpoints.cs', service: 'IStaffAuthService.GetCurrentUserAsync' },
+      { method: 'GET', path: '/api/v1/admin/users', desc: 'List staff members with pagination', module: 'admin', auth: 'Staff (ManageUsers)', input: '?page=1&pageSize=20', output: '{ "items": [...], "totalCount": 5 }', handler: 'AdminUserEndpoints.cs', service: 'IAdminUserService.GetUsersAsync' },
+      { method: 'POST', path: '/api/v1/admin/users', desc: 'Create a new staff member account', module: 'admin', auth: 'Staff (ManageUsers)', input: '{ "username": "cashier1", "email": "...", "roleId": "..." }', output: '{ "id": "...", "username": "cashier1" }', handler: 'AdminUserEndpoints.cs', service: 'IAdminUserService.CreateUserAsync' },
+      { method: 'GET', path: '/api/v1/admin/users/{id}', desc: 'Get staff member by GUID', module: 'admin', auth: 'Staff (ManageUsers)', input: 'Path: id', output: '{ "id": "...", "username": "..." }', handler: 'AdminUserEndpoints.cs', service: 'IAdminUserService.GetByIdAsync' },
+      { method: 'PUT', path: '/api/v1/admin/users/{id}', desc: 'Update staff member roles and branches', module: 'admin', auth: 'Staff (ManageUsers)', input: '{ "roleId": "...", "branchIds": [...] }', output: '{ "id": "..." }', handler: 'AdminUserEndpoints.cs', service: 'IAdminUserService.UpdateUserAsync' },
+      { method: 'DELETE', path: '/api/v1/admin/users/{id}', desc: 'Deactivate / soft-delete staff member', module: 'admin', auth: 'Staff (ManageUsers)', input: 'Path: id', output: '204 NoContent', handler: 'AdminUserEndpoints.cs', service: 'IAdminUserService.DeleteUserAsync' },
+
+      // Customers (6)
+      { method: 'GET', path: '/api/v1/admin/customers', desc: 'Search customers with active investment stats', module: 'admin', auth: 'Staff (ViewCustomers)', input: '?search=Jane&branchId=...', output: '{ "items": [...] }', handler: 'AdminCustomerEndpoints.cs', service: 'IAdminCustomerService.GetCustomersAsync' },
+      { method: 'POST', path: '/api/v1/admin/customers', desc: 'In-store manual registration of customer', module: 'admin', auth: 'Staff (ManageCustomers)', input: '{ "fullName": "John", "nic": "...", "mobile": "..." }', output: '{ "id": "...", "fullName": "John" }', handler: 'AdminCustomerEndpoints.cs', service: 'IAdminCustomerService.CreateCustomerAsync' },
+      { method: 'GET', path: '/api/v1/admin/customers/{id}', desc: 'Detailed customer dossier & gold accumulated', module: 'admin', auth: 'Staff (ViewCustomers)', input: 'Path: id', output: '{ "id": "...", "totalAccumulatedGrams": 15.5 }', handler: 'AdminCustomerEndpoints.cs', service: 'IAdminCustomerService.GetCustomerByIdAsync' },
+      { method: 'PUT', path: '/api/v1/admin/customers/{id}', desc: 'Update customer master data', module: 'admin', auth: 'Staff (ManageCustomers)', input: '{ "fullName": "John Updated" }', output: '{ "id": "..." }', handler: 'AdminCustomerEndpoints.cs', service: 'IAdminCustomerService.UpdateCustomerAsync' },
+      { method: 'POST', path: '/api/v1/admin/customers/{id}/close', desc: 'Deactivate / close customer account', module: 'admin', auth: 'Staff (ManageCustomers)', input: '{ "reason": "Customer request" }', output: '{ "message": "Account closed" }', handler: 'AdminCustomerEndpoints.cs', service: 'IAdminCustomerService.CloseAccountAsync' },
+      { method: 'POST', path: '/api/v1/admin/customers/{id}/reopen', desc: 'Reopen previously closed customer account', module: 'admin', auth: 'Staff (ManageCustomers)', input: 'Path: id', output: '{ "message": "Account reopened" }', handler: 'AdminCustomerEndpoints.cs', service: 'IAdminCustomerService.ReopenAccountAsync' },
+
+      // Jewellery Categories & Plans (14)
+      { method: 'GET', path: '/api/v1/customer/jewellery-categories', desc: 'Mobile: List active jewellery categories', module: 'customer', auth: 'Customer JWT', input: 'None', output: '[{ "id": "...", "name": "Bridal" }]', handler: 'CustomerJewelleryPlanEndpoints.cs', service: 'ICustomerJewelleryPlanService' },
+      { method: 'GET', path: '/api/v1/admin/jewellery-categories', desc: 'Admin: List all jewellery categories', module: 'admin', auth: 'Staff (ViewPlans)', input: '?includeInactive=false', output: '[{ "id": "...", "name": "Bridal" }]', handler: 'JewelleryCategoryEndpoints.cs', service: 'IJewelleryCategoryService' },
+      { method: 'POST', path: '/api/v1/admin/jewellery-categories', desc: 'Admin: Create new jewellery category', module: 'admin', auth: 'Staff (ManagePlans)', input: '{ "name": "Bangles", "iconUrl": "..." }', output: '{ "id": "..." }', handler: 'JewelleryCategoryEndpoints.cs', service: 'IJewelleryCategoryService' },
+      { method: 'PUT', path: '/api/v1/admin/jewellery-categories/{id}', desc: 'Admin: Update jewellery category', module: 'admin', auth: 'Staff (ManagePlans)', input: '{ "name": "Updated" }', output: '{ "id": "..." }', handler: 'JewelleryCategoryEndpoints.cs', service: 'IJewelleryCategoryService' },
+      { method: 'DELETE', path: '/api/v1/admin/jewellery-categories/{id}', desc: 'Admin: Soft-delete category', module: 'admin', auth: 'Staff (ManagePlans)', input: 'Path: id', output: '204 NoContent', handler: 'JewelleryCategoryEndpoints.cs', service: 'IJewelleryCategoryService' },
+      { method: 'GET', path: '/api/v1/customer/jewellery-plans', desc: 'Mobile: Browse available plans with filter', module: 'customer', auth: 'Customer JWT', input: '?categoryId=...', output: '[{ "id": "...", "targetGrams": 20 }]', handler: 'CustomerJewelleryPlanEndpoints.cs', service: 'ICustomerJewelleryPlanService' },
+      { method: 'GET', path: '/api/v1/customer/jewellery-plans/{id}', desc: 'Mobile: Detailed plan info & durations', module: 'customer', auth: 'Customer JWT', input: 'Path: id', output: '{ "id": "...", "offeredDurations": [6, 12] }', handler: 'CustomerJewelleryPlanEndpoints.cs', service: 'ICustomerJewelleryPlanService' },
+      { method: 'POST', path: '/api/v1/customer/jewellery-plans/{id}/quote', desc: 'Mobile: Pre-enrolment calculation preview', module: 'customer', auth: 'Customer JWT', input: '{ "mode": "BuyGram", "requestedGrams": 2 }', output: '{ "payableAmount": 68250 }', handler: 'CustomerJewelleryPlanEndpoints.cs', service: 'ICustomerJewelleryPlanService' },
+      { method: 'GET', path: '/api/v1/admin/jewellery-plans', desc: 'Admin: List all jewellery plans with stats', module: 'admin', auth: 'Staff (ViewPlans)', input: '?status=Active', output: '[{ "id": "...", "name": "..." }]', handler: 'JewelleryPlanEndpoints.cs', service: 'IJewelleryPlanService' },
+      { method: 'POST', path: '/api/v1/admin/jewellery-plans', desc: 'Admin: Create plan with target grams & options', module: 'admin', auth: 'Staff (ManagePlans)', input: '{ "name": "50g Plan", "targetGrams": 50 }', output: '{ "id": "..." }', handler: 'JewelleryPlanEndpoints.cs', service: 'IJewelleryPlanService' },
+      { method: 'GET', path: '/api/v1/admin/jewellery-plans/{id}', desc: 'Admin: Get plan by ID', module: 'admin', auth: 'Staff (ViewPlans)', input: 'Path: id', output: '{ "id": "..." }', handler: 'JewelleryPlanEndpoints.cs', service: 'IJewelleryPlanService' },
+      { method: 'PUT', path: '/api/v1/admin/jewellery-plans/{id}', desc: 'Admin: Update plan parameters', module: 'admin', auth: 'Staff (ManagePlans)', input: '{ "name": "Updated" }', output: '{ "id": "..." }', handler: 'JewelleryPlanEndpoints.cs', service: 'IJewelleryPlanService' },
+      { method: 'DELETE', path: '/api/v1/admin/jewellery-plans/{id}', desc: 'Admin: Soft-delete plan', module: 'admin', auth: 'Staff (ManagePlans)', input: 'Path: id', output: '204 NoContent', handler: 'JewelleryPlanEndpoints.cs', service: 'IJewelleryPlanService' },
+      { method: 'POST', path: '/api/v1/admin/jewellery-plans/{id}/deactivate', desc: 'Admin: Deactivate active plan', module: 'admin', auth: 'Staff (ManagePlans)', input: 'Path: id', output: '{ "message": "Deactivated" }', handler: 'JewelleryPlanEndpoints.cs', service: 'IJewelleryPlanService' },
+      { method: 'POST', path: '/api/v1/admin/jewellery-plans/{id}/reopen', desc: 'Admin: Reopen deactivated plan', module: 'admin', auth: 'Staff (ManagePlans)', input: 'Path: id', output: '{ "message": "Reopened" }', handler: 'JewelleryPlanEndpoints.cs', service: 'IJewelleryPlanService' },
+
+      // Enrolments & Payments (15)
+      { method: 'GET', path: '/api/v1/customer/jewellery-enrolments', desc: 'Mobile: "My Investments" list of enrolments', module: 'customer', auth: 'Customer JWT', input: '?status=Active', output: '[{ "id": "...", "netAccumulatedGoldGrams": 4.5 }]', handler: 'CustomerJewelleryPlanEndpoints.cs', service: 'ICustomerJewelleryPlanService' },
+      { method: 'POST', path: '/api/v1/customer/jewellery-enrolments', desc: 'Mobile: Join plan with repeat check guard', module: 'customer', auth: 'Customer JWT', input: '{ "planId": "...", "confirmRepeatEnrolment": false }', output: '{ "id": "...", "status": "Active" }', handler: 'CustomerJewelleryPlanEndpoints.cs', service: 'CustomerJewelleryPlanService' },
+      { method: 'GET', path: '/api/v1/customer/jewellery-enrolments/{id}', desc: 'Mobile: Detailed enrolment progress tracker', module: 'customer', auth: 'Customer JWT', input: 'Path: id', output: '{ "id": "...", "progressPercent": 25.0 }', handler: 'CustomerJewelleryPlanEndpoints.cs', service: 'ICustomerJewelleryPlanService' },
+      { method: 'POST', path: '/api/v1/customer/jewellery-enrolments/{id}/quote', desc: 'Mobile: 5-minute locked quote for payment', module: 'customer', auth: 'Customer JWT', input: '{ "mode": "BuyGram", "requestedGrams": 1 }', output: '{ "quoteId": "...", "payableAmount": 34125 }', handler: 'CustomerJewelleryPlanEndpoints.cs', service: 'ICustomerJewelleryPlanService' },
+      { method: 'POST', path: '/api/v1/customer/jewellery-enrolments/{id}/payments/initiate', desc: 'Mobile: Checkout initiation (Deferred Gateway)', module: 'customer', auth: 'Customer JWT', input: '{ "quoteId": "..." }', output: '501 NotImplemented', handler: 'CustomerJewelleryPlanEndpoints.cs', service: 'Deferred Payment Engine' },
+      { method: 'GET', path: '/api/v1/customer/jewellery-enrolments/{id}/payments', desc: 'Mobile: Payment contribution ledger history', module: 'customer', auth: 'Customer JWT', input: 'Path: id', output: '[{ "paymentSequenceNumber": 1, "amountPaid": 50000 }]', handler: 'CustomerJewelleryPlanEndpoints.cs', service: 'ICustomerJewelleryPlanService' },
+      { method: 'GET', path: '/api/v1/customer/jewellery-enrolments/{id}/payments/{paymentId}', desc: 'Mobile: Single payment receipt view', module: 'customer', auth: 'Customer JWT', input: 'Path: id, paymentId', output: '{ "id": "...", "goldGramsCredited": 1.45 }', handler: 'CustomerJewelleryPlanEndpoints.cs', service: 'ICustomerJewelleryPlanService' },
+      { method: 'GET', path: '/api/v1/admin/jewellery-enrolments', desc: 'Admin: List all customer enrolments', module: 'admin', auth: 'Staff (ViewEnrolments)', input: '?page=1&pageSize=20', output: '{ "items": [...] }', handler: 'AdminJewelleryEnrolmentEndpoints.cs', service: 'IAdminJewelleryEnrolmentService' },
+      { method: 'POST', path: '/api/v1/admin/jewellery-enrolments', desc: 'Admin: Assign plan to customer (Read-only grams)', module: 'admin', auth: 'Staff (ManageEnrolments)', input: '{ "customerId": "...", "planId": "..." }', output: '{ "id": "..." }', handler: 'AdminJewelleryEnrolmentEndpoints.cs', service: 'AdminJewelleryEnrolmentService' },
+      { method: 'GET', path: '/api/v1/admin/jewellery-enrolments/{id}', desc: 'Admin: Detailed enrolment & payments view', module: 'admin', auth: 'Staff (ViewEnrolments)', input: 'Path: id', output: '{ "id": "...", "payments": [...] }', handler: 'AdminJewelleryEnrolmentEndpoints.cs', service: 'IAdminJewelleryEnrolmentService' },
+      { method: 'POST', path: '/api/v1/admin/jewellery-enrolments/{id}/payments/record', desc: 'Admin: Record in-store payment (Atomic ledger)', module: 'admin', auth: 'Staff (ManagePayments)', input: '{ "mode": "BuyAmount", "amount": 50000, "method": "Cash" }', output: '{ "paymentId": "...", "sequenceNumber": 2 }', handler: 'AdminJewelleryEnrolmentEndpoints.cs', service: 'IJewelleryPaymentFinalizationService' },
+      { method: 'GET', path: '/api/v1/admin/jewellery-enrolments/{id}/payments', desc: 'Admin: List payments for an enrolment', module: 'admin', auth: 'Staff (ViewPayments)', input: 'Path: id', output: '[{ "paymentSequenceNumber": 1 }]', handler: 'AdminJewelleryEnrolmentEndpoints.cs', service: 'IAdminJewelleryEnrolmentService' },
+      { method: 'GET', path: '/api/v1/admin/jewellery-enrolments/{id}/payments/{paymentId}', desc: 'Admin: Single payment audit receipt', module: 'admin', auth: 'Staff (ViewPayments)', input: 'Path: id, paymentId', output: '{ "id": "...", "recordedByStaffId": "..." }', handler: 'AdminJewelleryEnrolmentEndpoints.cs', service: 'IAdminJewelleryEnrolmentService' },
+      { method: 'GET', path: '/api/v1/admin/jewellery-enrolments/payments', desc: 'Admin Payments Screen: Global payments feed', module: 'admin', auth: 'Staff (ViewPayments)', input: '?status=Succeeded&fromDate=...', output: '{ "items": [...] }', handler: 'AdminJewelleryEnrolmentEndpoints.cs', service: 'IAdminJewelleryEnrolmentService' },
+      { method: 'GET', path: '/api/v1/admin/jewellery-enrolments/payments/incomplete-plans', desc: 'Admin Payments: Incomplete plans inactivity tracker', module: 'admin', auth: 'Staff (ViewPayments)', input: '?inactivityDays=30', output: '{ "items": [{ "daysInactive": 42, "reminderEligible": true }] }', handler: 'AdminJewelleryEnrolmentEndpoints.cs', service: 'IAdminJewelleryEnrolmentService' },
+
+      // Gold Rates, Notifications, Storage & Support (9)
+      { method: 'GET', path: '/api/v1/customer/gold-rates/live', desc: 'Live 24K XAU rate in LKR (Cached 15m)', module: 'customer', auth: 'Public', input: 'None', output: '{ "ratePerGram24K": 32500, "currency": "LKR" }', handler: 'CustomerJewelleryPlanEndpoints.cs', service: 'IGoldRateService' },
+      { method: 'GET', path: '/api/v1/customer/gold-rates/history', desc: 'Historical 24K gold rates for chart display', module: 'customer', auth: 'Customer JWT', input: '?days=30', output: '[{ "date": "...", "rate": 32500 }]', handler: 'CustomerJewelleryPlanEndpoints.cs', service: 'IGoldRateService' },
+      { method: 'GET', path: '/api/v1/customer/notifications', desc: 'Mobile: Customer notification inbox', module: 'customer', auth: 'Customer JWT', input: '?unreadOnly=false', output: '{ "items": [...] }', handler: 'CustomerEndpoints.cs', service: 'ICustomerNotificationService' },
+      { method: 'GET', path: '/api/v1/customer/notifications/unread-count', desc: 'Mobile: Unread notification badge counter', module: 'customer', auth: 'Customer JWT', input: 'None', output: '{ "count": 3 }', handler: 'CustomerEndpoints.cs', service: 'ICustomerNotificationService' },
+      { method: 'POST', path: '/api/v1/customer/notifications/{id}/read', desc: 'Mobile: Mark single notification as read', module: 'customer', auth: 'Customer JWT', input: 'Path: id', output: '{ "message": "Marked read" }', handler: 'CustomerEndpoints.cs', service: 'ICustomerNotificationService' },
+      { method: 'POST', path: '/api/v1/customer/notifications/read-all', desc: 'Mobile: Mark all notifications as read', module: 'customer', auth: 'Customer JWT', input: 'None', output: '{ "message": "All marked read" }', handler: 'CustomerEndpoints.cs', service: 'ICustomerNotificationService' },
+      { method: 'POST', path: '/api/v1/customer/notifications/test-seed', desc: 'Dev: Seed synthetic notifications for testing', module: 'customer', auth: 'Customer JWT', input: '{ "count": 5 }', output: '{ "seededCount": 5 }', handler: 'CustomerEndpoints.cs', service: 'ICustomerNotificationService' },
+      { method: 'POST', path: '/api/v1/admin/storage/upload', desc: 'Upload in-store payment receipt to S3 bucket', module: 'admin', auth: 'Staff (ManagePayments)', input: 'Multipart: file (image/pdf)', output: '{ "fileUrl": "https://...supabase.co/...", "fileKey": "..." }', handler: 'AdminJewelleryEnrolmentEndpoints.cs', service: 'ISupabaseStorageService' },
+      { method: 'POST', path: '/api/v1/customer/support/tickets', desc: 'Mobile: Open customer support inquiry', module: 'customer', auth: 'Customer JWT', input: '{ "subject": "Payment query", "message": "..." }', output: '{ "id": "..." }', handler: 'CustomerEndpoints.cs', service: 'SJewlsDbContext.SupportTickets' }
+    ];
+
+    // Theme Switching
+    function toggleTheme() {
+      const html = document.documentElement;
+      const current = html.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', next);
+      document.getElementById('themeIcon').innerText = next === 'dark' ? '☀️' : '🌙';
+      document.getElementById('themeLabel').innerText = next === 'dark' ? 'Light' : 'Dark';
+      
+      // Update iframe theme if present
+      const frame = document.getElementById('archFrame');
+      if (frame && frame.contentWindow) {
+        frame.contentWindow.postMessage({ type: 'archify-theme', theme: next }, '*');
+      }
+    }
+
+    // Section Switching
+    function switchSection(secId) {
+      document.querySelectorAll('.doc-section').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+      
+      const targetSec = document.getElementById('sec-' + secId);
+      if (targetSec) targetSec.classList.add('active');
+      
+      const clickedBtn = Array.from(document.querySelectorAll('.nav-tab')).find(b => b.getAttribute('onclick').includes(secId));
+      if (clickedBtn) clickedBtn.classList.add('active');
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function reloadFrame() {
+      const frame = document.getElementById('archFrame');
+      frame.src = frame.src;
+    }
+
+    // Render API Catalogue
+    function renderApis(list) {
+      const container = document.getElementById('apiListContainer');
+      container.innerHTML = '';
+
+      if (list.length === 0) {
+        container.innerHTML = '<div style="padding: 2rem; text-align: center; color: var(--text-muted);">No endpoints match the current filter.</div>';
+        return;
+      }
+
+      list.forEach((api, index) => {
+        const item = document.createElement('div');
+        item.className = 'api-accordion';
+        item.innerHTML = `
+          <div class="api-accordion-header" onclick="toggleAccordion(this)">
+            <div class="api-route-box">
+              <span class="badge badge-${api.method.toLowerCase()}">${api.method}</span>
+              <span class="api-path">${api.path}</span>
+              <span class="api-desc">${api.desc}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span class="badge ${api.auth.includes('Public') ? 'badge-public' : 'badge-auth'}">${api.auth}</span>
+              <span style="color: var(--text-muted); font-size: 0.8rem;">▼</span>
+            </div>
+          </div>
+          <div class="api-accordion-content">
+            <div class="api-details-grid">
+              <div class="detail-card">
+                <div class="detail-label">Route Handler</div>
+                <div class="detail-val">${api.handler}</div>
+              </div>
+              <div class="detail-card">
+                <div class="detail-label">Service &amp; Interface</div>
+                <div class="detail-val">${api.service}</div>
+              </div>
+              <div class="detail-card">
+                <div class="detail-label">Module / Role</div>
+                <div class="detail-val">${api.module.toUpperCase()} • ${api.auth}</div>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+              <div>
+                <div class="detail-label">Request Input (DTO / Params)</div>
+                <pre><code>${api.input}</code></pre>
+              </div>
+              <div>
+                <div class="detail-label">Response DTO (Success 200/201)</div>
+                <pre><code>${api.output}</code></pre>
+              </div>
+            </div>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    function toggleAccordion(header) {
+      const parent = header.parentElement;
+      parent.classList.toggle('open');
+    }
+
+    let activeFilter = 'all';
+    function filterApis(type, btn) {
+      activeFilter = type;
+      document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      applyApiFilters();
+    }
+
+    function applyApiFilters() {
+      const q = document.getElementById('globalSearch').value.toLowerCase();
+      const filtered = apiEndpoints.filter(api => {
+        const matchesType = (activeFilter === 'all') ||
+          (activeFilter === 'customer' && api.module === 'customer') ||
+          (activeFilter === 'admin' && api.module === 'admin') ||
+          (activeFilter === api.method.toLowerCase());
+
+        const matchesQuery = !q ||
+          api.path.toLowerCase().includes(q) ||
+          api.desc.toLowerCase().includes(q) ||
+          api.handler.toLowerCase().includes(q) ||
+          api.service.toLowerCase().includes(q);
+
+        return matchesType && matchesQuery;
+      });
+
+      renderApis(filtered);
+    }
+
+    function filterContent() {
+      applyApiFilters();
+    }
+
+    // Financial Calculator Logic
+    let calcMode = 'buyGram';
+    function setCalcMode(mode) {
+      calcMode = mode;
+      document.getElementById('btnBuyGram').classList.toggle('active', mode === 'buyGram');
+      document.getElementById('btnBuyAmount').classList.toggle('active', mode === 'buyAmount');
+      document.getElementById('inputGramGroup').style.display = mode === 'buyGram' ? 'block' : 'none';
+      document.getElementById('inputAmountGroup').style.display = mode === 'buyAmount' ? 'block' : 'none';
+      document.getElementById('resMode').innerText = mode === 'buyGram' ? 'Buy Gram (Requested Grams)' : 'Buy Amount (Entered Money)';
+      calculate();
+    }
+
+    function calculate() {
+      const R = parseFloat(document.getElementById('calcRate').value) || 32500;
+      const p = (parseFloat(document.getElementById('calcPremium').value) || 5.0) / 100;
+      const targetGrams = parseFloat(document.getElementById('calcTarget').value) || 20.0;
+
+      let payableAmount = 0;
+      let creditedGrams = 0;
+      let premiumFeeGrams = 0;
+      let premiumFeeLkr = 0;
+
+      if (calcMode === 'buyGram') {
+        const G = parseFloat(document.getElementById('calcGrams').value) || 0;
+        premiumFeeGrams = G * p;
+        payableAmount = (G + premiumFeeGrams) * R;
+        creditedGrams = G;
+        premiumFeeLkr = premiumFeeGrams * R;
+      } else {
+        const A = parseFloat(document.getElementById('calcAmount').value) || 0;
+        payableAmount = A;
+        const baseGrams = A / R;
+        premiumFeeGrams = baseGrams * p;
+        creditedGrams = baseGrams - premiumFeeGrams;
+        premiumFeeLkr = premiumFeeGrams * R;
+      }
+
+      const remainingGrams = Math.max(0, targetGrams - creditedGrams);
+      const progressPercent = Math.min(100, (creditedGrams / targetGrams) * 100);
+
+      document.getElementById('resAmount').innerText = 'LKR ' + payableAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      document.getElementById('resGramsCredited').innerText = creditedGrams.toFixed(4) + ' g';
+      document.getElementById('resPremiumFee').innerText = premiumFeeGrams.toFixed(4) + ' g (LKR ' + premiumFeeLkr.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ')';
+      document.getElementById('resRemaining').innerText = remainingGrams.toFixed(4) + ' g';
+      document.getElementById('resProgress').innerText = progressPercent.toFixed(2) + '%';
+    }
+
+    // Initialize on load
+    window.addEventListener('DOMContentLoaded', () => {
+      renderApis(apiEndpoints);
+      calculate();
+      mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+    });
+  </script>
+</body>
+</html>

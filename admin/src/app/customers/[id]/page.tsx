@@ -31,6 +31,8 @@ import {
   ExternalLink,
   ChevronRight,
   Filter,
+  Coins,
+  Trophy,
 } from "lucide-react";
 
 interface CustomerDetailsPageProps {
@@ -68,8 +70,8 @@ function CustomerDetailsInner({ params }: CustomerDetailsPageProps) {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Active tab state: "overview" | "plans" | "payments"
-  const [activeTab, setActiveTab] = useState<"overview" | "plans" | "payments">("overview");
+  // Active tab state: "overview" | "plans" | "payments" | "chitu"
+  const [activeTab, setActiveTab] = useState<"overview" | "plans" | "payments" | "chitu">("overview");
 
   // Payments tab enrolment filter
   const [selectedEnrolmentFilter, setSelectedEnrolmentFilter] = useState<string>("ALL");
@@ -345,8 +347,8 @@ function CustomerDetailsInner({ params }: CustomerDetailsPageProps) {
               </div>
             </div>
 
-            {/* 3 Summary Cards matching Screenshot 2 & 3 */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* 4 Summary Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Active Plans Card */}
               <div className="p-5 rounded-2xl bg-white border border-gray-100 shadow-sm flex items-center justify-between">
                 <div>
@@ -387,6 +389,19 @@ function CustomerDetailsInner({ params }: CustomerDetailsPageProps) {
                   <Sparkles className="w-6 h-6 text-[#0B3D0B]" />
                 </div>
               </div>
+
+              {/* Chitu Slots Card */}
+              <div className="p-5 rounded-2xl bg-white border border-gray-100 shadow-sm flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                    Chitu Savings Slots
+                  </span>
+                  <div className="text-3xl font-black text-gray-900">{customer.chituSlots?.length || 0}</div>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
+                  <Coins className="w-6 h-6" />
+                </div>
+              </div>
             </div>
 
             {/* Navigation Tabs and Quick Action Buttons */}
@@ -424,6 +439,17 @@ function CustomerDetailsInner({ params }: CustomerDetailsPageProps) {
                   }`}
                 >
                   Jewellery Payments ({allContributionsWithEnrolment.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("chitu")}
+                  className={`px-4 py-2 text-xs font-extrabold uppercase tracking-wider rounded-xl transition-all ${
+                    activeTab === "chitu"
+                      ? "bg-[#0B3D0B] text-[#FFD700] shadow-sm"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                  }`}
+                >
+                  Chitu Slots ({customer.chituSlots?.length || 0})
                 </button>
               </div>
 
@@ -573,6 +599,76 @@ function CustomerDetailsInner({ params }: CustomerDetailsPageProps) {
                   ) : (
                     <div className="p-8 text-center text-gray-400 text-xs">
                       No payment or enrolment transactions recorded yet for this customer.
+                    </div>
+                  )}
+                </div>
+
+                {/* Chitu Savings Slots Overview */}
+                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <div className="flex items-center gap-2">
+                      <Coins className="w-4 h-4 text-[#0B3D0B]" />
+                      <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">
+                        Chitu Savings Slots ({customer.chituSlots?.length || 0})
+                      </h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("chitu")}
+                      className="text-xs font-bold text-[#0B3D0B] hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      View All Slots <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {!customer.chituSlots || customer.chituSlots.length === 0 ? (
+                    <div className="p-6 text-center text-gray-400 text-xs border border-dashed border-gray-200 rounded-xl">
+                      No Chitu savings slots enrolled for this customer.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {customer.chituSlots.map((slot) => (
+                        <div
+                          key={slot.id}
+                          className="p-3.5 rounded-xl border border-gray-200 bg-[#FAF9F6] flex flex-col justify-between text-xs space-y-2"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <span className="font-mono font-black text-xs px-2 py-0.5 rounded bg-[#0B3D0B] text-[#FFD700] mr-2">
+                                {slot.slotDisplayCode || `SLOT-${slot.slotNumber}`}
+                              </span>
+                              <span className="font-bold text-gray-900">{slot.planName}</span>
+                            </div>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                slot.isWinner
+                                  ? "bg-amber-100 text-amber-900 border border-amber-300"
+                                  : slot.status === "Active"
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : "bg-gray-100 text-gray-600"
+                              }`}
+                            >
+                              {slot.isWinner ? `Won (Rd ${slot.winningRoundIndex})` : slot.status}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[11px] text-gray-500 pt-1 border-t border-gray-200/60">
+                            <span>
+                              Price: <strong>LKR {slot.monthlyInstalmentAmount.toLocaleString()}</strong>/mo
+                            </span>
+                            <span>
+                              Paid: <strong>{slot.monthsPaidCount || 0} mos</strong>
+                            </span>
+                          </div>
+
+                          {slot.isWinner && slot.entitlementAmount && (
+                            <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-950 font-bold text-[11px] flex items-center justify-between">
+                              <span>Winning Entitlement:</span>
+                              <span className="font-mono">LKR {slot.entitlementAmount.toLocaleString()}</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -803,6 +899,136 @@ function CustomerDetailsInner({ params }: CustomerDetailsPageProps) {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            )}
+
+            {/* 4. CHITU SAVINGS SLOTS TAB */}
+            {activeTab === "chitu" && (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden space-y-6 p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+                  <div>
+                    <h3 className="text-base font-black text-gray-900 flex items-center gap-2">
+                      <Coins className="w-5 h-5 text-[#0B3D0B]" />
+                      Customer Chitu Savings Slots
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Fixed monthly instalments, physical raffle participation, stopped future obligations on winning, and confirmed contribution claim at plan end.
+                    </p>
+                  </div>
+                  <Link
+                    href="/chitu-plans"
+                    className="px-4 py-2 rounded-xl bg-[#0B3D0B] text-[#FFD700] text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-all"
+                  >
+                    <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                    Assign Chitu Slot
+                  </Link>
+                </div>
+
+                {!customer.chituSlots || customer.chituSlots.length === 0 ? (
+                  <div className="p-12 text-center text-gray-400 text-xs border border-dashed border-gray-200 rounded-2xl">
+                    <Coins className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                    <p className="font-bold text-gray-700">No Chitu Savings Slots</p>
+                    <p className="text-gray-400 mt-1">This customer is not currently enrolled in any Chitu monthly plans.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-[#FAF9F6] border-b border-gray-200 text-gray-500 font-bold uppercase tracking-wider">
+                        <tr>
+                          <th className="px-5 py-3.5">Slot Code</th>
+                          <th className="px-5 py-3.5">Plan Name</th>
+                          <th className="px-5 py-3.5">Redemption</th>
+                          <th className="px-5 py-3.5">Monthly Price</th>
+                          <th className="px-5 py-3.5">Months Covered</th>
+                          <th className="px-5 py-3.5">Total Confirmed Paid</th>
+                          <th className="px-5 py-3.5">Status & Winner State</th>
+                          <th className="px-5 py-3.5">Entitlement / Claim Context</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {customer.chituSlots.map((slot) => {
+                          const isGold = slot.redemptionType === "Gold";
+                          return (
+                            <tr key={slot.id} className="hover:bg-gray-50/70 transition-colors">
+                              <td className="px-5 py-3.5 font-mono font-black text-gray-900">
+                                <span className="px-2.5 py-1 rounded-md bg-[#0B3D0B] text-[#FFD700]">
+                                  {slot.slotDisplayCode || `SLOT-${slot.slotNumber}`}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5 font-bold text-gray-900">
+                                {slot.planName}
+                                <span className="text-[11px] text-gray-400 block font-mono">
+                                  {slot.planCode}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5">
+                                <span
+                                  className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                    isGold
+                                      ? "bg-amber-100 text-amber-900 border border-amber-300"
+                                      : "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                                  }`}
+                                >
+                                  {isGold ? "🪙 Gold" : "💵 Cash"}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5 font-mono font-bold text-gray-900">
+                                LKR {slot.monthlyInstalmentAmount.toLocaleString()}
+                              </td>
+                              <td className="px-5 py-3.5">
+                                <span className="font-bold text-gray-900">
+                                  {slot.monthsPaidCount || 0} month(s)
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5 font-mono font-bold text-emerald-900">
+                                LKR {(slot.totalPaidAmount || 0).toLocaleString()}
+                              </td>
+                              <td className="px-5 py-3.5">
+                                {slot.isWinner ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">
+                                    <Trophy className="w-3 h-3 text-amber-600" />
+                                    Winner (Round {slot.winningRoundIndex})
+                                  </span>
+                                ) : (
+                                  <span
+                                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                      slot.status === "Active"
+                                        ? "bg-emerald-100 text-emerald-800"
+                                        : "bg-gray-100 text-gray-600"
+                                    }`}
+                                  >
+                                    {slot.status}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-5 py-3.5">
+                                {slot.isWinner ? (
+                                  <div className="space-y-0.5">
+                                    <span className="font-bold text-amber-900 block">
+                                      Entitlement: LKR {(slot.entitlementAmount || 0).toLocaleString()}
+                                    </span>
+                                    {slot.advanceExcessAmount && slot.advanceExcessAmount > 0 ? (
+                                      <span className="text-[10px] text-amber-700 block font-semibold">
+                                        Excess Prepaid: LKR {slot.advanceExcessAmount.toLocaleString()} (Pending Decision)
+                                      </span>
+                                    ) : null}
+                                    <span className="text-[10px] text-gray-500 block">
+                                      Future payment obligations stopped
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-500 text-[11px]">
+                                    Claim basis at plan end: Confirmed contributions (LKR {(slot.totalPaidAmount || 0).toLocaleString()})
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
           </>

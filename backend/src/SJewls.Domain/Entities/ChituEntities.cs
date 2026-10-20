@@ -11,6 +11,7 @@ public class ChituPlan : BaseEntity
     public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public ChituRedemptionType RedemptionType { get; set; } = ChituRedemptionType.Cash;
 
     public decimal MonthlyInstalmentAmount { get; set; }
     public decimal ChituBenefitValue { get; set; }
@@ -18,6 +19,7 @@ public class ChituPlan : BaseEntity
     public int DurationMonths { get; set; }
     public int DueDayOfMonth { get; set; } = 10;
     public DateOnly StartDate { get; set; }
+    public DateOnly EndDate { get; set; }
     public PlanStatus Status { get; set; } = PlanStatus.Draft;
 
     // Navigation properties
@@ -34,7 +36,10 @@ public class ChituSlot : BaseEntity
     public Customer? Customer { get; set; }
 
     public int SlotNumber { get; set; }
+    public string SlotDisplayCode { get; set; } = string.Empty;
     public ChituSlotStatus Status { get; set; } = ChituSlotStatus.PendingReservation;
+    public int? WinningRoundIndex { get; set; }
+    public decimal PrepaidExcessAmount { get; set; } = 0m;
 
     public DateTimeOffset? ReservedUntilUtc { get; set; }
     public DateTimeOffset? ActivatedAtUtc { get; set; }
@@ -57,6 +62,7 @@ public class ChituInstalment : BaseEntity
     public InstalmentStatus Status { get; set; } = InstalmentStatus.Pending;
     public DateTimeOffset? PaidAtUtc { get; set; }
     public Guid? PaymentId { get; set; }
+    public Payment? Payment { get; set; }
 }
 
 public class ChituDraw : BaseEntity
@@ -66,6 +72,8 @@ public class ChituDraw : BaseEntity
 
     public int DrawMonthIndex { get; set; }
     public DateOnly DrawDate { get; set; }
+    public DateTimeOffset RecordedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+    public string? ReferenceNumber { get; set; }
 
     public Guid WinningSlotId { get; set; }
     public ChituSlot? WinningSlot { get; set; }
@@ -90,6 +98,8 @@ public class WinnerBenefit : BaseEntity
     public Customer? Customer { get; set; }
 
     public decimal ChituBenefitValue { get; set; }
+    public decimal AdvanceExcessAmount { get; set; } = 0m;
+    public ChituRedemptionType RedemptionType { get; set; } = ChituRedemptionType.Cash;
     public BenefitStatus Status { get; set; } = BenefitStatus.Unclaimed;
 
     public DateTimeOffset? ClaimedAtUtc { get; set; }

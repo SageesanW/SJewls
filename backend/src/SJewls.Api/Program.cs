@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
@@ -52,6 +53,16 @@ foreach (var envPath in envCandidatePaths)
 }
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configure System.Text.Json Enum String Serialization & Deserialization
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
+builder.Services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(options =>
+{
+    options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
 
 // Railway / Container Port Binding (listens on 0.0.0.0:PORT when PORT is set)
 var port = Environment.GetEnvironmentVariable("PORT");
@@ -240,6 +251,7 @@ builder.Services.AddScoped<ICustomerNotificationService, CustomerNotificationSer
 builder.Services.AddScoped<ICustomerJewelleryPlanService, CustomerJewelleryPlanService>();
 builder.Services.AddScoped<IJewelleryPaymentFinalizationService, JewelleryPaymentFinalizationService>();
 builder.Services.AddScoped<IAdminJewelleryEnrolmentService, AdminJewelleryEnrolmentService>();
+builder.Services.AddScoped<IChituService, ChituService>();
 
 
 // Rate Limiting for Auth Endpoints
@@ -342,7 +354,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "SJewls Customer Mobile API",
         Version = "v1",
-        Description = "API endpoints for the SJewls Customer Mobile Application — Contact Verification, OTP Request & Verification, Profile Completion, Self-Service Account Closure, and Active Branches."
+        Description = "Complete API specification for the SJewls Customer Mobile Application — Customer Authentication & OTP Verification, Profile Completion, Self-Service Account Closure, Active Store Branches, Jewellery Plan & Category Browsing, Plan Enrolment Previews & Creation, Contribution Ledger, Gold Rate & Payment Quotes, Deferred Payment Initiation, and Customer Notifications."
     });
 
     options.SwaggerDoc("admin", new OpenApiInfo
@@ -396,22 +408,8 @@ builder.Services.AddSwaggerGen(options =>
         Description = "Enter your JWT Bearer token (e.g., Bearer eyJhbGci...)"
     });
 
-    options.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
-        {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            Array.Empty<string>()
-        }
-    });
-
     options.OperationFilter<EndpointMetadataFilter>();
+    options.DocumentFilter<TagDescriptionsDocumentFilter>();
 });
 
 // 5. CORS for Next.js Admin & React Native Mobile
@@ -504,6 +502,7 @@ app.MapBranchEndpoints();
 app.MapJewelleryCategoryEndpoints();
 app.MapJewelleryPlanEndpoints();
 app.MapAdminJewelleryEnrolmentEndpoints();
+app.MapAdminChituEndpoints();
 
 
 // Seed initial roles, default branch, and initial Super Admin if configured
@@ -592,7 +591,8 @@ static void EnsurePortAvailable(int port, ILogger logger)
 }
 
 /// <summary>
-/// Swagger operation filter to copy minimal API .WithSummary() and .WithDescription() into OpenAPI operations for Scalar.
+/// Swagger operation filter to copy minimal API .WithSummary() and .WithDescription() into OpenAPI operations for Scalar,
+/// enrich parameter descriptions, and scope security requirements to protected endpoints only.
 /// </summary>
 public class EndpointMetadataFilter : IOperationFilter
 {
@@ -612,6 +612,123 @@ public class EndpointMetadataFilter : IOperationFilter
         if (descriptionMetadata != null && string.IsNullOrEmpty(operation.Description))
         {
             operation.Description = descriptionMetadata.Description;
+        }
+
+        // 1. Configure Bearer security requirement only for endpoints that require authorization
+        var hasAuth = context.ApiDescription.ActionDescriptor.EndpointMetadata
+            .OfType<Microsoft.AspNetCore.Authorization.IAuthorizeData>()
+            .Any();
+        var allowsAnon = context.ApiDescription.ActionDescriptor.EndpointMetadata
+            .OfType<Microsoft.AspNetCore.Authorization.IAllowAnonymous>()
+            .Any();
+
+        if (hasAuth && !allowsAnon)
+        {
+            operation.Security = new List<OpenApiSecurityRequirement>
+            {
+                new()
+                {
+                    {
+                        new OpenApiSecurityScheme
+                        {
+                            Reference = new OpenApiReference
+                            {
+                                Type = ReferenceType.SecurityScheme,
+                                Id = "Bearer"
+                            }
+                        },
+                        Array.Empty<string>()
+                    }
+                }
+            };
+        }
+        else
+        {
+            operation.Security = new List<OpenApiSecurityRequirement>();
+        }
+
+        // 2. Enrich known header and query parameter documentation
+        if (operation.Parameters != null)
+        {
+            foreach (var parameter in operation.Parameters)
+            {
+                if (parameter.In == ParameterLocation.Header && parameter.Name == "X-Idempotency-Key" && string.IsNullOrEmpty(parameter.Description))
+                {
+                    parameter.Description = "Optional client-generated UUID idempotency key to prevent duplicate enrolment creations across network retries.";
+                    parameter.Required = false;
+                }
+                else if (parameter.In == ParameterLocation.Query && parameter.Name == "categoryId" && string.IsNullOrEmpty(parameter.Description))
+                {
+                    parameter.Description = "Optional category filter. When provided, returns only active plans belonging to this category.";
+                }
+                else if (parameter.In == ParameterLocation.Query && parameter.Name == "page" && string.IsNullOrEmpty(parameter.Description))
+                {
+                    parameter.Description = "Page number (1-based index, default: 1).";
+                }
+                else if (parameter.In == ParameterLocation.Query && parameter.Name == "pageSize" && string.IsNullOrEmpty(parameter.Description))
+                {
+                    parameter.Description = "Number of items per page (default: 20, max: 50).";
+                }
+            }
+        }
+    }
+}
+
+/// <summary>
+/// Adds rich descriptions for OpenAPI tags to enhance the Scalar API reference sidebar and section headers.
+/// </summary>
+public class TagDescriptionsDocumentFilter : IDocumentFilter
+{
+    public void Apply(OpenApiDocument swaggerDoc, DocumentFilterContext context)
+    {
+        var descriptions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Customer Authentication"] = "Customer onboarding, phone & email verification, profile completion, session management, and logout.",
+            ["Customer Profile & Contacts"] = "Authenticated customer profile, secondary contact verification, and self-service account closure.",
+            ["Customer Jewellery Plans"] = "Browse active jewellery plan categories and plans available for the customer's branch.",
+            ["Customer Jewellery Enrolments"] = "Preview and confirm jewellery plan enrolments (My Investments), and view contribution history.",
+            ["Customer Jewellery Quotes & Payments"] = "Gold rate calculation previews, locked payment quotes (Pay Now), and deferred payment initiation.",
+            ["Customer Notifications"] = "Customer notification feed, read receipts, and bulk mark-as-read.",
+            ["Branches"] = "Active store locations for customer registration and branch lookups.",
+            ["System"] = "Health check and database connectivity verification.",
+            ["Admin Authentication"] = "Staff login, password recovery, reset, and session management.",
+            ["Admin Staff Management"] = "Staff user administration, role assignment, and branch permissions.",
+            ["Admin Customer Management"] = "Customer management with full unmasked NIC, registration, and account status controls.",
+            ["Admin Branches"] = "Store branch management, staff assignment, and branch analytics.",
+            ["Admin Jewellery Categories"] = "Admin jewellery category configuration and image management.",
+            ["Admin Jewellery Plans"] = "Admin jewellery plan lifecycle management, terms, and lifetime tracking.",
+            ["Admin Jewellery Enrolments"] = "Admin jewellery enrolment monitoring, payment history, and staff payment recording."
+        };
+
+        swaggerDoc.Tags ??= new List<OpenApiTag>();
+        var existingTags = swaggerDoc.Tags.ToDictionary(t => t.Name, StringComparer.OrdinalIgnoreCase);
+
+        // Ensure tags used in operations are present and documented
+        foreach (var path in swaggerDoc.Paths.Values)
+        {
+            foreach (var op in path.Operations.Values)
+            {
+                if (op.Tags != null)
+                {
+                    foreach (var opTag in op.Tags)
+                    {
+                        if (!existingTags.TryGetValue(opTag.Name, out var existing))
+                        {
+                            var newTag = new OpenApiTag
+                            {
+                                Name = opTag.Name,
+                                Description = descriptions.TryGetValue(opTag.Name, out var desc) ? desc : null
+                            };
+                            swaggerDoc.Tags.Add(newTag);
+                            existingTags[opTag.Name] = newTag;
+                        }
+                        else if (string.IsNullOrEmpty(existing.Description) && descriptions.TryGetValue(existing.Name, out var desc))
+                        {
+                            existing.Description = desc;
+                        }
+                    }
+                }
+            }
         }
     }
 }

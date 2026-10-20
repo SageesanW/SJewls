@@ -290,4 +290,12 @@ public class CustomerNotificationsPagedResponse
     public int TotalPages => PageSize > 0 ? (int)Math.Ceiling((double)TotalCount / PageSize) : 0;
 }
 
+public class NotificationActionResponse
+{
+    public bool Success { get; set; } = true;
+    public string Message { get; set; } = string.Empty;
+    public int? MarkedCount { get; set; }
+}
+
 #endregion
+

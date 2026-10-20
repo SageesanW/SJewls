@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace SJewls.Domain.Enums;
 
 public enum ContactType
@@ -64,10 +66,20 @@ public enum BusinessModule
     Jewellery = 2
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum ChituRedemptionType
+{
+    Cash = 1,
+    Gold = 2
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum PaymentMethod
 {
     MockOnline = 1,
-    Cash = 2
+    Cash = 2,
+    Card = 3,
+    BankTransfer = 4
 }
 
 public enum PaymentStatus

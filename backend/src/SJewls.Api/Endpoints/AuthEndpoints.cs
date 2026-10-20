@@ -137,7 +137,8 @@ public static class AuthEndpoints
         .WithSummary("Complete customer profile registration")
         .WithDescription("Finalizes customer registration using the registrationToken. Automatically preserves the initially entered OTP-verified contact and saves any provided secondary email/phone number. Requires FullName, DateOfBirth (18+), and valid Sri Lankan NIC. Returns JWT access and refresh tokens.")
         .Produces<VerifyOtpResponse>(StatusCodes.Status200OK)
-        .ProducesProblem(StatusCodes.Status400BadRequest);
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status401Unauthorized);
 
         // 4. POST /api/v1/auth/token/refresh
         group.MapPost("/token/refresh", async (
@@ -178,11 +179,12 @@ public static class AuthEndpoints
                 var ip = httpContext.Connection.RemoteIpAddress?.ToString();
                 await authService.LogoutAsync(request.RefreshToken, ip);
             }
-            return Results.Ok(new { message = "Logged out successfully." });
+            return Results.Ok(new LogoutResponse());
         })
         .WithName("Logout")
         .WithSummary("Revoke refresh token and log out")
-        .Produces(StatusCodes.Status200OK);
+        .WithDescription("Revokes the specified refresh token, terminating the active mobile session.")
+        .Produces<LogoutResponse>(StatusCodes.Status200OK);
 
         return app;
     }

@@ -189,3 +189,15 @@ public record AccountClosureResponse
     public string Status { get; init; } = "Inactive";
 }
 
+public record LogoutResponse
+{
+    public string Message { get; init; } = "Logged out successfully.";
+}
+
+public record VerifySecondaryContactResponse
+{
+    public bool Success { get; init; }
+    public string Message { get; init; } = "Additional contact verified successfully. You can now use this contact to sign in.";
+}
+
+

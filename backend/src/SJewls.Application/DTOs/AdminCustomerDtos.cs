@@ -89,10 +89,18 @@ public class AdminCustomerSlotDto
 {
     public Guid Id { get; set; }
     public int SlotNumber { get; set; }
+    public string SlotDisplayCode { get; set; } = string.Empty;
     public string PlanName { get; set; } = string.Empty;
     public string PlanCode { get; set; } = string.Empty;
     public decimal MonthlyInstalmentAmount { get; set; }
     public string Status { get; set; } = string.Empty;
+    public int MonthsPaidCount { get; set; }
+    public decimal TotalPaidAmount { get; set; }
+    public bool IsWinner { get; set; }
+    public int? WinningRoundIndex { get; set; }
+    public decimal? EntitlementAmount { get; set; }
+    public decimal? AdvanceExcessAmount { get; set; }
+    public string RedemptionType { get; set; } = "Cash";
     public DateTimeOffset? ActivatedAtUtc { get; set; }
 }
 

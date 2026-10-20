@@ -134,6 +134,16 @@ public class SJewlsDbContext : DbContext
             entity.HasIndex(e => new { e.StaffId, e.RoleId }).IsUnique();
         });
 
+        // Chitu Plan uniqueness & branch
+        modelBuilder.Entity<ChituPlan>(entity =>
+        {
+            entity.HasIndex(e => new { e.BranchId, e.Code }).IsUnique();
+            entity.HasOne(e => e.Branch)
+                  .WithMany(b => b.ChituPlans)
+                  .HasForeignKey(e => e.BranchId)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
+
         // Chitu Slot uniqueness & concurrency
         modelBuilder.Entity<ChituSlot>(entity =>
         {
@@ -152,11 +162,18 @@ public class SJewlsDbContext : DbContext
                   .WithMany(s => s.Instalments)
                   .HasForeignKey(e => e.ChituSlotId)
                   .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(i => i.Payment)
+                  .WithMany()
+                  .HasForeignKey(i => i.PaymentId)
+                  .OnDelete(DeleteBehavior.SetNull);
         });
 
         // Chitu Draw & Winner
         modelBuilder.Entity<ChituDraw>(entity =>
         {
+            entity.HasIndex(d => new { d.ChituPlanId, d.DrawMonthIndex }).IsUnique();
+            entity.HasIndex(d => d.WinningSlotId).IsUnique();
             entity.HasOne(d => d.WinningSlot)
                   .WithMany()
                   .HasForeignKey(d => d.WinningSlotId)

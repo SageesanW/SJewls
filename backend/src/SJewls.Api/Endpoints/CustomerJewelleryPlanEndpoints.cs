@@ -10,14 +10,16 @@ public static class CustomerJewelleryPlanEndpoints
 {
     public static IEndpointRouteBuilder MapCustomerJewelleryPlanEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/v1/customer")
-            .WithTags("Customer Jewellery Plans & Enrolments")
+        var baseGroup = app.MapGroup("/api/v1/customer")
             .RequireAuthorization();
 
         #region Category & Plan Browsing
 
+        var plansGroup = baseGroup.MapGroup("")
+            .WithTags("Customer Jewellery Plans");
+
         // 1. GET /api/v1/customer/jewellery-categories
-        group.MapGet("/jewellery-categories", async (
+        plansGroup.MapGet("/jewellery-categories", async (
             ClaimsPrincipal user,
             ICustomerJewelleryPlanService service,
             CancellationToken ct) =>
@@ -49,7 +51,7 @@ public static class CustomerJewelleryPlanEndpoints
         .ProducesProblem(StatusCodes.Status403Forbidden);
 
         // 2. GET /api/v1/customer/jewellery-categories/{categoryId}/plans
-        group.MapGet("/jewellery-categories/{categoryId:guid}/plans", async (
+        plansGroup.MapGet("/jewellery-categories/{categoryId:guid}/plans", async (
             Guid categoryId,
             ClaimsPrincipal user,
             ICustomerJewelleryPlanService service,
@@ -82,7 +84,7 @@ public static class CustomerJewelleryPlanEndpoints
         .ProducesProblem(StatusCodes.Status403Forbidden);
 
         // 3. GET /api/v1/customer/jewellery-plans (optionally ?categoryId=...)
-        group.MapGet("/jewellery-plans", async (
+        plansGroup.MapGet("/jewellery-plans", async (
             [FromQuery] Guid? categoryId,
             ClaimsPrincipal user,
             ICustomerJewelleryPlanService service,
@@ -115,7 +117,7 @@ public static class CustomerJewelleryPlanEndpoints
         .ProducesProblem(StatusCodes.Status403Forbidden);
 
         // 4. GET /api/v1/customer/jewellery-plans/{planId}
-        group.MapGet("/jewellery-plans/{planId:guid}", async (
+        plansGroup.MapGet("/jewellery-plans/{planId:guid}", async (
             Guid planId,
             ClaimsPrincipal user,
             ICustomerJewelleryPlanService service,
@@ -148,15 +150,20 @@ public static class CustomerJewelleryPlanEndpoints
         .WithSummary("Get jewellery plan details")
         .WithDescription("Retrieves details of an individual plan including target gold grams, offered durations, and premium percentage.")
         .Produces<CustomerJewelleryPlanDto>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status401Unauthorized)
+        .ProducesProblem(StatusCodes.Status403Forbidden)
         .ProducesProblem(StatusCodes.Status404NotFound);
 
         #endregion
 
         #region Enrolment Confirmation & Creation
 
-        // 4. POST /api/v1/customer/jewellery-enrolments/preview
-        group.MapPost("/jewellery-enrolments/preview", async (
+        var enrolmentsGroup = baseGroup.MapGroup("")
+            .WithTags("Customer Jewellery Enrolments");
+
+        // 5. POST /api/v1/customer/jewellery-enrolments/preview
+        enrolmentsGroup.MapPost("/jewellery-enrolments/preview", async (
             [FromBody] EnrolmentPreviewRequest request,
             ClaimsPrincipal user,
             ICustomerJewelleryPlanService service,
@@ -194,11 +201,13 @@ public static class CustomerJewelleryPlanEndpoints
         .WithDescription("Returns a proposed enrolment confirmation summary containing plan snapshot, target grams, premium percentage, proposed joining date and deadline.")
         .Produces<EnrolmentPreviewResponse>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status401Unauthorized)
+        .ProducesProblem(StatusCodes.Status403Forbidden)
         .ProducesProblem(StatusCodes.Status404NotFound)
         .ProducesProblem(StatusCodes.Status409Conflict);
 
-        // 5. POST /api/v1/customer/jewellery-enrolments
-        group.MapPost("/jewellery-enrolments", async (
+        // 6. POST /api/v1/customer/jewellery-enrolments
+        enrolmentsGroup.MapPost("/jewellery-enrolments", async (
             [FromBody] CreateCustomerEnrolmentRequest request,
             [FromHeader(Name = "X-Idempotency-Key")] string? headerIdempotencyKey,
             ClaimsPrincipal user,
@@ -256,15 +265,16 @@ public static class CustomerJewelleryPlanEndpoints
         .Produces<CustomerEnrolmentDto>(StatusCodes.Status201Created)
         .Produces<RepeatEnrolmentConflictResponse>(StatusCodes.Status409Conflict)
         .ProducesProblem(StatusCodes.Status400BadRequest)
-        .ProducesProblem(StatusCodes.Status404NotFound)
-        .ProducesProblem(StatusCodes.Status409Conflict);
+        .ProducesProblem(StatusCodes.Status401Unauthorized)
+        .ProducesProblem(StatusCodes.Status403Forbidden)
+        .ProducesProblem(StatusCodes.Status404NotFound);
 
         #endregion
 
         #region My Investments (Enrolments)
 
-        // 6. GET /api/v1/customer/jewellery-enrolments
-        group.MapGet("/jewellery-enrolments", async (
+        // 7. GET /api/v1/customer/jewellery-enrolments
+        enrolmentsGroup.MapGet("/jewellery-enrolments", async (
             [FromQuery] int page,
             [FromQuery] int pageSize,
             ClaimsPrincipal user,
@@ -297,10 +307,11 @@ public static class CustomerJewelleryPlanEndpoints
         .WithSummary("List customer enrolments (My Investments)")
         .WithDescription("Retrieves paginated jewellery plan enrolments for the authenticated customer, showing target grams, net accumulated gold, remaining grams, and contribution availability.")
         .Produces<CustomerEnrolmentsPagedResponse>(StatusCodes.Status200OK)
-        .ProducesProblem(StatusCodes.Status401Unauthorized);
+        .ProducesProblem(StatusCodes.Status401Unauthorized)
+        .ProducesProblem(StatusCodes.Status403Forbidden);
 
-        // 7. GET /api/v1/customer/jewellery-enrolments/{enrolmentId}
-        group.MapGet("/jewellery-enrolments/{enrolmentId:guid}", async (
+        // 8. GET /api/v1/customer/jewellery-enrolments/{enrolmentId}
+        enrolmentsGroup.MapGet("/jewellery-enrolments/{enrolmentId:guid}", async (
             Guid enrolmentId,
             ClaimsPrincipal user,
             ICustomerJewelleryPlanService service,
@@ -330,10 +341,11 @@ public static class CustomerJewelleryPlanEndpoints
         .WithDescription("Retrieves full details and progress metrics for a specific enrolment owned by the customer.")
         .Produces<CustomerEnrolmentDto>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status401Unauthorized)
+        .ProducesProblem(StatusCodes.Status403Forbidden)
         .ProducesProblem(StatusCodes.Status404NotFound);
 
-        // 8. GET /api/v1/customer/jewellery-enrolments/{enrolmentId}/payments
-        group.MapGet("/jewellery-enrolments/{enrolmentId:guid}/payments", async (
+        // 9. GET /api/v1/customer/jewellery-enrolments/{enrolmentId}/payments
+        enrolmentsGroup.MapGet("/jewellery-enrolments/{enrolmentId:guid}/payments", async (
             Guid enrolmentId,
             ClaimsPrincipal user,
             ICustomerJewelleryPlanService service,
@@ -363,14 +375,18 @@ public static class CustomerJewelleryPlanEndpoints
         .WithDescription("Retrieves the confirmed contribution and payment ledger history for this jewellery plan enrolment.")
         .Produces<List<CustomerEnrolmentPaymentDto>>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status401Unauthorized)
+        .ProducesProblem(StatusCodes.Status403Forbidden)
         .ProducesProblem(StatusCodes.Status404NotFound);
 
         #endregion
 
         #region Previews, Locked Quotes & Payment Foundation
 
-        // 9. POST /api/v1/customer/jewellery-enrolments/{enrolmentId}/preview
-        group.MapPost("/jewellery-enrolments/{enrolmentId:guid}/preview", async (
+        var quotesGroup = baseGroup.MapGroup("")
+            .WithTags("Customer Jewellery Quotes & Payments");
+
+        // 10. POST /api/v1/customer/jewellery-enrolments/{enrolmentId}/preview
+        quotesGroup.MapPost("/jewellery-enrolments/{enrolmentId:guid}/preview", async (
             Guid enrolmentId,
             [FromBody] JewelleryCalculationRequest request,
             ClaimsPrincipal user,
@@ -413,13 +429,14 @@ public static class CustomerJewelleryPlanEndpoints
         .WithDescription("Calculates an informational calculation preview for Buy Gram or Buy Amount mode without altering balances or creating a quote.")
         .Produces<JewelleryCalculationPreviewResponse>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status401Unauthorized)
         .ProducesProblem(StatusCodes.Status403Forbidden)
         .ProducesProblem(StatusCodes.Status404NotFound)
         .ProducesProblem(StatusCodes.Status409Conflict)
         .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
-        // 10. POST /api/v1/customer/jewellery-enrolments/{enrolmentId}/quotes
-        group.MapPost("/jewellery-enrolments/{enrolmentId:guid}/quotes", async (
+        // 11. POST /api/v1/customer/jewellery-enrolments/{enrolmentId}/quotes
+        quotesGroup.MapPost("/jewellery-enrolments/{enrolmentId:guid}/quotes", async (
             Guid enrolmentId,
             [FromBody] JewelleryCalculationRequest request,
             ClaimsPrincipal user,
@@ -462,13 +479,14 @@ public static class CustomerJewelleryPlanEndpoints
         .WithDescription("Locks an authoritative payment quote for 5 minutes at the latest applicable gold rate. Guarantees payable amount and credited grams during validity.")
         .Produces<CustomerPaymentQuoteDto>(StatusCodes.Status201Created)
         .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status401Unauthorized)
         .ProducesProblem(StatusCodes.Status403Forbidden)
         .ProducesProblem(StatusCodes.Status404NotFound)
         .ProducesProblem(StatusCodes.Status409Conflict)
         .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
-        // 11. GET /api/v1/customer/jewellery-quotes/{quoteId}
-        group.MapGet("/jewellery-quotes/{quoteId:guid}", async (
+        // 12. GET /api/v1/customer/jewellery-quotes/{quoteId}
+        quotesGroup.MapGet("/jewellery-quotes/{quoteId:guid}", async (
             Guid quoteId,
             ClaimsPrincipal user,
             ICustomerJewelleryPlanService service,
@@ -498,10 +516,11 @@ public static class CustomerJewelleryPlanEndpoints
         .WithDescription("Retrieves the status, values, and expiry of a locked payment quote.")
         .Produces<CustomerPaymentQuoteDto>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status401Unauthorized)
+        .ProducesProblem(StatusCodes.Status403Forbidden)
         .ProducesProblem(StatusCodes.Status404NotFound);
 
-        // 12. POST /api/v1/customer/jewellery-quotes/{quoteId}/pay
-        group.MapPost("/jewellery-quotes/{quoteId:guid}/pay", async (
+        // 13. POST /api/v1/customer/jewellery-quotes/{quoteId}/pay
+        quotesGroup.MapPost("/jewellery-quotes/{quoteId:guid}/pay", async (
             Guid quoteId,
             ClaimsPrincipal user,
             ICustomerJewelleryPlanService service,
@@ -536,6 +555,7 @@ public static class CustomerJewelleryPlanEndpoints
         .WithDescription("Gateway integration is deferred. Returns PaymentProviderNotConfigured (HTTP 501). No fake checkout URL is generated, and balances remain unchanged.")
         .Produces<PaymentInitiationResponse>(StatusCodes.Status501NotImplemented)
         .ProducesProblem(StatusCodes.Status401Unauthorized)
+        .ProducesProblem(StatusCodes.Status403Forbidden)
         .ProducesProblem(StatusCodes.Status404NotFound)
         .ProducesProblem(StatusCodes.Status409Conflict);
 
@@ -543,8 +563,11 @@ public static class CustomerJewelleryPlanEndpoints
 
         #region Customer Notifications
 
-        // 13. GET /api/v1/customer/notifications
-        group.MapGet("/notifications", async (
+        var notificationsGroup = baseGroup.MapGroup("")
+            .WithTags("Customer Notifications");
+
+        // 14. GET /api/v1/customer/notifications
+        notificationsGroup.MapGet("/notifications", async (
             [FromQuery] int page,
             [FromQuery] int pageSize,
             ClaimsPrincipal user,
@@ -568,8 +591,8 @@ public static class CustomerJewelleryPlanEndpoints
         .Produces<CustomerNotificationsPagedResponse>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status401Unauthorized);
 
-        // 14. POST /api/v1/customer/notifications/{notificationId}/read
-        group.MapPost("/notifications/{notificationId:guid}/read", async (
+        // 15. POST /api/v1/customer/notifications/{notificationId}/read
+        notificationsGroup.MapPost("/notifications/{notificationId:guid}/read", async (
             Guid notificationId,
             ClaimsPrincipal user,
             ICustomerNotificationService notificationService,
@@ -585,17 +608,22 @@ public static class CustomerJewelleryPlanEndpoints
             {
                 return Results.NotFound(new { message = "Notification not found." });
             }
-            return Results.Ok(new { message = "Notification marked as read." });
+            return Results.Ok(new NotificationActionResponse
+            {
+                Success = true,
+                Message = "Notification marked as read.",
+                MarkedCount = 1
+            });
         })
         .WithName("CustomerMarkNotificationAsRead")
         .WithSummary("Mark notification as read")
         .WithDescription("Marks an individual customer notification as read.")
-        .Produces(StatusCodes.Status200OK)
+        .Produces<NotificationActionResponse>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status401Unauthorized)
         .ProducesProblem(StatusCodes.Status404NotFound);
 
-        // 15. POST /api/v1/customer/notifications/read-all
-        group.MapPost("/notifications/read-all", async (
+        // 16. POST /api/v1/customer/notifications/read-all
+        notificationsGroup.MapPost("/notifications/read-all", async (
             ClaimsPrincipal user,
             ICustomerNotificationService notificationService,
             CancellationToken ct) =>
@@ -606,12 +634,17 @@ public static class CustomerJewelleryPlanEndpoints
             }
 
             var count = await notificationService.MarkAllAsReadAsync(customerId, ct);
-            return Results.Ok(new { message = $"{count} notifications marked as read." });
+            return Results.Ok(new NotificationActionResponse
+            {
+                Success = true,
+                Message = $"{count} notifications marked as read.",
+                MarkedCount = count
+            });
         })
         .WithName("CustomerMarkAllNotificationsAsRead")
         .WithSummary("Mark all notifications as read")
         .WithDescription("Marks all unread notifications for the customer as read.")
-        .Produces(StatusCodes.Status200OK)
+        .Produces<NotificationActionResponse>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status401Unauthorized);
 
         #endregion

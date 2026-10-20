@@ -89,6 +89,7 @@ public static class CustomerEndpoints
             "• `409 Conflict`: Contact already verified.")
         .Produces<RequestOtpResponse>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status401Unauthorized)
         .ProducesProblem(StatusCodes.Status404NotFound)
         .ProducesProblem(StatusCodes.Status409Conflict);
 
@@ -109,7 +110,11 @@ public static class CustomerEndpoints
             try
             {
                 var verified = await authService.VerifySecondaryContactOtpAsync(customerId, request.Contact, request.Code);
-                return Results.Ok(new { success = verified, message = "Additional contact verified successfully. You can now use this contact to sign in." });
+                return Results.Ok(new VerifySecondaryContactResponse
+                {
+                    Success = verified,
+                    Message = "Additional contact verified successfully. You can now use this contact to sign in."
+                });
             }
             catch (ArgumentException ex)
             {
@@ -123,8 +128,9 @@ public static class CustomerEndpoints
         .WithName("VerifySecondaryContactOtp")
         .WithSummary("Verify and activate secondary contact for login")
         .WithDescription("Submits the OTP for the additional contact. Once verified, this contact is activated and can also be used for customer login.")
-        .Produces(StatusCodes.Status200OK)
+        .Produces<VerifySecondaryContactResponse>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status401Unauthorized)
         .ProducesProblem(StatusCodes.Status404NotFound);
 
         // 4. POST /api/v1/customers/me/account-closure/otp/request
@@ -165,6 +171,7 @@ public static class CustomerEndpoints
         .Produces<RequestClosureOtpResponse>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status401Unauthorized)
+        .ProducesProblem(StatusCodes.Status403Forbidden)
         .ProducesProblem(StatusCodes.Status404NotFound);
 
         // 5. POST /api/v1/customers/me/account-closure/confirm
@@ -213,6 +220,7 @@ public static class CustomerEndpoints
         .Produces<AccountClosureResponse>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status401Unauthorized)
+        .ProducesProblem(StatusCodes.Status403Forbidden)
         .ProducesProblem(StatusCodes.Status404NotFound);
 
         return app;

@@ -60,4 +60,38 @@ public interface IAdminJewelleryEnrolmentService
         Guid staffId,
         Guid enrolmentId,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Retrieves jewellery payments across all plans within the staff member's permitted branch scope.
+    /// Supports status filtering, date range in branch timezone, search, deterministic pagination, and stable instalment numbering.
+    /// </summary>
+    Task<AdminJewelleryPaymentsPagedResponse> GetJewelleryPaymentsPagedAsync(
+        Guid staffId,
+        AdminJewelleryPaymentsQuery query,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Retrieves incomplete enrolments whose agreed duration ended below target weight.
+    /// </summary>
+    Task<AdminIncompleteEnrolmentsPagedResponse> GetIncompleteEnrolmentsPagedAsync(
+        Guid staffId,
+        AdminIncompleteEnrolmentsQuery query,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Retrieves verified reminder context for draft notification handoff.
+    /// </summary>
+    Task<AdminReminderContextDto> GetReminderContextAsync(
+        Guid staffId,
+        Guid enrolmentId,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Authoritatively dispatches or records a reminder to the customer across selected delivery channels.
+    /// </summary>
+    Task<AdminSendReminderResult> SendReminderAsync(
+        Guid staffId,
+        Guid enrolmentId,
+        AdminSendReminderRequest request,
+        CancellationToken ct = default);
 }

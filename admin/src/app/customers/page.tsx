@@ -1579,19 +1579,35 @@ export default function CustomersPage() {
                           {detailCustomer.chituSlots.map((slot) => (
                             <div
                               key={slot.id}
-                              className="p-3 rounded-xl border border-gray-200 bg-emerald-50/30 flex items-center justify-between text-xs"
+                              className="p-3 rounded-xl border border-gray-200 bg-[#FAF9F6] flex flex-col justify-between text-xs space-y-1.5"
                             >
-                              <div>
-                                <span className="font-bold text-gray-900 block">
-                                  {slot.planName} (Slot #{slot.slotNumber})
+                              <div className="flex items-center justify-between">
+                                <span className="font-mono font-black text-xs px-2 py-0.5 rounded bg-[#0B3D0B] text-[#FFD700]">
+                                  {slot.slotDisplayCode || `SLOT-${slot.slotNumber}`}
                                 </span>
-                                <span className="text-gray-500 text-[11px]">
-                                  LKR {slot.monthlyInstalmentAmount.toLocaleString()}/mo
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    slot.isWinner
+                                      ? "bg-amber-100 text-amber-900 border border-amber-300"
+                                      : slot.status === "Active"
+                                      ? "bg-emerald-100 text-emerald-800"
+                                      : "bg-gray-100 text-gray-600"
+                                  }`}
+                                >
+                                  {slot.isWinner ? `Won (Rd ${slot.winningRoundIndex})` : slot.status}
                                 </span>
                               </div>
-                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                                {slot.status}
-                              </span>
+                              <div>
+                                <span className="font-bold text-gray-900 block">{slot.planName}</span>
+                                <span className="text-gray-500 text-[11px]">
+                                  LKR {slot.monthlyInstalmentAmount.toLocaleString()}/mo | {slot.monthsPaidCount || 0} months covered
+                                </span>
+                              </div>
+                              {slot.isWinner && slot.entitlementAmount && (
+                                <span className="text-[10px] font-bold text-amber-900 block bg-amber-50 p-1.5 rounded-lg border border-amber-200">
+                                  Entitlement: LKR {slot.entitlementAmount.toLocaleString()}
+                                </span>
+                              )}
                             </div>
                           ))}
                         </div>

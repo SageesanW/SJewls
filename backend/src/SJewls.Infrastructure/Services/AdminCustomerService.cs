@@ -223,6 +223,10 @@ public class AdminCustomerService : IAdminCustomerService
             .Include(c => c.PrimaryBranch)
             .Include(c => c.ChituSlots)
                 .ThenInclude(s => s.ChituPlan)
+            .Include(c => c.ChituSlots)
+                .ThenInclude(s => s.Instalments)
+            .Include(c => c.ChituSlots)
+                .ThenInclude(s => s.WinnerBenefit)
             .Include(c => c.JewelleryEnrolments)
                 .ThenInclude(e => e.JewelleryPlan!)
                     .ThenInclude(p => p.Category)
@@ -269,10 +273,18 @@ public class AdminCustomerService : IAdminCustomerService
             {
                 Id = s.Id,
                 SlotNumber = s.SlotNumber,
+                SlotDisplayCode = !string.IsNullOrEmpty(s.SlotDisplayCode) ? s.SlotDisplayCode : $"{s.ChituPlan?.Code ?? "SLOT"}-{s.SlotNumber:D3}",
                 PlanName = s.ChituPlan?.Name ?? "Chitu Savings Plan",
                 PlanCode = s.ChituPlan?.Code ?? "CHITU",
                 MonthlyInstalmentAmount = s.ChituPlan?.MonthlyInstalmentAmount ?? 0,
                 Status = s.Status.ToString(),
+                MonthsPaidCount = s.Instalments.Count(i => i.Status == InstalmentStatus.Paid),
+                TotalPaidAmount = s.Instalments.Where(i => i.Status == InstalmentStatus.Paid).Sum(i => i.AmountDue),
+                IsWinner = s.Status == ChituSlotStatus.Won,
+                WinningRoundIndex = s.WinningRoundIndex,
+                EntitlementAmount = s.WinnerBenefit?.ChituBenefitValue,
+                AdvanceExcessAmount = s.PrepaidExcessAmount > 0 ? s.PrepaidExcessAmount : (s.WinnerBenefit?.AdvanceExcessAmount ?? 0),
+                RedemptionType = s.ChituPlan?.RedemptionType == ChituRedemptionType.Gold ? "Gold" : "Cash",
                 ActivatedAtUtc = s.ActivatedAtUtc
             }).ToList(),
             JewelleryEnrolments = customer.JewelleryEnrolments

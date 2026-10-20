@@ -232,3 +232,156 @@ export interface AdminRecordPaymentResult {
   planCompleted: boolean;
   recordedAtUtc: string;
 }
+
+export interface AdminJewelleryPaymentsQuery {
+  branchId?: string;
+  planId?: string;
+  status?: string; // "All" | "Successful" | "Pending"
+  search?: string;
+  fromDate?: string;
+  toDate?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface AdminJewelleryPaymentItem {
+  paymentId: string;
+  contributionId?: string | null;
+  instalmentNumber?: number | null;
+  instalmentLabel: string;
+  customerId: string;
+  customerName: string;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  enrolmentId: string;
+  enrolmentReference: string;
+  planId: string;
+  planName: string;
+  branchId: string;
+  branchName: string;
+  branchTimezone: string;
+  amount: number;
+  currency: string;
+  goldRate: number;
+  goldCredit: number;
+  estimatedPendingGoldCredit?: number | null;
+  status: "Successful" | "Pending" | string;
+  paymentMethod: string;
+  paymentReference: string;
+  dueDate: string;
+  paidAtUtc?: string | null;
+  createdAtUtc: string;
+  canSendReminder: boolean;
+  reminderReason?: string | null;
+  lastSuccessfulPaymentAt?: string | null;
+  reminderEligibleAt?: string | null;
+}
+
+export interface AdminJewelleryPaymentsPagedResponse {
+  items: AdminJewelleryPaymentItem[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  totalConfirmedAmount: number;
+  totalConfirmedGrams: number;
+  totalPendingAmount: number;
+  totalPendingCount: number;
+  totalSuccessfulCount: number;
+  currency: string;
+}
+
+export interface AdminIncompleteEnrolmentsQuery {
+  branchId?: string;
+  planId?: string;
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface AdminIncompleteEnrolmentItem {
+  enrolmentId: string;
+  enrolmentReference: string;
+  customerId: string;
+  customerName: string;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  planId: string;
+  planName: string;
+  branchId: string;
+  branchName: string;
+  joiningDate: string;
+  selectedDurationMonths: number;
+  deadline: string;
+  targetGrams: number;
+  netSavedGrams: number;
+  remainingGrams: number;
+  totalConfirmedMoneyPaid: number;
+  currency: string;
+  progressPercentage: number;
+  status: string;
+  canSendReminder: boolean;
+  reminderReason?: string | null;
+  lastSuccessfulPaymentAt?: string | null;
+}
+
+export interface AdminIncompleteEnrolmentsPagedResponse {
+  items: AdminIncompleteEnrolmentItem[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  totalIncompleteEnrolments: number;
+  totalRemainingGrams: number;
+  totalConfirmedMoneyPaid: number;
+  currency: string;
+}
+
+export interface ChannelStatus {
+  available: boolean;
+  description: string;
+}
+
+export interface AdminReminderContext {
+  customerId: string;
+  customerName: string;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  isPhoneVerified: boolean;
+  isEmailVerified: boolean;
+  enrolmentId: string;
+  enrolmentReference: string;
+  planId: string;
+  planName: string;
+  targetGrams: number;
+  savedGrams: number;
+  remainingGrams: number;
+  startDate: string;
+  deadline: string;
+  lastSuccessfulPaymentAt?: string | null;
+  totalContributedCurrency: number;
+  currency: string;
+  reminderReason: string;
+  canSendReminder: boolean;
+  reminderEligibleAt?: string | null;
+  suggestedTitle: string;
+  suggestedMessage: string;
+  inApp: ChannelStatus;
+  email: ChannelStatus;
+  sms: ChannelStatus;
+  push: ChannelStatus;
+}
+
+export interface AdminSendReminderRequest {
+  channels: string[];
+  title: string;
+  message: string;
+}
+
+export interface AdminSendReminderResult {
+  success: boolean;
+  message: string;
+  deliveredChannels: string[];
+  failedChannels: string[];
+  sentAtUtc: string;
+}

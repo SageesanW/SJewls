@@ -139,8 +139,14 @@ namespace SJewls.Infrastructure.Migrations
                     b.Property<int>("DrawMonthIndex")
                         .HasColumnType("integer");
 
+                    b.Property<DateTimeOffset>("RecordedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("RecordedByStaffId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ReferenceNumber")
+                        .HasColumnType("text");
 
                     b.Property<string>("Remarks")
                         .IsRequired()
@@ -154,11 +160,13 @@ namespace SJewls.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ChituPlanId");
-
                     b.HasIndex("RecordedByStaffId");
 
-                    b.HasIndex("WinningSlotId");
+                    b.HasIndex("WinningSlotId")
+                        .IsUnique();
+
+                    b.HasIndex("ChituPlanId", "DrawMonthIndex")
+                        .IsUnique();
 
                     b.ToTable("ChituDraws");
                 });
@@ -198,6 +206,8 @@ namespace SJewls.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("PaymentId");
+
                     b.HasIndex("ChituSlotId", "MonthIndex")
                         .IsUnique();
 
@@ -233,12 +243,18 @@ namespace SJewls.Infrastructure.Migrations
                     b.Property<int>("DurationMonths")
                         .HasColumnType("integer");
 
+                    b.Property<DateOnly>("EndDate")
+                        .HasColumnType("date");
+
                     b.Property<decimal>("MonthlyInstalmentAmount")
                         .HasColumnType("decimal(18, 4)");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<int>("RedemptionType")
+                        .HasColumnType("integer");
 
                     b.Property<DateOnly>("StartDate")
                         .HasColumnType("date");
@@ -254,7 +270,8 @@ namespace SJewls.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BranchId");
+                    b.HasIndex("BranchId", "Code")
+                        .IsUnique();
 
                     b.ToTable("ChituPlans");
                 });
@@ -283,8 +300,15 @@ namespace SJewls.Infrastructure.Migrations
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uuid");
 
+                    b.Property<decimal>("PrepaidExcessAmount")
+                        .HasColumnType("decimal(18, 4)");
+
                     b.Property<DateTimeOffset?>("ReservedUntilUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SlotDisplayCode")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<int>("SlotNumber")
                         .HasColumnType("integer");
@@ -294,6 +318,9 @@ namespace SJewls.Infrastructure.Migrations
 
                     b.Property<DateTimeOffset?>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("WinningRoundIndex")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -1429,6 +1456,9 @@ namespace SJewls.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<decimal>("AdvanceExcessAmount")
+                        .HasColumnType("decimal(18, 4)");
+
                     b.Property<decimal>("ChituBenefitValue")
                         .HasColumnType("decimal(18, 4)");
 
@@ -1452,6 +1482,9 @@ namespace SJewls.Infrastructure.Migrations
 
                     b.Property<Guid?>("HandedOverByStaffId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("RedemptionType")
+                        .HasColumnType("integer");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
@@ -1509,7 +1542,14 @@ namespace SJewls.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("SJewls.Domain.Entities.Payment", "Payment")
+                        .WithMany()
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("ChituSlot");
+
+                    b.Navigation("Payment");
                 });
 
             modelBuilder.Entity("SJewls.Domain.Entities.ChituPlan", b =>
@@ -1517,7 +1557,7 @@ namespace SJewls.Infrastructure.Migrations
                     b.HasOne("SJewls.Domain.Entities.Branch", "Branch")
                         .WithMany("ChituPlans")
                         .HasForeignKey("BranchId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Branch");

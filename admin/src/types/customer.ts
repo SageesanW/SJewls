@@ -23,10 +23,18 @@ export interface CustomerListItem {
 export interface CustomerSlot {
   id: string;
   slotNumber: number;
+  slotDisplayCode?: string;
   planName: string;
   planCode: string;
   monthlyInstalmentAmount: number;
   status: string;
+  monthsPaidCount?: number;
+  totalPaidAmount?: number;
+  isWinner?: boolean;
+  winningRoundIndex?: number | null;
+  entitlementAmount?: number | null;
+  advanceExcessAmount?: number | null;
+  redemptionType?: string;
   activatedAtUtc: string | null;
 }
 

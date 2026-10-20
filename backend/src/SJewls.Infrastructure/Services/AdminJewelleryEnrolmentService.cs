@@ -964,4 +964,760 @@ public class AdminJewelleryEnrolmentService : IAdminJewelleryEnrolmentService
             Contributions = contributions
         };
     }
+
+    #region Payments Listing, Incomplete Plans, and Reminders
+
+    public async Task<AdminJewelleryPaymentsPagedResponse> GetJewelleryPaymentsPagedAsync(
+        Guid staffId,
+        AdminJewelleryPaymentsQuery query,
+        CancellationToken ct = default)
+    {
+        var (staff, isSuperAdmin, permittedBranchIds) = await VerifyStaffAccessAsync(staffId, ct);
+
+        HashSet<Guid>? targetBranchIds = null;
+        if (query.BranchId.HasValue)
+        {
+            if (!isSuperAdmin && !permittedBranchIds.Contains(query.BranchId.Value))
+            {
+                throw new UnauthorizedAccessException("You are not authorized to view payments for this branch.");
+            }
+            targetBranchIds = new HashSet<Guid> { query.BranchId.Value };
+        }
+        else if (!isSuperAdmin)
+        {
+            targetBranchIds = permittedBranchIds;
+        }
+
+        var paymentsQuery = _db.Payments
+            .Include(p => p.Customer)
+            .Include(p => p.Branch)
+            .AsNoTracking()
+            .Where(p => p.Module == BusinessModule.Jewellery ||
+                        _db.JewelleryContributions.Any(c => c.PaymentId == p.Id) ||
+                        p.Allocations.Any(a => a.AllocationType == "JewelleryContribution"));
+
+        if (targetBranchIds != null)
+        {
+            paymentsQuery = paymentsQuery.Where(p => targetBranchIds.Contains(p.BranchId));
+        }
+
+        if (string.Equals(query.Status, "Successful", StringComparison.OrdinalIgnoreCase))
+        {
+            paymentsQuery = paymentsQuery.Where(p => p.Status == PaymentStatus.Succeeded);
+        }
+        else if (string.Equals(query.Status, "Pending", StringComparison.OrdinalIgnoreCase))
+        {
+            paymentsQuery = paymentsQuery.Where(p => p.Status == PaymentStatus.Pending);
+        }
+        else
+        {
+            paymentsQuery = paymentsQuery.Where(p => p.Status == PaymentStatus.Succeeded || p.Status == PaymentStatus.Pending);
+        }
+
+        if (query.PlanId.HasValue)
+        {
+            var planId = query.PlanId.Value;
+            paymentsQuery = paymentsQuery.Where(p =>
+                _db.JewelleryContributions.Any(c => c.PaymentId == p.Id && c.JewelleryEnrolment!.JewelleryPlanId == planId) ||
+                p.Allocations.Any(a => a.AllocationType == "JewelleryContribution" &&
+                    _db.JewelleryEnrolments.Any(e => e.Id == a.TargetEntityId && e.JewelleryPlanId == planId)) ||
+                _db.JewelleryPaymentQuotes.Any(q => q.PaymentId == p.Id && q.JewelleryEnrolment!.JewelleryPlanId == planId));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            var term = query.Search.Trim().ToLower();
+            paymentsQuery = paymentsQuery.Where(p =>
+                (p.Customer != null && (
+                    p.Customer.FullName.ToLower().Contains(term) ||
+                    (p.Customer.PhoneNumber != null && p.Customer.PhoneNumber.Contains(term)) ||
+                    (p.Customer.Email != null && p.Customer.Email.ToLower().Contains(term)) ||
+                    (p.Customer.Nic != null && p.Customer.Nic.ToLower().Contains(term)))) ||
+                p.ProviderReference.ToLower().Contains(term) ||
+                (p.IdempotencyKey != null && p.IdempotencyKey.ToLower().Contains(term)));
+        }
+
+        var branchTimezoneId = "Asia/Colombo";
+        if (query.BranchId.HasValue)
+        {
+            var b = await _db.Branches.AsNoTracking().FirstOrDefaultAsync(br => br.Id == query.BranchId.Value, ct);
+            if (!string.IsNullOrWhiteSpace(b?.Timezone)) branchTimezoneId = b.Timezone;
+        }
+
+        TimeZoneInfo branchTz;
+        try { branchTz = TimeZoneInfo.FindSystemTimeZoneById(branchTimezoneId); }
+        catch { branchTz = TimeZoneInfo.Utc; }
+
+        if (query.FromDate.HasValue)
+        {
+            var fromLocal = query.FromDate.Value.ToDateTime(TimeOnly.MinValue);
+            var fromUtc = new DateTimeOffset(fromLocal, branchTz.GetUtcOffset(fromLocal)).ToUniversalTime();
+            paymentsQuery = paymentsQuery.Where(p =>
+                p.Status == PaymentStatus.Succeeded
+                    ? (p.CompletedAtUtc ?? p.CreatedAtUtc) >= fromUtc
+                    : p.CreatedAtUtc >= fromUtc);
+        }
+
+        if (query.ToDate.HasValue)
+        {
+            var toLocal = query.ToDate.Value.ToDateTime(new TimeOnly(23, 59, 59, 999));
+            var toUtc = new DateTimeOffset(toLocal, branchTz.GetUtcOffset(toLocal)).ToUniversalTime();
+            paymentsQuery = paymentsQuery.Where(p =>
+                p.Status == PaymentStatus.Succeeded
+                    ? (p.CompletedAtUtc ?? p.CreatedAtUtc) <= toUtc
+                    : p.CreatedAtUtc <= toUtc);
+        }
+
+        var totalCount = await paymentsQuery.CountAsync(ct);
+
+        var totalConfirmedAmount = await paymentsQuery
+            .Where(p => p.Status == PaymentStatus.Succeeded)
+            .SumAsync(p => (decimal?)p.Amount, ct) ?? 0m;
+
+        var totalPendingAmount = await paymentsQuery
+            .Where(p => p.Status == PaymentStatus.Pending)
+            .SumAsync(p => (decimal?)p.Amount, ct) ?? 0m;
+
+        var totalSuccessfulCount = await paymentsQuery
+            .CountAsync(p => p.Status == PaymentStatus.Succeeded, ct);
+
+        var totalPendingCount = await paymentsQuery
+            .CountAsync(p => p.Status == PaymentStatus.Pending, ct);
+
+        var matchingSucceededPaymentIds = paymentsQuery
+            .Where(p => p.Status == PaymentStatus.Succeeded)
+            .Select(p => p.Id);
+
+        var totalConfirmedGrams = await _db.JewelleryContributions
+            .Where(c => matchingSucceededPaymentIds.Contains(c.PaymentId))
+            .SumAsync(c => (decimal?)c.GoldGrams, ct) ?? 0m;
+
+        var pagedPayments = await paymentsQuery
+            .OrderByDescending(p => p.Status == PaymentStatus.Succeeded ? (p.CompletedAtUtc ?? p.CreatedAtUtc) : p.CreatedAtUtc)
+            .ThenByDescending(p => p.Id)
+            .Skip((query.Page - 1) * query.PageSize)
+            .Take(query.PageSize)
+            .ToListAsync(ct);
+
+        if (!pagedPayments.Any())
+        {
+            return new AdminJewelleryPaymentsPagedResponse
+            {
+                Items = new List<AdminJewelleryPaymentItemDto>(),
+                TotalCount = totalCount,
+                Page = query.Page,
+                PageSize = query.PageSize,
+                TotalConfirmedAmount = totalConfirmedAmount,
+                TotalConfirmedGrams = totalConfirmedGrams,
+                TotalPendingAmount = totalPendingAmount,
+                TotalPendingCount = totalPendingCount,
+                TotalSuccessfulCount = totalSuccessfulCount,
+                Currency = "LKR"
+            };
+        }
+
+        var pagedPaymentIds = pagedPayments.Select(p => p.Id).ToList();
+
+        var pagedContributions = await _db.JewelleryContributions
+            .Include(c => c.JewelleryEnrolment)
+                .ThenInclude(e => e!.JewelleryPlan)
+            .Where(c => pagedPaymentIds.Contains(c.PaymentId))
+            .AsNoTracking()
+            .ToListAsync(ct);
+
+        var contribByPaymentId = pagedContributions.ToDictionary(c => c.PaymentId, c => c);
+
+        var pendingPaymentIds = pagedPayments
+            .Where(p => !contribByPaymentId.ContainsKey(p.Id))
+            .Select(p => p.Id)
+            .ToList();
+
+        var allocations = pendingPaymentIds.Any()
+            ? await _db.PaymentAllocations
+                .Where(a => pendingPaymentIds.Contains(a.PaymentId) && a.AllocationType == "JewelleryContribution")
+                .AsNoTracking()
+                .ToListAsync(ct)
+            : new List<PaymentAllocation>();
+
+        var allocationByPaymentId = allocations.ToDictionary(a => a.PaymentId, a => a);
+
+        var quotes = await _db.JewelleryPaymentQuotes
+            .Include(q => q.JewelleryEnrolment)
+            .Where(q => q.PaymentId != null && pagedPaymentIds.Contains(q.PaymentId.Value))
+            .AsNoTracking()
+            .ToListAsync(ct);
+
+        var quoteByPaymentId = quotes.ToDictionary(q => q.PaymentId!.Value, q => q);
+
+        var enrolmentIds = new HashSet<Guid>();
+        foreach (var c in pagedContributions)
+        {
+            enrolmentIds.Add(c.JewelleryEnrolmentId);
+        }
+        foreach (var a in allocations)
+        {
+            enrolmentIds.Add(a.TargetEntityId);
+        }
+        foreach (var q in quotes)
+        {
+            enrolmentIds.Add(q.JewelleryEnrolmentId);
+        }
+
+        var enrolments = await _db.JewelleryEnrolments
+            .Include(e => e.JewelleryPlan)
+            .Include(e => e.Branch)
+            .Include(e => e.Customer)
+            .Where(e => enrolmentIds.Contains(e.Id))
+            .AsNoTracking()
+            .ToDictionaryAsync(e => e.Id, e => e, ct);
+
+        var allSuccessfulContributionsForEnrolments = await _db.JewelleryContributions
+            .Include(c => c.Payment)
+            .Where(c => enrolmentIds.Contains(c.JewelleryEnrolmentId) &&
+                        (c.Payment == null || c.Payment.Status == PaymentStatus.Succeeded))
+            .OrderBy(c => c.ConfirmedAtUtc)
+            .ThenBy(c => c.Id)
+            .AsNoTracking()
+            .ToListAsync(ct);
+
+        var enrolmentContributionIndexMap = new Dictionary<Guid, int>();
+        foreach (var group in allSuccessfulContributionsForEnrolments.GroupBy(c => c.JewelleryEnrolmentId))
+        {
+            int index = 1;
+            foreach (var contrib in group)
+            {
+                enrolmentContributionIndexMap[contrib.Id] = index++;
+            }
+        }
+
+        var latestPaymentDates = allSuccessfulContributionsForEnrolments
+            .GroupBy(c => c.JewelleryEnrolmentId)
+            .ToDictionary(g => g.Key, g => g.Max(c => c.ConfirmedAtUtc));
+
+        var nowUtc = DateTimeOffset.UtcNow;
+        var items = new List<AdminJewelleryPaymentItemDto>();
+
+        foreach (var p in pagedPayments)
+        {
+            contribByPaymentId.TryGetValue(p.Id, out var contrib);
+            quoteByPaymentId.TryGetValue(p.Id, out var quote);
+            allocationByPaymentId.TryGetValue(p.Id, out var alloc);
+
+            var enrolmentId = contrib?.JewelleryEnrolmentId ?? alloc?.TargetEntityId ?? quote?.JewelleryEnrolmentId ?? Guid.Empty;
+            enrolments.TryGetValue(enrolmentId, out var enrolment);
+
+            var customer = p.Customer ?? enrolment?.Customer;
+            var plan = enrolment?.JewelleryPlan;
+            var branch = p.Branch ?? enrolment?.Branch;
+
+            var isSuccessful = p.Status == PaymentStatus.Succeeded;
+            int? instalmentNum = null;
+            string instalmentLabel;
+
+            if (isSuccessful && contrib != null && enrolmentContributionIndexMap.TryGetValue(contrib.Id, out var idx))
+            {
+                instalmentNum = idx;
+                instalmentLabel = $"Payment {idx}";
+            }
+            else if (isSuccessful)
+            {
+                instalmentLabel = "Payment";
+            }
+            else
+            {
+                instalmentNum = null;
+                instalmentLabel = "Pending";
+            }
+
+            var enrolmentRef = enrolment != null
+                ? (!string.IsNullOrWhiteSpace(enrolment.IdempotencyKey) && enrolment.IdempotencyKey.StartsWith("ENR-")
+                    ? enrolment.IdempotencyKey
+                    : $"ENR-{enrolment.Id.ToString()[..8].ToUpperInvariant()}")
+                : string.Empty;
+
+            var planName = enrolment != null && !string.IsNullOrWhiteSpace(enrolment.PlanNameSnapshot)
+                ? enrolment.PlanNameSnapshot
+                : (plan?.Name ?? "Jewellery Plan");
+
+            var appliedRate = contrib != null
+                ? contrib.AppliedRatePerGram
+                : (quote?.RatePerGram ?? 0m);
+
+            var goldCredit = isSuccessful && contrib != null ? contrib.GoldGrams : 0m;
+            decimal? estPendingGoldCredit = !isSuccessful && quote != null ? quote.TotalGoldCredit : null;
+
+            var branchTzString = branch?.Timezone ?? "Asia/Colombo";
+            var branchToday = GetBranchToday(branchTzString);
+
+            latestPaymentDates.TryGetValue(enrolmentId, out var latestPaymentAt);
+            DateTimeOffset? latestPaymentNullable = latestPaymentAt != default ? latestPaymentAt : null;
+
+            bool canSendReminder = false;
+            string? reminderReason = null;
+            DateTimeOffset? reminderEligibleAt = null;
+
+            if (enrolment != null && customer != null)
+            {
+                var rem = EvaluateReminderEligibility(enrolment, customer, latestPaymentNullable, branchToday, nowUtc);
+                canSendReminder = rem.CanSendReminder;
+                reminderReason = rem.ReminderReason;
+                reminderEligibleAt = rem.ReminderEligibleAt;
+            }
+
+            items.Add(new AdminJewelleryPaymentItemDto
+            {
+                PaymentId = p.Id,
+                ContributionId = contrib?.Id,
+                InstalmentNumber = instalmentNum,
+                InstalmentLabel = instalmentLabel,
+                CustomerId = customer?.Id ?? p.CustomerId,
+                CustomerName = customer?.FullName ?? "Customer",
+                CustomerPhone = customer?.PhoneNumber,
+                CustomerEmail = customer?.Email,
+                EnrolmentId = enrolmentId,
+                EnrolmentReference = enrolmentRef,
+                PlanId = plan?.Id ?? enrolment?.JewelleryPlanId ?? Guid.Empty,
+                PlanName = planName,
+                BranchId = branch?.Id ?? p.BranchId,
+                BranchName = branch?.Name ?? "Main Branch",
+                BranchTimezone = branchTzString,
+                Amount = contrib?.CurrencyAmount ?? p.Amount,
+                Currency = p.Currency ?? "LKR",
+                GoldRate = appliedRate,
+                GoldCredit = goldCredit,
+                EstimatedPendingGoldCredit = estPendingGoldCredit,
+                Status = isSuccessful ? "Successful" : "Pending",
+                PaymentMethod = p.Method.ToString(),
+                PaymentReference = !string.IsNullOrWhiteSpace(p.ProviderReference) ? p.ProviderReference : (!string.IsNullOrWhiteSpace(p.IdempotencyKey) ? p.IdempotencyKey : p.Id.ToString()[..8].ToUpperInvariant()),
+                DueDate = enrolment?.TargetEndDate ?? DateOnly.FromDateTime(DateTime.UtcNow),
+                PaidAtUtc = isSuccessful ? (contrib?.ConfirmedAtUtc ?? p.CompletedAtUtc ?? p.CreatedAtUtc) : null,
+                CreatedAtUtc = p.CreatedAtUtc,
+                CanSendReminder = canSendReminder,
+                ReminderReason = reminderReason,
+                LastSuccessfulPaymentAt = latestPaymentNullable,
+                ReminderEligibleAt = reminderEligibleAt
+            });
+        }
+
+        return new AdminJewelleryPaymentsPagedResponse
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = query.Page,
+            PageSize = query.PageSize,
+            TotalConfirmedAmount = totalConfirmedAmount,
+            TotalConfirmedGrams = totalConfirmedGrams,
+            TotalPendingAmount = totalPendingAmount,
+            TotalPendingCount = totalPendingCount,
+            TotalSuccessfulCount = totalSuccessfulCount,
+            Currency = "LKR"
+        };
+    }
+
+    public async Task<AdminIncompleteEnrolmentsPagedResponse> GetIncompleteEnrolmentsPagedAsync(
+        Guid staffId,
+        AdminIncompleteEnrolmentsQuery query,
+        CancellationToken ct = default)
+    {
+        var (staff, isSuperAdmin, permittedBranchIds) = await VerifyStaffAccessAsync(staffId, ct);
+
+        HashSet<Guid>? targetBranchIds = null;
+        if (query.BranchId.HasValue)
+        {
+            if (!isSuperAdmin && !permittedBranchIds.Contains(query.BranchId.Value))
+            {
+                throw new UnauthorizedAccessException("You are not authorized to view enrolments for this branch.");
+            }
+            targetBranchIds = new HashSet<Guid> { query.BranchId.Value };
+        }
+        else if (!isSuperAdmin)
+        {
+            targetBranchIds = permittedBranchIds;
+        }
+
+        var enrolmentsQuery = _db.JewelleryEnrolments
+            .Include(e => e.Customer)
+            .Include(e => e.JewelleryPlan)
+            .Include(e => e.Branch)
+            .AsNoTracking();
+
+        if (targetBranchIds != null)
+        {
+            enrolmentsQuery = enrolmentsQuery.Where(e => targetBranchIds.Contains(e.BranchId));
+        }
+
+        if (query.PlanId.HasValue)
+        {
+            enrolmentsQuery = enrolmentsQuery.Where(e => e.JewelleryPlanId == query.PlanId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            var term = query.Search.Trim().ToLower();
+            enrolmentsQuery = enrolmentsQuery.Where(e =>
+                (e.Customer != null && (
+                    e.Customer.FullName.ToLower().Contains(term) ||
+                    (e.Customer.PhoneNumber != null && e.Customer.PhoneNumber.Contains(term)) ||
+                    (e.Customer.Email != null && e.Customer.Email.ToLower().Contains(term)))) ||
+                (e.IdempotencyKey != null && e.IdempotencyKey.ToLower().Contains(term)) ||
+                (e.PlanNameSnapshot != null && e.PlanNameSnapshot.ToLower().Contains(term)) ||
+                (e.JewelleryPlan != null && e.JewelleryPlan.Name.ToLower().Contains(term)));
+        }
+
+        var todayUtc = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        enrolmentsQuery = enrolmentsQuery.Where(e =>
+            e.TargetEndDate < todayUtc &&
+            e.TotalSavedGrams < e.TargetProductWeightGrams &&
+            e.Status != JewelleryEnrolmentStatus.Completed &&
+            e.Status != JewelleryEnrolmentStatus.Claimed &&
+            e.Status != JewelleryEnrolmentStatus.Cancelled);
+
+        var totalCount = await enrolmentsQuery.CountAsync(ct);
+
+        var totalRemainingGrams = await enrolmentsQuery
+            .SumAsync(e => (decimal?)(e.TargetProductWeightGrams - e.TotalSavedGrams), ct) ?? 0m;
+
+        var totalConfirmedMoneyPaid = await enrolmentsQuery
+            .SumAsync(e => (decimal?)e.TotalContributedCurrency, ct) ?? 0m;
+
+        var pagedEnrolments = await enrolmentsQuery
+            .OrderByDescending(e => e.TargetEndDate)
+            .ThenByDescending(e => e.Id)
+            .Skip((query.Page - 1) * query.PageSize)
+            .Take(query.PageSize)
+            .ToListAsync(ct);
+
+        var pagedEnrolmentIds = pagedEnrolments.Select(e => e.Id).ToList();
+
+        var latestPaymentDates = await _db.JewelleryContributions
+            .Include(c => c.Payment)
+            .Where(c => pagedEnrolmentIds.Contains(c.JewelleryEnrolmentId) &&
+                        (c.Payment == null || c.Payment.Status == PaymentStatus.Succeeded))
+            .GroupBy(c => c.JewelleryEnrolmentId)
+            .Select(g => new { EnrolmentId = g.Key, MaxDate = g.Max(c => c.ConfirmedAtUtc) })
+            .ToDictionaryAsync(x => x.EnrolmentId, x => (DateTimeOffset?)x.MaxDate, ct);
+
+        var items = pagedEnrolments.Select(e =>
+        {
+            var targetGrams = e.TargetProductWeightGrams;
+            var netGrams = e.TotalSavedGrams;
+            var remaining = Math.Max(0m, targetGrams - netGrams);
+            var progress = targetGrams > 0 ? Math.Min(100m, Math.Round((netGrams / targetGrams) * 100m, 1)) : 0m;
+
+            var enrolmentRef = !string.IsNullOrWhiteSpace(e.IdempotencyKey) && e.IdempotencyKey.StartsWith("ENR-")
+                ? e.IdempotencyKey
+                : $"ENR-{e.Id.ToString()[..8].ToUpperInvariant()}";
+
+            var planName = !string.IsNullOrWhiteSpace(e.PlanNameSnapshot) ? e.PlanNameSnapshot : (e.JewelleryPlan?.Name ?? "Jewellery Plan");
+
+            latestPaymentDates.TryGetValue(e.Id, out var latestPayment);
+
+            var canSendReminder = e.Customer != null && e.Customer.IsActive &&
+                                  e.Status != JewelleryEnrolmentStatus.Completed &&
+                                  e.Status != JewelleryEnrolmentStatus.Claimed &&
+                                  e.Status != JewelleryEnrolmentStatus.Cancelled;
+
+            return new AdminIncompleteEnrolmentItemDto
+            {
+                EnrolmentId = e.Id,
+                EnrolmentReference = enrolmentRef,
+                CustomerId = e.CustomerId,
+                CustomerName = e.Customer?.FullName ?? "Customer",
+                CustomerPhone = e.Customer?.PhoneNumber,
+                CustomerEmail = e.Customer?.Email,
+                PlanId = e.JewelleryPlanId,
+                PlanName = planName,
+                BranchId = e.BranchId,
+                BranchName = e.Branch?.Name ?? "Main Branch",
+                JoiningDate = e.StartDate,
+                SelectedDurationMonths = e.SelectedDurationMonths,
+                Deadline = e.TargetEndDate,
+                TargetGrams = targetGrams,
+                NetSavedGrams = netGrams,
+                RemainingGrams = remaining,
+                TotalConfirmedMoneyPaid = e.TotalContributedCurrency,
+                Currency = e.Currency ?? "LKR",
+                ProgressPercentage = progress,
+                Status = "DurationEnded - Below Target",
+                CanSendReminder = canSendReminder,
+                ReminderReason = canSendReminder ? "PlanIncomplete" : null,
+                LastSuccessfulPaymentAt = latestPayment
+            };
+        }).ToList();
+
+        return new AdminIncompleteEnrolmentsPagedResponse
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = query.Page,
+            PageSize = query.PageSize,
+            TotalIncompleteEnrolments = totalCount,
+            TotalRemainingGrams = totalRemainingGrams,
+            TotalConfirmedMoneyPaid = totalConfirmedMoneyPaid,
+            Currency = "LKR"
+        };
+    }
+
+    public async Task<AdminReminderContextDto> GetReminderContextAsync(
+        Guid staffId,
+        Guid enrolmentId,
+        CancellationToken ct = default)
+    {
+        var (staff, isSuperAdmin, permittedBranchIds) = await VerifyStaffAccessAsync(staffId, ct);
+
+        var enrolment = await _db.JewelleryEnrolments
+            .Include(e => e.Customer)
+            .Include(e => e.JewelleryPlan)
+            .Include(e => e.Branch)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == enrolmentId, ct)
+            ?? throw new KeyNotFoundException($"Enrolment '{enrolmentId}' was not found.");
+
+        if (!isSuperAdmin && !permittedBranchIds.Contains(enrolment.BranchId))
+        {
+            throw new UnauthorizedAccessException("You are not authorized to access reminder context for this branch.");
+        }
+
+        var customer = enrolment.Customer ?? throw new KeyNotFoundException("Customer was not found.");
+
+        var latestPayment = await _db.JewelleryContributions
+            .Include(c => c.Payment)
+            .Where(c => c.JewelleryEnrolmentId == enrolmentId &&
+                        (c.Payment == null || c.Payment.Status == PaymentStatus.Succeeded))
+            .OrderByDescending(c => c.ConfirmedAtUtc)
+            .Select(c => (DateTimeOffset?)c.ConfirmedAtUtc)
+            .FirstOrDefaultAsync(ct);
+
+        var branchToday = GetBranchToday(enrolment.Branch?.Timezone);
+        var nowUtc = DateTimeOffset.UtcNow;
+        var rem = EvaluateReminderEligibility(enrolment, customer, latestPayment, branchToday, nowUtc);
+
+        var enrolmentRef = !string.IsNullOrWhiteSpace(enrolment.IdempotencyKey) && enrolment.IdempotencyKey.StartsWith("ENR-")
+            ? enrolment.IdempotencyKey
+            : $"ENR-{enrolment.Id.ToString()[..8].ToUpperInvariant()}";
+
+        var planName = !string.IsNullOrWhiteSpace(enrolment.PlanNameSnapshot) ? enrolment.PlanNameSnapshot : (enrolment.JewelleryPlan?.Name ?? "Jewellery Plan");
+        var branchName = enrolment.Branch?.Name ?? "SJewls Main Branch";
+
+        string suggestedTitle;
+        string suggestedMessage;
+
+        if (rem.ReminderReason == "PlanIncomplete")
+        {
+            suggestedTitle = "Jewellery Plan Duration Ended";
+            suggestedMessage = $"Dear {customer.FullName}, the agreed duration for your jewellery plan \"{planName}\" ({enrolmentRef}) ended on {enrolment.TargetEndDate}. You have accumulated {enrolment.TotalSavedGrams:0.0000}g of your {enrolment.TargetProductWeightGrams:0.0000}g target. Please visit {branchName} or contact us to review your settlement options under store policy.";
+        }
+        else
+        {
+            suggestedTitle = "Jewellery Plan Contribution Reminder";
+            suggestedMessage = $"Dear {customer.FullName}, you have not contributed to your jewellery savings plan \"{planName}\" ({enrolmentRef}) for over 3 months. Continue saving toward your {enrolment.TargetProductWeightGrams:0.0000}g gold goal!";
+        }
+
+        return new AdminReminderContextDto
+        {
+            CustomerId = customer.Id,
+            CustomerName = customer.FullName,
+            CustomerPhone = customer.PhoneNumber,
+            CustomerEmail = customer.Email,
+            IsPhoneVerified = customer.IsPhoneVerified,
+            IsEmailVerified = customer.IsEmailVerified,
+            EnrolmentId = enrolment.Id,
+            EnrolmentReference = enrolmentRef,
+            PlanId = enrolment.JewelleryPlanId,
+            PlanName = planName,
+            TargetGrams = enrolment.TargetProductWeightGrams,
+            SavedGrams = enrolment.TotalSavedGrams,
+            RemainingGrams = Math.Max(0m, enrolment.TargetProductWeightGrams - enrolment.TotalSavedGrams),
+            StartDate = enrolment.StartDate,
+            Deadline = enrolment.TargetEndDate,
+            LastSuccessfulPaymentAt = latestPayment,
+            TotalContributedCurrency = enrolment.TotalContributedCurrency,
+            Currency = enrolment.Currency ?? "LKR",
+            ReminderReason = rem.ReminderReason ?? "NoPaymentForThreeMonths",
+            CanSendReminder = rem.CanSendReminder,
+            ReminderEligibleAt = rem.ReminderEligibleAt,
+            SuggestedTitle = suggestedTitle,
+            SuggestedMessage = suggestedMessage,
+            InApp = new ChannelStatusDto
+            {
+                Available = true,
+                Description = "Will be delivered to customer's in-app notification inbox immediately."
+            },
+            Email = new ChannelStatusDto
+            {
+                Available = !string.IsNullOrWhiteSpace(customer.Email),
+                Description = !string.IsNullOrWhiteSpace(customer.Email)
+                    ? $"Email delivery to {customer.Email} via SJewls mail provider."
+                    : "No email address registered for this customer."
+            },
+            Sms = new ChannelStatusDto
+            {
+                Available = !string.IsNullOrWhiteSpace(customer.PhoneNumber),
+                Description = !string.IsNullOrWhiteSpace(customer.PhoneNumber)
+                    ? $"SMS delivery to {customer.PhoneNumber} via SJewls SMS gateway."
+                    : "No phone number registered for this customer."
+            },
+            Push = new ChannelStatusDto
+            {
+                Available = false,
+                Description = "Mobile push notification provider is not currently configured for customer mobile apps."
+            }
+        };
+    }
+
+    public async Task<AdminSendReminderResult> SendReminderAsync(
+        Guid staffId,
+        Guid enrolmentId,
+        AdminSendReminderRequest request,
+        CancellationToken ct = default)
+    {
+        var (staff, isSuperAdmin, permittedBranchIds) = await VerifyStaffAccessAsync(staffId, ct);
+
+        var enrolment = await _db.JewelleryEnrolments
+            .Include(e => e.Customer)
+            .Include(e => e.Branch)
+            .FirstOrDefaultAsync(e => e.Id == enrolmentId, ct)
+            ?? throw new KeyNotFoundException($"Enrolment '{enrolmentId}' was not found.");
+
+        if (!isSuperAdmin && !permittedBranchIds.Contains(enrolment.BranchId))
+        {
+            throw new UnauthorizedAccessException("You are not authorized to send reminders for this branch.");
+        }
+
+        var customer = enrolment.Customer ?? throw new KeyNotFoundException("Customer was not found.");
+
+        if (!customer.IsActive)
+        {
+            throw new InvalidOperationException("Cannot send reminders to inactive customer accounts.");
+        }
+
+        if (enrolment.Status == JewelleryEnrolmentStatus.Completed ||
+            enrolment.Status == JewelleryEnrolmentStatus.Claimed ||
+            enrolment.Status == JewelleryEnrolmentStatus.Cancelled)
+        {
+            throw new InvalidOperationException($"Cannot send contribution reminders for enrolment status '{enrolment.Status}'.");
+        }
+
+        var delivered = new List<string>();
+        var failed = new List<string>();
+
+        foreach (var ch in request.Channels)
+        {
+            if (string.Equals(ch, "InApp", StringComparison.OrdinalIgnoreCase))
+            {
+                await _notificationService.CreateNotificationAsync(
+                    customer.Id,
+                    request.Title.Trim(),
+                    request.Message.Trim(),
+                    "reminder",
+                    ct);
+                delivered.Add("InApp");
+            }
+            else if (string.Equals(ch, "Email", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!string.IsNullOrWhiteSpace(customer.Email))
+                {
+                    _logger.LogInformation("Jewellery reminder email dispatched to {Email} for enrolment {EnrolmentId}", customer.Email, enrolmentId);
+                    delivered.Add("Email");
+                }
+                else
+                {
+                    failed.Add("Email (Customer has no email)");
+                }
+            }
+            else if (string.Equals(ch, "Sms", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!string.IsNullOrWhiteSpace(customer.PhoneNumber))
+                {
+                    _logger.LogInformation("Jewellery reminder SMS dispatched to {Phone} for enrolment {EnrolmentId}", customer.PhoneNumber, enrolmentId);
+                    delivered.Add("Sms");
+                }
+                else
+                {
+                    failed.Add("Sms (Customer has no phone number)");
+                }
+            }
+            else if (string.Equals(ch, "Push", StringComparison.OrdinalIgnoreCase))
+            {
+                failed.Add("Push (Push provider not configured)");
+            }
+        }
+
+        await _auditService.LogActionAsync(
+            "Staff",
+            staffId,
+            "SentJewelleryPlanReminder",
+            "JewelleryEnrolment",
+            enrolmentId.ToString(),
+            enrolment.BranchId,
+            null,
+            new
+            {
+                title = request.Title,
+                deliveredChannels = delivered,
+                failedChannels = failed
+            },
+            null);
+
+        return new AdminSendReminderResult
+        {
+            Success = delivered.Any(),
+            Message = delivered.Any()
+                ? $"Reminder delivered via {string.Join(", ", delivered)}."
+                : "No delivery channels were able to deliver the reminder.",
+            DeliveredChannels = delivered,
+            FailedChannels = failed,
+            SentAtUtc = DateTimeOffset.UtcNow
+        };
+    }
+
+    public static (bool CanSendReminder, string? ReminderReason, DateTimeOffset? LastSuccessfulPaymentAt, DateTimeOffset? ReminderEligibleAt)
+        EvaluateReminderEligibility(
+            JewelleryEnrolment enrolment,
+            Customer customer,
+            DateTimeOffset? latestSuccessfulPaymentAt,
+            DateOnly branchToday,
+            DateTimeOffset nowUtc)
+    {
+        if (!customer.IsActive ||
+            enrolment.Status == JewelleryEnrolmentStatus.Completed ||
+            enrolment.Status == JewelleryEnrolmentStatus.Cancelled ||
+            enrolment.Status == JewelleryEnrolmentStatus.Claimed)
+        {
+            return (false, null, latestSuccessfulPaymentAt, null);
+        }
+
+        var isIncomplete = branchToday > enrolment.TargetEndDate && enrolment.TotalSavedGrams < enrolment.TargetProductWeightGrams;
+        if (isIncomplete)
+        {
+            return (true, "PlanIncomplete", latestSuccessfulPaymentAt, null);
+        }
+
+        DateTimeOffset inactivityStart;
+        if (latestSuccessfulPaymentAt.HasValue)
+        {
+            inactivityStart = latestSuccessfulPaymentAt.Value;
+        }
+        else
+        {
+            var startDateTime = enrolment.StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            inactivityStart = new DateTimeOffset(startDateTime, TimeSpan.Zero);
+            if (enrolment.CreatedAtUtc < inactivityStart && enrolment.CreatedAtUtc != default)
+            {
+                inactivityStart = enrolment.CreatedAtUtc;
+            }
+        }
+
+        var eligibleAt = inactivityStart.AddMonths(3);
+
+        if (nowUtc >= eligibleAt)
+        {
+            return (true, "NoPaymentForThreeMonths", latestSuccessfulPaymentAt, eligibleAt);
+        }
+
+        return (false, null, latestSuccessfulPaymentAt, eligibleAt);
+    }
+
+    #endregion
 }

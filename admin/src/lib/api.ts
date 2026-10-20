@@ -1,4 +1,25 @@
 import { Branch, ForgotPasswordResponse, LoginResponse, ResetPasswordResponse, StaffUser } from "../types/auth";
+import {
+  ChituPlanCardDto,
+  ChituPlanDetailDto,
+  ChituPlanListResponse,
+  CreateChituPlanRequest,
+  UpdateChituPlanRequest,
+  ChituSlotAssignmentPreviewRequest,
+  ChituSlotAssignmentPreviewResponse,
+  AssignChituSlotsRequest,
+  AssignChituSlotsResponse,
+  CustomerPayableSlotsResponse,
+  ChituPaymentPreviewRequest,
+  ChituPaymentPreviewResponse,
+  RecordChituPaymentRequest,
+  RecordChituPaymentResponse,
+  ChituEligibleSlotsResponse,
+  RecordChituRaffleRequest,
+  RecordChituRaffleResponse,
+  ChituRosterQueryParameters,
+  ChituRosterResponse,
+} from "../types/chitu";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/+$/, "");
 
@@ -422,5 +443,131 @@ export const adminApi = {
   async getEnrolmentPayments(enrolmentId: string): Promise<import("../types/jewelleryPlan").EnrolmentContribution[]> {
     return fetchWithAuth<import("../types/jewelleryPlan").EnrolmentContribution[]>(`/api/v1/admin/jewellery-enrolments/${enrolmentId}/payments`);
   },
+
+  async getPaymentsPaged(query?: import("../types/jewelleryPlan").AdminJewelleryPaymentsQuery): Promise<import("../types/jewelleryPlan").AdminJewelleryPaymentsPagedResponse> {
+    const params = new URLSearchParams();
+    if (query?.branchId) params.append("branchId", query.branchId);
+    if (query?.planId) params.append("planId", query.planId);
+    if (query?.status && query.status !== "All") params.append("status", query.status);
+    if (query?.search) params.append("search", query.search);
+    if (query?.fromDate) params.append("fromDate", query.fromDate);
+    if (query?.toDate) params.append("toDate", query.toDate);
+    if (query?.page) params.append("page", query.page.toString());
+    if (query?.pageSize) params.append("pageSize", query.pageSize.toString());
+
+    const qs = params.toString();
+    return fetchWithAuth<import("../types/jewelleryPlan").AdminJewelleryPaymentsPagedResponse>(`/api/v1/admin/jewellery-enrolments/payments${qs ? `?${qs}` : ""}`);
+  },
+
+  async getIncompleteEnrolmentsPaged(query?: import("../types/jewelleryPlan").AdminIncompleteEnrolmentsQuery): Promise<import("../types/jewelleryPlan").AdminIncompleteEnrolmentsPagedResponse> {
+    const params = new URLSearchParams();
+    if (query?.branchId) params.append("branchId", query.branchId);
+    if (query?.planId) params.append("planId", query.planId);
+    if (query?.search) params.append("search", query.search);
+    if (query?.page) params.append("page", query.page.toString());
+    if (query?.pageSize) params.append("pageSize", query.pageSize.toString());
+
+    const qs = params.toString();
+    return fetchWithAuth<import("../types/jewelleryPlan").AdminIncompleteEnrolmentsPagedResponse>(`/api/v1/admin/jewellery-enrolments/incomplete${qs ? `?${qs}` : ""}`);
+  },
+
+  async getReminderContext(enrolmentId: string): Promise<import("../types/jewelleryPlan").AdminReminderContext> {
+    return fetchWithAuth<import("../types/jewelleryPlan").AdminReminderContext>(`/api/v1/admin/jewellery-enrolments/${enrolmentId}/reminder-context`);
+  },
+
+  async sendReminder(enrolmentId: string, data: import("../types/jewelleryPlan").AdminSendReminderRequest): Promise<import("../types/jewelleryPlan").AdminSendReminderResult> {
+    return fetchWithAuth<import("../types/jewelleryPlan").AdminSendReminderResult>(`/api/v1/admin/jewellery-enrolments/${enrolmentId}/send-reminder`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  // ==================== CHITU MODULE ====================
+  async getChituPlans(params?: { branchId?: string; search?: string; status?: string; redemptionType?: number }): Promise<ChituPlanListResponse> {
+    const qs = new URLSearchParams();
+    if (params?.branchId) qs.append("branchId", params.branchId);
+    if (params?.search) qs.append("search", params.search);
+    if (params?.status && params.status !== "All") qs.append("status", params.status);
+    if (params?.redemptionType !== undefined && params?.redemptionType !== null) qs.append("redemptionType", params.redemptionType.toString());
+    const query = qs.toString();
+    return fetchWithAuth<ChituPlanListResponse>(`/api/v1/admin/chitu-plans${query ? `?${query}` : ""}`);
+  },
+
+  async getChituPlanById(planId: string): Promise<ChituPlanDetailDto> {
+    return fetchWithAuth<ChituPlanDetailDto>(`/api/v1/admin/chitu-plans/${planId}`);
+  },
+
+  async createChituPlan(data: CreateChituPlanRequest): Promise<ChituPlanCardDto> {
+    return fetchWithAuth<ChituPlanCardDto>("/api/v1/admin/chitu-plans", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateChituPlan(planId: string, data: UpdateChituPlanRequest): Promise<ChituPlanCardDto> {
+    return fetchWithAuth<ChituPlanCardDto>(`/api/v1/admin/chitu-plans/${planId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async previewChituSlotAssignment(data: ChituSlotAssignmentPreviewRequest): Promise<ChituSlotAssignmentPreviewResponse> {
+    return fetchWithAuth<ChituSlotAssignmentPreviewResponse>("/api/v1/admin/chitu-plans/preview-assignment", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async assignChituSlots(data: AssignChituSlotsRequest): Promise<AssignChituSlotsResponse> {
+    return fetchWithAuth<AssignChituSlotsResponse>("/api/v1/admin/chitu-plans/assign-slots", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async getCustomerPayableChituSlots(planId: string, customerId: string): Promise<CustomerPayableSlotsResponse> {
+    return fetchWithAuth<CustomerPayableSlotsResponse>(`/api/v1/admin/chitu-plans/${planId}/payable-slots/${customerId}`);
+  },
+
+  async previewChituPayment(data: ChituPaymentPreviewRequest): Promise<ChituPaymentPreviewResponse> {
+    return fetchWithAuth<ChituPaymentPreviewResponse>("/api/v1/admin/chitu-plans/preview-payment", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async recordChituPayment(data: RecordChituPaymentRequest): Promise<RecordChituPaymentResponse> {
+    return fetchWithAuth<RecordChituPaymentResponse>("/api/v1/admin/chitu-plans/record-payment", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async getEligibleChituRaffleSlots(planId: string, roundIndex: number, search?: string): Promise<ChituEligibleSlotsResponse> {
+    const qs = search?.trim() ? `?search=${encodeURIComponent(search.trim())}` : "";
+    return fetchWithAuth<ChituEligibleSlotsResponse>(`/api/v1/admin/chitu-plans/${planId}/raffles/${roundIndex}/eligible-slots${qs}`);
+  },
+
+  async recordChituRaffleResult(planId: string, roundIndex: number, data: RecordChituRaffleRequest): Promise<RecordChituRaffleResponse> {
+    return fetchWithAuth<RecordChituRaffleResponse>(`/api/v1/admin/chitu-plans/${planId}/raffles/${roundIndex}/record`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async getChituRoster(planId: string, query?: ChituRosterQueryParameters): Promise<ChituRosterResponse> {
+    const qs = new URLSearchParams();
+    if (query?.roundIndex) qs.append("roundIndex", query.roundIndex.toString());
+    if (query?.search) qs.append("search", query.search);
+    if (query?.statusFilter && query.statusFilter !== "All") qs.append("statusFilter", query.statusFilter);
+    if (query?.paymentFilter && query.paymentFilter !== "All") qs.append("paymentFilter", query.paymentFilter);
+    if (query?.page) qs.append("page", query.page.toString());
+    if (query?.pageSize) qs.append("pageSize", query.pageSize.toString());
+    const q = qs.toString();
+    return fetchWithAuth<ChituRosterResponse>(`/api/v1/admin/chitu-plans/${planId}/roster${q ? `?${q}` : ""}`);
+  },
 };
+
+export const jewelleryEnrolmentsApi = adminApi;
+
 

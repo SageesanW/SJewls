@@ -477,4 +477,396 @@ public class AdminJewelleryEnrolmentTests
 
         Assert.Contains("confirm receipt", ex.Message);
     }
+
+    [Fact]
+    public async Task GetJewelleryPaymentsPaged_SeparatesConfirmedAndPending_WithStableInstalmentNumbering()
+    {
+        var db = CreateInMemoryDbContext(nameof(GetJewelleryPaymentsPaged_SeparatesConfirmedAndPending_WithStableInstalmentNumbering));
+        var (branch, staff, customer, plan) = await SetupBranchStaffCustomerAndPlanAsync(db);
+
+        var goldRateMock = new MockGoldRateService { MockRate = 25000m };
+        var notifyService = new CustomerNotificationService(db, NullLogger<CustomerNotificationService>.Instance);
+        var auditService = new AuditLogService(db, NullLogger<AuditLogService>.Instance);
+        var service = new AdminJewelleryEnrolmentService(db, goldRateMock, notifyService, auditService, NullLogger<AdminJewelleryEnrolmentService>.Instance);
+
+        var enrolment = await service.AssignPlanAsync(staff.Id, new AdminAssignPlanRequest
+        {
+            CustomerId = customer.Id,
+            PlanId = plan.Id,
+            SelectedDurationMonths = 12
+        }, null);
+
+        // Record first cash payment (Instalment 1)
+        var p1 = await service.RecordPaymentAsync(staff.Id, enrolment.Id, new AdminRecordPaymentRequest
+        {
+            Mode = "BuyAmount",
+            EnteredAmount = 50000m,
+            ConfirmedReceived = true
+        }, null);
+
+        var c1 = await db.JewelleryContributions.FirstAsync(c => c.PaymentId == p1.PaymentId);
+        c1.ConfirmedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-5);
+        var pay1 = await db.Payments.FirstAsync(p => p.Id == p1.PaymentId);
+        pay1.CompletedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-5);
+        pay1.CreatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-5);
+        await db.SaveChangesAsync();
+
+        // Record second cash payment (Instalment 2)
+        var p2 = await service.RecordPaymentAsync(staff.Id, enrolment.Id, new AdminRecordPaymentRequest
+        {
+            Mode = "BuyAmount",
+            EnteredAmount = 25000m,
+            ConfirmedReceived = true
+        }, null);
+
+        // Add a genuine pending payment intent
+        var pendingPayment = new Payment
+        {
+            Id = Guid.NewGuid(),
+            CustomerId = customer.Id,
+            BranchId = branch.Id,
+            Amount = 15000m,
+            Currency = "LKR",
+            Status = PaymentStatus.Pending,
+            Method = PaymentMethod.MockOnline,
+            Module = BusinessModule.Jewellery,
+            ProviderReference = "PAYHERE-PENDING-001",
+            CreatedAtUtc = DateTimeOffset.UtcNow
+        };
+        db.Payments.Add(pendingPayment);
+
+        var pendingAlloc = new PaymentAllocation
+        {
+            Id = Guid.NewGuid(),
+            PaymentId = pendingPayment.Id,
+            AllocationType = "JewelleryContribution",
+            TargetEntityId = enrolment.Id,
+            AllocatedAmount = 15000m
+        };
+        db.PaymentAllocations.Add(pendingAlloc);
+        await db.SaveChangesAsync();
+
+        // Query payments paged
+        var response = await service.GetJewelleryPaymentsPagedAsync(staff.Id, new AdminJewelleryPaymentsQuery());
+
+        Assert.Equal(3, response.TotalCount);
+        Assert.Equal(75000m, response.TotalConfirmedAmount);
+        Assert.Equal(15000m, response.TotalPendingAmount);
+        Assert.Equal(1, response.TotalPendingCount);
+        Assert.True(response.TotalConfirmedGrams > 0m);
+
+        // Verify instalment numbering:
+        // p2 is newest -> Payment 2
+        // p1 is oldest -> Payment 1
+        // pendingPayment -> Pending ("—")
+        var p2Item = response.Items.First(x => x.PaymentReference == p2.PaymentReference);
+        var p1Item = response.Items.First(x => x.PaymentReference == p1.PaymentReference);
+        var pendingItem = response.Items.First(x => x.PaymentReference == "PAYHERE-PENDING-001");
+
+        Assert.Equal(2, p2Item.InstalmentNumber);
+        Assert.Equal("Payment 2", p2Item.InstalmentLabel);
+        Assert.Equal("Successful", p2Item.Status);
+
+        Assert.Equal(1, p1Item.InstalmentNumber);
+        Assert.Equal("Payment 1", p1Item.InstalmentLabel);
+        Assert.Equal("Successful", p1Item.Status);
+
+        Assert.Null(pendingItem.InstalmentNumber);
+        Assert.True(pendingItem.InstalmentLabel == "Pending" || pendingItem.InstalmentLabel == "—");
+        Assert.Equal("Pending", pendingItem.Status);
+        Assert.Equal(0m, pendingItem.GoldCredit); // Pending does not credit gold
+        Assert.Null(pendingItem.PaidAtUtc);
+    }
+
+    [Fact]
+    public async Task GetJewelleryPaymentsPaged_InstalmentNumbering_RemainsStableAcrossFiltering()
+    {
+        var db = CreateInMemoryDbContext(nameof(GetJewelleryPaymentsPaged_InstalmentNumbering_RemainsStableAcrossFiltering));
+        var (branch, staff, customer, plan) = await SetupBranchStaffCustomerAndPlanAsync(db);
+
+        var goldRateMock = new MockGoldRateService { MockRate = 25000m };
+        var notifyService = new CustomerNotificationService(db, NullLogger<CustomerNotificationService>.Instance);
+        var auditService = new AuditLogService(db, NullLogger<AuditLogService>.Instance);
+        var service = new AdminJewelleryEnrolmentService(db, goldRateMock, notifyService, auditService, NullLogger<AdminJewelleryEnrolmentService>.Instance);
+
+        var enrolment = await service.AssignPlanAsync(staff.Id, new AdminAssignPlanRequest
+        {
+            CustomerId = customer.Id,
+            PlanId = plan.Id,
+            SelectedDurationMonths = 12
+        }, null);
+
+        // Payment 1: record and shift timestamp to 5 days ago
+        var p1 = await service.RecordPaymentAsync(staff.Id, enrolment.Id, new AdminRecordPaymentRequest
+        {
+            Mode = "BuyAmount",
+            EnteredAmount = 10000m,
+            ConfirmedReceived = true
+        }, null);
+
+        var c1 = await db.JewelleryContributions.FirstAsync(c => c.PaymentId == p1.PaymentId);
+        c1.ConfirmedAtUtc = DateTimeOffset.UtcNow.AddDays(-5);
+        var pay1 = await db.Payments.FirstAsync(p => p.Id == p1.PaymentId);
+        pay1.CompletedAtUtc = DateTimeOffset.UtcNow.AddDays(-5);
+        pay1.CreatedAtUtc = DateTimeOffset.UtcNow.AddDays(-5);
+
+        // Payment 2: record today
+        var p2 = await service.RecordPaymentAsync(staff.Id, enrolment.Id, new AdminRecordPaymentRequest
+        {
+            Mode = "BuyAmount",
+            EnteredAmount = 15000m,
+            ConfirmedReceived = true
+        }, null);
+
+        await db.SaveChangesAsync();
+
+        // Now filter specifically for recent payment (excluding Payment 1 which was 5 days ago)
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var response = await service.GetJewelleryPaymentsPagedAsync(staff.Id, new AdminJewelleryPaymentsQuery
+        {
+            FromDate = today.AddDays(-1),
+            ToDate = today.AddDays(1)
+        });
+
+        // The returned item must STILL be Payment 2, NOT renumbered to Payment 1!
+        Assert.Single(response.Items);
+        var item = response.Items[0];
+        Assert.Equal(p2.PaymentReference, item.PaymentReference);
+        Assert.Equal(2, item.InstalmentNumber);
+        Assert.Equal("Payment 2", item.InstalmentLabel);
+    }
+
+    [Fact]
+    public async Task GetIncompleteEnrolmentsPaged_IdentifiesExpiredEnrolmentsBelowTarget()
+    {
+        var db = CreateInMemoryDbContext(nameof(GetIncompleteEnrolmentsPaged_IdentifiesExpiredEnrolmentsBelowTarget));
+        var (branch, staff, customer, plan) = await SetupBranchStaffCustomerAndPlanAsync(db);
+
+        var goldRateMock = new MockGoldRateService { MockRate = 25000m };
+        var notifyService = new CustomerNotificationService(db, NullLogger<CustomerNotificationService>.Instance);
+        var auditService = new AuditLogService(db, NullLogger<AuditLogService>.Instance);
+        var service = new AdminJewelleryEnrolmentService(db, goldRateMock, notifyService, auditService, NullLogger<AdminJewelleryEnrolmentService>.Instance);
+
+        // 1. Incomplete enrolment: Target 10g, Saved 4g, TargetEndDate passed 10 days ago
+        var expiredIncomplete = new JewelleryEnrolment
+        {
+            Id = Guid.NewGuid(),
+            CustomerId = customer.Id,
+            JewelleryPlanId = plan.Id,
+            PlanNameSnapshot = plan.Name,
+            CategoryNameSnapshot = "Bridal Collection",
+            BranchId = branch.Id,
+            Status = JewelleryEnrolmentStatus.Active,
+            StartDate = DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(-7)),
+            SelectedDurationMonths = 6,
+            TargetEndDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-10)),
+            TargetProductWeightGrams = 10.0m,
+            TotalSavedGrams = 4.0m,
+            TotalContributedCurrency = 100000m,
+            Currency = "LKR",
+            CreatedAtUtc = DateTimeOffset.UtcNow.AddMonths(-7)
+        };
+        db.JewelleryEnrolments.Add(expiredIncomplete);
+
+        // 2. Active enrolment: TargetEndDate not passed yet
+        var activeOnSchedule = new JewelleryEnrolment
+        {
+            Id = Guid.NewGuid(),
+            CustomerId = customer.Id,
+            JewelleryPlanId = plan.Id,
+            PlanNameSnapshot = plan.Name,
+            CategoryNameSnapshot = "Bridal Collection",
+            BranchId = branch.Id,
+            Status = JewelleryEnrolmentStatus.Active,
+            StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            SelectedDurationMonths = 6,
+            TargetEndDate = DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(6)),
+            TargetProductWeightGrams = 10.0m,
+            TotalSavedGrams = 2.0m,
+            TotalContributedCurrency = 50000m,
+            Currency = "LKR",
+            CreatedAtUtc = DateTimeOffset.UtcNow
+        };
+        db.JewelleryEnrolments.Add(activeOnSchedule);
+
+        // 3. Completed enrolment: Expired but target reached and status Completed
+        var completed = new JewelleryEnrolment
+        {
+            Id = Guid.NewGuid(),
+            CustomerId = customer.Id,
+            JewelleryPlanId = plan.Id,
+            PlanNameSnapshot = plan.Name,
+            CategoryNameSnapshot = "Bridal Collection",
+            BranchId = branch.Id,
+            Status = JewelleryEnrolmentStatus.Completed,
+            StartDate = DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(-7)),
+            SelectedDurationMonths = 6,
+            TargetEndDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-5)),
+            TargetProductWeightGrams = 10.0m,
+            TotalSavedGrams = 10.0m,
+            TotalContributedCurrency = 250000m,
+            Currency = "LKR",
+            CreatedAtUtc = DateTimeOffset.UtcNow.AddMonths(-7)
+        };
+        db.JewelleryEnrolments.Add(completed);
+
+        await db.SaveChangesAsync();
+
+        var incompleteResponse = await service.GetIncompleteEnrolmentsPagedAsync(staff.Id, new AdminIncompleteEnrolmentsQuery());
+
+        Assert.Single(incompleteResponse.Items);
+        var inc = incompleteResponse.Items[0];
+        Assert.Equal(expiredIncomplete.Id, inc.EnrolmentId);
+        Assert.Equal(10.0m, inc.TargetGrams);
+        Assert.Equal(4.0m, inc.NetSavedGrams);
+        Assert.Equal(6.0m, inc.RemainingGrams);
+        Assert.Equal(40.0m, inc.ProgressPercentage);
+        Assert.True(inc.CanSendReminder);
+        Assert.Equal("PlanIncomplete", inc.ReminderReason);
+    }
+
+    [Fact]
+    public async Task ReminderEligibility_ActivePlan_RespectsThreeCalendarMonths_AndMonthEndBoundaries()
+    {
+        var db = CreateInMemoryDbContext(nameof(ReminderEligibility_ActivePlan_RespectsThreeCalendarMonths_AndMonthEndBoundaries));
+        var (branch, staff, customer, plan) = await SetupBranchStaffCustomerAndPlanAsync(db);
+
+        var goldRateMock = new MockGoldRateService { MockRate = 25000m };
+        var notifyService = new CustomerNotificationService(db, NullLogger<CustomerNotificationService>.Instance);
+        var auditService = new AuditLogService(db, NullLogger<AuditLogService>.Instance);
+        var service = new AdminJewelleryEnrolmentService(db, goldRateMock, notifyService, auditService, NullLogger<AdminJewelleryEnrolmentService>.Instance);
+
+        // Enrolment A: Joined 4 calendar months ago, no payments made
+        var enrNoPayment = new JewelleryEnrolment
+        {
+            Id = Guid.NewGuid(),
+            CustomerId = customer.Id,
+            JewelleryPlanId = plan.Id,
+            PlanNameSnapshot = plan.Name,
+            CategoryNameSnapshot = "Bridal Collection",
+            BranchId = branch.Id,
+            Status = JewelleryEnrolmentStatus.Active,
+            StartDate = DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(-4)),
+            SelectedDurationMonths = 12,
+            TargetEndDate = DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(8)),
+            TargetProductWeightGrams = 10.0m,
+            TotalSavedGrams = 0m,
+            TotalContributedCurrency = 0m,
+            Currency = "LKR",
+            CreatedAtUtc = DateTimeOffset.UtcNow.AddMonths(-4)
+        };
+        db.JewelleryEnrolments.Add(enrNoPayment);
+
+        // Enrolment B: Joined 4 months ago, but paid 1 month ago
+        var enrRecentPayment = new JewelleryEnrolment
+        {
+            Id = Guid.NewGuid(),
+            CustomerId = customer.Id,
+            JewelleryPlanId = plan.Id,
+            PlanNameSnapshot = plan.Name,
+            CategoryNameSnapshot = "Bridal Collection",
+            BranchId = branch.Id,
+            Status = JewelleryEnrolmentStatus.Active,
+            StartDate = DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(-4)),
+            SelectedDurationMonths = 12,
+            TargetEndDate = DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(8)),
+            TargetProductWeightGrams = 10.0m,
+            TotalSavedGrams = 1.0m,
+            TotalContributedCurrency = 25000m,
+            Currency = "LKR",
+            CreatedAtUtc = DateTimeOffset.UtcNow.AddMonths(-4)
+        };
+        db.JewelleryEnrolments.Add(enrRecentPayment);
+
+        var paymentRecent = new Payment
+        {
+            Id = Guid.NewGuid(),
+            BranchId = branch.Id,
+            CustomerId = customer.Id,
+            Module = BusinessModule.Jewellery,
+            Amount = 25000m,
+            Currency = "LKR",
+            Method = PaymentMethod.Cash,
+            Status = PaymentStatus.Succeeded,
+            ProviderReference = "REC-B1",
+            CompletedAtUtc = DateTimeOffset.UtcNow.AddMonths(-1),
+            CreatedAtUtc = DateTimeOffset.UtcNow.AddMonths(-1)
+        };
+        db.Payments.Add(paymentRecent);
+
+        var cRecent = new JewelleryContribution
+        {
+            Id = Guid.NewGuid(),
+            JewelleryEnrolmentId = enrRecentPayment.Id,
+            CurrencyAmount = 25000m,
+            GoldGrams = 1.0m,
+            AppliedRatePerGram = 25000m,
+            Karat = 24,
+            PaymentId = paymentRecent.Id,
+            ConfirmedAtUtc = DateTimeOffset.UtcNow.AddMonths(-1)
+        };
+        db.JewelleryContributions.Add(cRecent);
+
+        await db.SaveChangesAsync();
+
+        var ctxNoPay = await service.GetReminderContextAsync(staff.Id, enrNoPayment.Id);
+        Assert.True(ctxNoPay.CanSendReminder);
+        Assert.Equal("NoPaymentForThreeMonths", ctxNoPay.ReminderReason);
+        Assert.Null(ctxNoPay.LastSuccessfulPaymentAt);
+
+        var ctxRecent = await service.GetReminderContextAsync(staff.Id, enrRecentPayment.Id);
+        Assert.False(ctxRecent.CanSendReminder); // Paid 1 month ago, 3 calendar months have not elapsed!
+        Assert.NotNull(ctxRecent.LastSuccessfulPaymentAt);
+    }
+
+    [Fact]
+    public async Task ReminderHandoffAndDispatch_ValidatesAuthorization_AndReportsChannelCapabilities()
+    {
+        var db = CreateInMemoryDbContext(nameof(ReminderHandoffAndDispatch_ValidatesAuthorization_AndReportsChannelCapabilities));
+        var (branch, staff, customer, plan) = await SetupBranchStaffCustomerAndPlanAsync(db);
+
+        var goldRateMock = new MockGoldRateService { MockRate = 25000m };
+        var notifyService = new CustomerNotificationService(db, NullLogger<CustomerNotificationService>.Instance);
+        var auditService = new AuditLogService(db, NullLogger<AuditLogService>.Instance);
+        var service = new AdminJewelleryEnrolmentService(db, goldRateMock, notifyService, auditService, NullLogger<AdminJewelleryEnrolmentService>.Instance);
+
+        var enrolment = await service.AssignPlanAsync(staff.Id, new AdminAssignPlanRequest
+        {
+            CustomerId = customer.Id,
+            PlanId = plan.Id,
+            SelectedDurationMonths = 12
+        }, null);
+
+        // 1. Fetch authorized reminder context
+        var context = await service.GetReminderContextAsync(staff.Id, enrolment.Id);
+        Assert.Equal(enrolment.Id, context.EnrolmentId);
+        Assert.Equal(customer.FullName, context.CustomerName);
+        Assert.Equal("Bridal Gold Saver", context.PlanName);
+
+        // Check channel definitions
+        Assert.True(context.InApp.Available);
+        Assert.True(context.Email.Available);
+        Assert.True(context.Sms.Available);
+        Assert.False(context.Push.Available);
+        Assert.Contains("not currently configured", context.Push.Description);
+
+        // 2. Dispatch reminder using In-App and Email
+        var sendResult = await service.SendReminderAsync(staff.Id, enrolment.Id, new AdminSendReminderRequest
+        {
+            Channels = new List<string> { "InApp", "Email" },
+            Title = "Monthly Contribution Reminder",
+            Message = "Please visit our branch or pay online to stay on track for your Bridal Gold Saver plan."
+        });
+
+        Assert.True(sendResult.Success);
+        Assert.Contains("InApp", sendResult.DeliveredChannels);
+        Assert.Contains("Email", sendResult.DeliveredChannels);
+
+        // Verify In-App notification was created in database
+        var createdNotification = await db.Notifications.FirstOrDefaultAsync(n => n.CustomerId == customer.Id && n.Title == "Monthly Contribution Reminder");
+        Assert.NotNull(createdNotification);
+        Assert.Equal("reminder", createdNotification.Type);
+    }
 }
+
+
