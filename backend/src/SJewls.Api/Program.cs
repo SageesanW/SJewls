@@ -168,6 +168,32 @@ if (isProdEnvironment && isDevModeEnabled)
     throw new InvalidOperationException("CRITICAL SECURITY ERROR: Otp:EnableDevMode cannot be enabled in a Production environment.");
 }
 
+// 2.6 Chitu Payments Configuration & Simulation Mode Guard
+builder.Services.AddOptions<ChituPaymentOptions>()
+    .Bind(builder.Configuration.GetSection(ChituPaymentOptions.SectionName))
+    .Validate(options =>
+    {
+        var isProd = builder.Environment.IsProduction() ||
+            string.Equals(builder.Configuration["ASPNETCORE_ENVIRONMENT"], "Production", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(builder.Configuration["App:Environment"], "Production", StringComparison.OrdinalIgnoreCase);
+
+        if (isProd && options.EnableSimulation)
+        {
+            return false;
+        }
+        return true;
+    }, "CRITICAL SECURITY ERROR: ChituPayments:EnableSimulation cannot be enabled in a Production environment.")
+    .ValidateOnStart();
+
+var chituConfig = builder.Configuration.GetSection(ChituPaymentOptions.SectionName).Get<ChituPaymentOptions>() ?? new ChituPaymentOptions();
+var isChituSimEnabled = chituConfig.EnableSimulation ||
+    string.Equals(builder.Configuration["ChituPayments:EnableSimulation"], "true", StringComparison.OrdinalIgnoreCase);
+
+if (isProdEnvironment && isChituSimEnabled)
+{
+    throw new InvalidOperationException("CRITICAL SECURITY ERROR: ChituPayments:EnableSimulation cannot be enabled in a Production environment.");
+}
+
 // 3. SMS Configuration (Text.lk SMS Gateway)
 builder.Services.AddOptions<SmsOptions>()
     .Bind(builder.Configuration.GetSection(SmsOptions.SectionName))
@@ -252,6 +278,8 @@ builder.Services.AddScoped<ICustomerJewelleryPlanService, CustomerJewelleryPlanS
 builder.Services.AddScoped<IJewelleryPaymentFinalizationService, JewelleryPaymentFinalizationService>();
 builder.Services.AddScoped<IAdminJewelleryEnrolmentService, AdminJewelleryEnrolmentService>();
 builder.Services.AddScoped<IChituService, ChituService>();
+builder.Services.AddScoped<ICustomerChituService, CustomerChituService>();
+builder.Services.AddScoped<ICustomerPaymentService, CustomerPaymentService>();
 
 
 // Rate Limiting for Auth Endpoints
@@ -361,7 +389,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "SJewls Admin & Staff Portal API",
         Version = "v1",
-        Description = "API endpoints for the SJewls Admin Web Portal — Staff Authentication, Password Recovery, Staff User Management, Customer Management with Full Unmasked NIC, and Branch Statistics."
+        Description = "API endpoints for the SJewls Admin Web Portal — Staff Authentication, Password Recovery, Staff User Management, Customer Management with Full Unmasked NIC, Store Branch Management, Jewellery Category & Plan Management, Jewellery Enrolment Lifecycle, and Chitu Monthly Lucky Draw Management."
     });
 
     options.SwaggerDoc("v1", new OpenApiInfo
@@ -493,6 +521,8 @@ app.MapGet("/api/v1/health", async (SJewlsDbContext? db) =>
 app.MapAuthEndpoints();
 app.MapCustomerEndpoints();
 app.MapCustomerJewelleryPlanEndpoints();
+app.MapCustomerChituEndpoints();
+app.MapCustomerPaymentEndpoints();
 
 // Map Admin Authentication, User, Customer, Branch & Jewellery Category Management Endpoints
 app.MapAdminAuthEndpoints();
@@ -503,6 +533,7 @@ app.MapJewelleryCategoryEndpoints();
 app.MapJewelleryPlanEndpoints();
 app.MapAdminJewelleryEnrolmentEndpoints();
 app.MapAdminChituEndpoints();
+app.MapGoldRateEndpoints();
 
 
 // Seed initial roles, default branch, and initial Super Admin if configured
@@ -697,7 +728,11 @@ public class TagDescriptionsDocumentFilter : IDocumentFilter
             ["Admin Branches"] = "Store branch management, staff assignment, and branch analytics.",
             ["Admin Jewellery Categories"] = "Admin jewellery category configuration and image management.",
             ["Admin Jewellery Plans"] = "Admin jewellery plan lifecycle management, terms, and lifetime tracking.",
-            ["Admin Jewellery Enrolments"] = "Admin jewellery enrolment monitoring, payment history, and staff payment recording."
+            ["Admin Jewellery Enrolment"] = "Admin jewellery enrolment monitoring, payment history, and staff payment recording.",
+            ["Admin Chitu"] = "Admin Chitu plan lifecycle management, slot allocation, roster, payments, and raffle draws.",
+            ["Admin Gold Rates"] = "Gold rate management, live API market feeds, store-wide and branch manual overrides, and audit history.",
+            ["Customer Chitu Plans"] = "Browse active and available Chitu plans, preview join requirements, purchase slots, view My Plans portfolio, and pay for existing slots.",
+            ["Customer Unified Payments"] = "Unified financial transaction history and receipts across both Chitu savings plans and Jewellery gold accumulation plans."
         };
 
         swaggerDoc.Tags ??= new List<OpenApiTag>();

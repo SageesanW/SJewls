@@ -9,9 +9,9 @@ info:
   version: v1
 servers:
 - url: http://localhost:5230
-  description: Local Development Server
-- url: /
   description: Current Host
+- url: http://localhost:5230
+  description: Local Server
 paths:
   /api/v1/branches:
     get:
@@ -237,6 +237,497 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LogoutResponse'
+  /api/v1/customer/chitu-plans:
+    get:
+      tags:
+      - Customer Chitu Plans
+      summary: Browse active and available Chitu plans
+      description: Retrieves paginated Chitu plans open for joining or late-joining
+        in the customer's registered branch.
+      operationId: CustomerGetAvailableChituPlans
+      parameters:
+      - name: page
+        in: query
+        description: 'Page number (1-based index, default: 1).'
+        style: form
+        schema:
+          type: integer
+          format: int32
+      - name: pageSize
+        in: query
+        description: 'Number of items per page (default: 20, max: 50).'
+        style: form
+        schema:
+          type: integer
+          format: int32
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerChituPlansPagedResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      security:
+      - Bearer: []
+  /api/v1/customer/chitu-plans/{planId}:
+    get:
+      tags:
+      - Customer Chitu Plans
+      summary: Get Chitu plan details with schedule and terms
+      description: Retrieves full details, round schedule, and terms for a specific
+        Chitu plan.
+      operationId: CustomerGetChituPlanDetails
+      parameters:
+      - name: planId
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerChituPlanDetailDto'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      security:
+      - Bearer: []
+  /api/v1/customer/chitu-plans/{planId}/join-preview:
+    post:
+      tags:
+      - Customer Chitu Plans
+      summary: Preview initial payment for joining a Chitu plan
+      description: Calculates required initial payment covering Round 1 (pre-enrolment)
+        or all elapsed rounds (late joining) for requested slot quantity.
+      operationId: CustomerPreviewChituJoin
+      parameters:
+      - name: planId
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerChituJoinPreviewRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerChituJoinPreviewResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      security:
+      - Bearer: []
+  /api/v1/customer/chitu-plans/{planId}/join:
+    post:
+      tags:
+      - Customer Chitu Plans
+      summary: Confirm and join Chitu plan with slot purchase
+      description: Idempotently processes initial payment (or simulated payment in
+        test mode) and assigns sequential permanent slots.
+      operationId: CustomerConfirmChituJoin
+      parameters:
+      - name: planId
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      - name: X-Idempotency-Key
+        in: header
+        description: Optional client-generated UUID idempotency key to prevent duplicate
+          enrolment creations across network retries.
+        style: simple
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerChituJoinRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerChituJoinResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '501':
+          description: Server Error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      security:
+      - Bearer: []
+  /api/v1/customer/chitu-investments:
+    get:
+      tags:
+      - Customer Chitu Plans
+      summary: Get customer's Chitu portfolio (My Plans)
+      description: Returns paginated Chitu plans owned by the customer, grouped by
+        plan, with individual slot breakdowns, arrears, and eligibility.
+      operationId: CustomerGetChituInvestments
+      parameters:
+      - name: status
+        in: query
+        style: form
+        schema:
+          type: string
+      - name: page
+        in: query
+        description: 'Page number (1-based index, default: 1).'
+        style: form
+        schema:
+          type: integer
+          format: int32
+      - name: pageSize
+        in: query
+        description: 'Number of items per page (default: 20, max: 50).'
+        style: form
+        schema:
+          type: integer
+          format: int32
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerChituInvestmentsPagedResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      security:
+      - Bearer: []
+  /api/v1/customer/my-plans:
+    get:
+      tags:
+      - Customer Chitu Plans
+      summary: Alias for Customer Chitu investments (My Plans)
+      operationId: CustomerGetMyPlansAlias
+      parameters:
+      - name: status
+        in: query
+        style: form
+        schema:
+          type: string
+      - name: page
+        in: query
+        description: 'Page number (1-based index, default: 1).'
+        style: form
+        schema:
+          type: integer
+          format: int32
+      - name: pageSize
+        in: query
+        description: 'Number of items per page (default: 20, max: 50).'
+        style: form
+        schema:
+          type: integer
+          format: int32
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerChituInvestmentsPagedResponse'
+      security:
+      - Bearer: []
+  /api/v1/customer/chitu-investments/{planId}:
+    get:
+      tags:
+      - Customer Chitu Plans
+      summary: Get single Chitu plan portfolio details
+      operationId: CustomerGetChituInvestmentPlanDetails
+      parameters:
+      - name: planId
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerChituInvestmentPlanDto'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      security:
+      - Bearer: []
+  /api/v1/customer/chitu-slots/{slotId}:
+    get:
+      tags:
+      - Customer Chitu Plans
+      summary: Get detailed information for an individual slot
+      description: Retrieves slot instalment schedule, payment statuses, arrears,
+        and winner entitlement claim data.
+      operationId: CustomerGetChituSlotDetails
+      parameters:
+      - name: slotId
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerChituSlotDetailDto'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      security:
+      - Bearer: []
+  /api/v1/customer/chitu-slots/{slotId}/payments:
+    get:
+      tags:
+      - Customer Chitu Plans
+      summary: Get payment history for a specific slot
+      operationId: CustomerGetChituSlotPayments
+      parameters:
+      - name: slotId
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CustomerPaymentSummaryDto'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      security:
+      - Bearer: []
+  /api/v1/customer/chitu-plans/{planId}/payable-slots:
+    get:
+      tags:
+      - Customer Chitu Plans
+      summary: Get customer's payable slots for a Chitu plan
+      description: Returns all slots owned by the customer in this plan with payment
+        eligibility, outstanding due, and unpaid rounds.
+      operationId: CustomerGetPayableSlots
+      parameters:
+      - name: planId
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerPayableSlotsDto'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      security:
+      - Bearer: []
+  /api/v1/customer/chitu-plans/{planId}/payments/preview:
+    post:
+      tags:
+      - Customer Chitu Plans
+      summary: Preview payment allocation for existing slots
+      description: Calculates per-slot oldest-unpaid-first allocations, resulting
+        arrears, and raffle eligibility.
+      operationId: CustomerPreviewChituExistingSlotPayment
+      parameters:
+      - name: planId
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerChituPaymentPreviewRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerChituPaymentPreviewResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      security:
+      - Bearer: []
+  /api/v1/customer/chitu-plans/{planId}/payments:
+    post:
+      tags:
+      - Customer Chitu Plans
+      summary: Confirm and post payment for existing slots
+      description: Idempotently processes contribution payment, marks instalments
+        as Paid, and updates slot coverage.
+      operationId: CustomerConfirmChituExistingSlotPayment
+      parameters:
+      - name: planId
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      - name: X-Idempotency-Key
+        in: header
+        description: Optional client-generated UUID idempotency key to prevent duplicate
+          enrolment creations across network retries.
+        style: simple
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerChituPaymentConfirmRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerChituPaymentConfirmResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '501':
+          description: Server Error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      security:
+      - Bearer: []
   /api/v1/customer/jewellery-enrolments/preview:
     post:
       tags:
@@ -1201,6 +1692,120 @@ paths:
                 $ref: '#/components/schemas/ProblemDetails'
       security:
       - Bearer: []
+  /api/v1/customer/payments:
+    get:
+      tags:
+      - Customer Unified Payments
+      summary: Unified customer payment history
+      description: Retrieves paginated unified financial transactions across both
+        Chitu and Jewellery plans with filtering by plan type, status, and dates.
+      operationId: CustomerGetPaymentHistory
+      parameters:
+      - name: planType
+        in: query
+        style: form
+        schema:
+          type: string
+      - name: planId
+        in: query
+        style: form
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        style: form
+        schema:
+          type: string
+      - name: startDate
+        in: query
+        style: form
+        schema:
+          type: string
+          format: date-time
+      - name: endDate
+        in: query
+        style: form
+        schema:
+          type: string
+          format: date-time
+      - name: search
+        in: query
+        style: form
+        schema:
+          type: string
+      - name: page
+        in: query
+        description: 'Page number (1-based index, default: 1).'
+        style: form
+        schema:
+          type: integer
+          format: int32
+      - name: pageSize
+        in: query
+        description: 'Number of items per page (default: 20, max: 50).'
+        style: form
+        schema:
+          type: integer
+          format: int32
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerPaymentsPagedResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      security:
+      - Bearer: []
+  /api/v1/customer/payments/{paymentId}:
+    get:
+      tags:
+      - Customer Unified Payments
+      summary: Get payment transaction details
+      description: Retrieves single receipt details including slot breakdowns (for
+        Chitu) or gold grams and historical rate (for Jewellery).
+      operationId: CustomerGetPaymentDetail
+      parameters:
+      - name: paymentId
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerPaymentDetailDto'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      security:
+      - Bearer: []
   /api/v1/health:
     get:
       tags:
@@ -1227,6 +1832,11 @@ components:
           type: string
           nullable: true
       additionalProperties: false
+    BenefitStatus:
+      enum:
+      - Unclaimed
+      - Claimed
+      type: string
     BranchDto:
       type: object
       properties:
@@ -1298,6 +1908,19 @@ components:
           type: string
           nullable: true
       additionalProperties: false
+    ChituRedemptionType:
+      enum:
+      - Cash
+      - Gold
+      type: string
+    ChituSlotStatus:
+      enum:
+      - PendingReservation
+      - Active
+      - Won
+      - Closed
+      - Cancelled
+      type: string
     CompleteRegistrationRequest:
       required:
       - dateOfBirth
@@ -1343,10 +1966,9 @@ components:
       additionalProperties: false
     ContactType:
       enum:
-      - 1
-      - 2
-      type: integer
-      format: int32
+      - Phone
+      - Email
+      type: string
     CreateCustomerEnrolmentRequest:
       required:
       - planId
@@ -1366,6 +1988,797 @@ components:
           nullable: true
         confirmRepeatEnrolment:
           type: boolean
+      additionalProperties: false
+    CustomerAssignedSlotDto:
+      type: object
+      properties:
+        slotId:
+          type: string
+          format: uuid
+        slotNumber:
+          type: integer
+          format: int32
+        slotDisplayCode:
+          type: string
+          nullable: true
+        initialMonthsPaid:
+          type: integer
+          format: int32
+        activatedAtUtc:
+          type: string
+          format: date-time
+      additionalProperties: false
+    CustomerChituInvestmentPlanDto:
+      type: object
+      properties:
+        planId:
+          type: string
+          format: uuid
+        branchId:
+          type: string
+          format: uuid
+        branchName:
+          type: string
+          nullable: true
+        code:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        redemptionType:
+          $ref: '#/components/schemas/ChituRedemptionType'
+        currency:
+          type: string
+          nullable: true
+        durationMonths:
+          type: integer
+          format: int32
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        currentRoundIndex:
+          type: integer
+          format: int32
+        nextRaffleRoundIndex:
+          type: integer
+          format: int32
+          nullable: true
+        nextRaffleDate:
+          type: string
+          format: date
+          nullable: true
+        planStatus:
+          $ref: '#/components/schemas/PlanStatus'
+        totalOwnedSlotsCount:
+          type: integer
+          format: int32
+        activeSlotsCount:
+          type: integer
+          format: int32
+        winningSlotsCount:
+          type: integer
+          format: int32
+        monthlySlotPrice:
+          type: number
+          format: double
+        normalMonthlyCommitment:
+          type: number
+          format: double
+        actualOutstandingDueThroughCurrentRound:
+          type: number
+          format: double
+        currentRoundPaidSlotsCount:
+          type: integer
+          format: int32
+        currentRoundUnpaidSlotsCount:
+          type: integer
+          format: int32
+        totalConfirmedContributions:
+          type: number
+          format: double
+        canPurchaseAdditionalSlots:
+          type: boolean
+        canPayExistingSlots:
+          type: boolean
+        isSimulated:
+          type: boolean
+        slots:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerChituSlotSummaryDto'
+          nullable: true
+      additionalProperties: false
+    CustomerChituInvestmentsPagedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerChituInvestmentPlanDto'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        totalPages:
+          type: integer
+          format: int32
+          readOnly: true
+      additionalProperties: false
+    CustomerChituJoinPreviewRequest:
+      required:
+      - quantity
+      type: object
+      properties:
+        quantity:
+          maximum: 1000
+          minimum: 1
+          type: integer
+          format: int32
+      additionalProperties: false
+    CustomerChituJoinPreviewResponse:
+      type: object
+      properties:
+        planId:
+          type: string
+          format: uuid
+        planCode:
+          type: string
+          nullable: true
+        planName:
+          type: string
+          nullable: true
+        currency:
+          type: string
+          nullable: true
+        monthlySlotPrice:
+          type: number
+          format: double
+        requestedQuantity:
+          type: integer
+          format: int32
+        totalOrdinaryMonthlyPayment:
+          type: number
+          format: double
+        requiredInitialInstalmentsPerSlot:
+          type: integer
+          format: int32
+        requiredInitialAmountPerSlot:
+          type: number
+          format: double
+        totalInitialAmountPayable:
+          type: number
+          format: double
+        availableSlotsCount:
+          type: integer
+          format: int32
+        winningEntitlementPerSlot:
+          type: number
+          format: double
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        currentRoundIndex:
+          type: integer
+          format: int32
+        nextRaffleRoundIndex:
+          type: integer
+          format: int32
+          nullable: true
+        nextRaffleDate:
+          type: string
+          format: date
+          nullable: true
+        existingOwnedSlotsCount:
+          type: integer
+          format: int32
+        previewReference:
+          type: string
+          nullable: true
+        previewCreatedAtUtc:
+          type: string
+          format: date-time
+        previewExpiresAtUtc:
+          type: string
+          format: date-time
+      additionalProperties: false
+    CustomerChituJoinRequest:
+      required:
+      - idempotencyKey
+      - quantity
+      type: object
+      properties:
+        quantity:
+          maximum: 1000
+          minimum: 1
+          type: integer
+          format: int32
+        idempotencyKey:
+          minLength: 1
+          type: string
+        previewReference:
+          type: string
+          nullable: true
+        expectedTotalInitialAmount:
+          type: number
+          format: double
+          nullable: true
+      additionalProperties: false
+    CustomerChituJoinResponse:
+      type: object
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        planId:
+          type: string
+          format: uuid
+        planCode:
+          type: string
+          nullable: true
+        planName:
+          type: string
+          nullable: true
+        slotsCount:
+          type: integer
+          format: int32
+        totalAmountPaid:
+          type: number
+          format: double
+        currency:
+          type: string
+          nullable: true
+        isSimulated:
+          type: boolean
+        assignedSlots:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerAssignedSlotDto'
+          nullable: true
+        message:
+          type: string
+          nullable: true
+      additionalProperties: false
+    CustomerChituPaymentConfirmRequest:
+      required:
+      - idempotencyKey
+      - slotSelections
+      type: object
+      properties:
+        slotSelections:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerSlotPaymentSelectionDto'
+        idempotencyKey:
+          minLength: 1
+          type: string
+        previewReference:
+          type: string
+          nullable: true
+        expectedTotalAmount:
+          type: number
+          format: double
+          nullable: true
+      additionalProperties: false
+    CustomerChituPaymentConfirmResponse:
+      type: object
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        planId:
+          type: string
+          format: uuid
+        planCode:
+          type: string
+          nullable: true
+        planName:
+          type: string
+          nullable: true
+        totalAmount:
+          type: number
+          format: double
+        currency:
+          type: string
+          nullable: true
+        paidAtUtc:
+          type: string
+          format: date-time
+        paymentMethod:
+          type: string
+          nullable: true
+        isSimulated:
+          type: boolean
+        receipts:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerSlotPaymentReceiptDto'
+          nullable: true
+        message:
+          type: string
+          nullable: true
+      additionalProperties: false
+    CustomerChituPaymentDetailBreakdownDto:
+      type: object
+      properties:
+        planId:
+          type: string
+          format: uuid
+        planName:
+          type: string
+          nullable: true
+        planCode:
+          type: string
+          nullable: true
+        monthlySlotPrice:
+          type: number
+          format: double
+        isJoiningPayment:
+          type: boolean
+        slotAllocations:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerChituPaymentSlotAllocationDto'
+          nullable: true
+      additionalProperties: false
+    CustomerChituPaymentPreviewRequest:
+      required:
+      - slotSelections
+      type: object
+      properties:
+        slotSelections:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerSlotPaymentSelectionDto'
+      additionalProperties: false
+    CustomerChituPaymentPreviewResponse:
+      type: object
+      properties:
+        planId:
+          type: string
+          format: uuid
+        planCode:
+          type: string
+          nullable: true
+        planName:
+          type: string
+          nullable: true
+        currency:
+          type: string
+          nullable: true
+        monthlySlotPrice:
+          type: number
+          format: double
+        totalPayableAmount:
+          type: number
+          format: double
+        slots:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerSlotPaymentPreviewItemDto'
+          nullable: true
+        previewReference:
+          type: string
+          nullable: true
+        previewCreatedAtUtc:
+          type: string
+          format: date-time
+        previewExpiresAtUtc:
+          type: string
+          format: date-time
+      additionalProperties: false
+    CustomerChituPaymentSlotAllocationDto:
+      type: object
+      properties:
+        slotId:
+          type: string
+          format: uuid
+        slotNumber:
+          type: integer
+          format: int32
+        slotDisplayCode:
+          type: string
+          nullable: true
+        allocatedAmount:
+          type: number
+          format: double
+        instalmentRoundsCovered:
+          type: array
+          items:
+            type: integer
+            format: int32
+          nullable: true
+        isJoiningPayment:
+          type: boolean
+      additionalProperties: false
+    CustomerChituPlanDetailDto:
+      type: object
+      properties:
+        planId:
+          type: string
+          format: uuid
+        branchId:
+          type: string
+          format: uuid
+        branchName:
+          type: string
+          nullable: true
+        code:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        redemptionType:
+          $ref: '#/components/schemas/ChituRedemptionType'
+        currency:
+          type: string
+          nullable: true
+        durationMonths:
+          type: integer
+          format: int32
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        monthlySlotPrice:
+          type: number
+          format: double
+        winningEntitlementPerSlot:
+          type: number
+          format: double
+        totalSlotCapacity:
+          type: integer
+          format: int32
+        issuedSlotsCount:
+          type: integer
+          format: int32
+        availableSlotsCount:
+          type: integer
+          format: int32
+        capacityPercentage:
+          type: number
+          format: double
+        currentRoundIndex:
+          type: integer
+          format: int32
+        nextRaffleRoundIndex:
+          type: integer
+          format: int32
+          nullable: true
+        nextRaffleDate:
+          type: string
+          format: date
+          nullable: true
+        customerOwnedSlotsCount:
+          type: integer
+          format: int32
+        isAvailableForJoining:
+          type: boolean
+        joiningAvailabilityReason:
+          type: string
+          nullable: true
+        schedule:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerChituRoundScheduleDto'
+          nullable: true
+        terms:
+          type: array
+          items:
+            type: string
+          nullable: true
+      additionalProperties: false
+    CustomerChituPlanSummaryDto:
+      type: object
+      properties:
+        planId:
+          type: string
+          format: uuid
+        branchId:
+          type: string
+          format: uuid
+        branchName:
+          type: string
+          nullable: true
+        code:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        redemptionType:
+          $ref: '#/components/schemas/ChituRedemptionType'
+        currency:
+          type: string
+          nullable: true
+        durationMonths:
+          type: integer
+          format: int32
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        monthlySlotPrice:
+          type: number
+          format: double
+        winningEntitlementPerSlot:
+          type: number
+          format: double
+        totalSlotCapacity:
+          type: integer
+          format: int32
+        issuedSlotsCount:
+          type: integer
+          format: int32
+        availableSlotsCount:
+          type: integer
+          format: int32
+        capacityPercentage:
+          type: number
+          format: double
+        currentRoundIndex:
+          type: integer
+          format: int32
+        nextRaffleRoundIndex:
+          type: integer
+          format: int32
+          nullable: true
+        nextRaffleDate:
+          type: string
+          format: date
+          nullable: true
+        customerOwnedSlotsCount:
+          type: integer
+          format: int32
+        isAvailableForJoining:
+          type: boolean
+        joiningAvailabilityReason:
+          type: string
+          nullable: true
+      additionalProperties: false
+    CustomerChituPlansPagedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerChituPlanSummaryDto'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        totalPages:
+          type: integer
+          format: int32
+          readOnly: true
+      additionalProperties: false
+    CustomerChituRoundScheduleDto:
+      type: object
+      properties:
+        roundIndex:
+          type: integer
+          format: int32
+        scheduledDate:
+          type: string
+          format: date
+        status:
+          type: string
+          nullable: true
+        hasRecordedDraw:
+          type: boolean
+      additionalProperties: false
+    CustomerChituSlotDetailDto:
+      type: object
+      properties:
+        slotId:
+          type: string
+          format: uuid
+        slotNumber:
+          type: integer
+          format: int32
+        slotDisplayCode:
+          type: string
+          nullable: true
+        joinedAtUtc:
+          type: string
+          format: date-time
+        monthlySlotPrice:
+          type: number
+          format: double
+        durationMonths:
+          type: integer
+          format: int32
+        instalmentsPaidCount:
+          type: integer
+          format: int32
+        paidThroughRound:
+          type: integer
+          format: int32
+        arrearsMonths:
+          type: integer
+          format: int32
+        arrearsAmount:
+          type: number
+          format: double
+        advancePaidMonths:
+          type: integer
+          format: int32
+        advancePaidAmount:
+          type: number
+          format: double
+        isCurrentRoundPaid:
+          type: boolean
+        totalConfirmedContributions:
+          type: number
+          format: double
+        slotStatus:
+          $ref: '#/components/schemas/ChituSlotStatus'
+        isWinner:
+          type: boolean
+        winningRoundIndex:
+          type: integer
+          format: int32
+          nullable: true
+        winningDrawDate:
+          type: string
+          format: date
+          nullable: true
+        winningPrizeAmount:
+          type: number
+          format: double
+          nullable: true
+        winningEntitlementClaimed:
+          type: boolean
+        isRaffleEligible:
+          type: boolean
+        raffleEligibilityReason:
+          type: string
+          nullable: true
+        planId:
+          type: string
+          format: uuid
+        planName:
+          type: string
+          nullable: true
+        planCode:
+          type: string
+          nullable: true
+        currency:
+          type: string
+          nullable: true
+        instalments:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerChituSlotInstalmentDto'
+          nullable: true
+        entitlementClaimInfo:
+          $ref: '#/components/schemas/CustomerWinnerBenefitDto'
+      additionalProperties: false
+    CustomerChituSlotInstalmentDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        monthIndex:
+          type: integer
+          format: int32
+        dueDate:
+          type: string
+          format: date
+        amountDue:
+          type: number
+          format: double
+        status:
+          $ref: '#/components/schemas/InstalmentStatus'
+        paidAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+        paymentId:
+          type: string
+          format: uuid
+          nullable: true
+      additionalProperties: false
+    CustomerChituSlotSummaryDto:
+      type: object
+      properties:
+        slotId:
+          type: string
+          format: uuid
+        slotNumber:
+          type: integer
+          format: int32
+        slotDisplayCode:
+          type: string
+          nullable: true
+        joinedAtUtc:
+          type: string
+          format: date-time
+        monthlySlotPrice:
+          type: number
+          format: double
+        durationMonths:
+          type: integer
+          format: int32
+        instalmentsPaidCount:
+          type: integer
+          format: int32
+        paidThroughRound:
+          type: integer
+          format: int32
+        arrearsMonths:
+          type: integer
+          format: int32
+        arrearsAmount:
+          type: number
+          format: double
+        advancePaidMonths:
+          type: integer
+          format: int32
+        advancePaidAmount:
+          type: number
+          format: double
+        isCurrentRoundPaid:
+          type: boolean
+        totalConfirmedContributions:
+          type: number
+          format: double
+        slotStatus:
+          $ref: '#/components/schemas/ChituSlotStatus'
+        isWinner:
+          type: boolean
+        winningRoundIndex:
+          type: integer
+          format: int32
+          nullable: true
+        winningDrawDate:
+          type: string
+          format: date
+          nullable: true
+        winningPrizeAmount:
+          type: number
+          format: double
+          nullable: true
+        winningEntitlementClaimed:
+          type: boolean
+        isRaffleEligible:
+          type: boolean
+        raffleEligibilityReason:
+          type: string
+          nullable: true
       additionalProperties: false
     CustomerEnrolmentDto:
       type: object
@@ -1502,6 +2915,32 @@ components:
           type: integer
           format: int32
       additionalProperties: false
+    CustomerJewelleryPaymentDetailBreakdownDto:
+      type: object
+      properties:
+        enrolmentId:
+          type: string
+          format: uuid
+        enrolmentDisplayNumber:
+          type: string
+          nullable: true
+        appliedGoldRatePerGram:
+          type: number
+          format: double
+        appliedPremiumPercentage:
+          type: number
+          format: double
+        creditedGrams:
+          type: number
+          format: double
+        instalmentMonthIndex:
+          type: integer
+          format: int32
+          nullable: true
+        paymentType:
+          type: string
+          nullable: true
+      additionalProperties: false
     CustomerJewelleryPlanDto:
       type: object
       properties:
@@ -1590,6 +3029,148 @@ components:
           format: int32
           readOnly: true
       additionalProperties: false
+    CustomerPayableSlotItemDto:
+      type: object
+      properties:
+        slotId:
+          type: string
+          format: uuid
+        slotNumber:
+          type: integer
+          format: int32
+        slotDisplayCode:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/ChituSlotStatus'
+        isEligibleForPayment:
+          type: boolean
+        ineligibilityReason:
+          type: string
+          nullable: true
+        monthlyInstalmentPrice:
+          type: number
+          format: double
+        paidInstalmentRounds:
+          type: array
+          items:
+            type: integer
+            format: int32
+          nullable: true
+        unpaidInstalmentRounds:
+          type: array
+          items:
+            type: integer
+            format: int32
+          nullable: true
+        outstandingDueAmount:
+          type: number
+          format: double
+        remainingPayableMonths:
+          type: integer
+          format: int32
+        isCurrentRoundPaid:
+          type: boolean
+        instalmentsPaidCount:
+          type: integer
+          format: int32
+        totalConfirmedPaid:
+          type: number
+          format: double
+      additionalProperties: false
+    CustomerPayableSlotsDto:
+      type: object
+      properties:
+        planId:
+          type: string
+          format: uuid
+        planCode:
+          type: string
+          nullable: true
+        planName:
+          type: string
+          nullable: true
+        monthlySlotPrice:
+          type: number
+          format: double
+        currency:
+          type: string
+          nullable: true
+        currentRoundIndex:
+          type: integer
+          format: int32
+        slots:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerPayableSlotItemDto'
+          nullable: true
+      additionalProperties: false
+    CustomerPaymentDetailDto:
+      type: object
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        planType:
+          type: string
+          nullable: true
+        planId:
+          type: string
+          format: uuid
+          nullable: true
+        planName:
+          type: string
+          nullable: true
+        planCode:
+          type: string
+          nullable: true
+        currency:
+          type: string
+          nullable: true
+        amount:
+          type: number
+          format: double
+        status:
+          type: string
+          nullable: true
+        paymentMethod:
+          type: string
+          nullable: true
+        provider:
+          type: string
+          nullable: true
+        providerReference:
+          type: string
+          nullable: true
+        createdAtUtc:
+          type: string
+          format: date-time
+        confirmedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+        isSimulated:
+          type: boolean
+        allocationsCount:
+          type: integer
+          format: int32
+        slotsCoveredCount:
+          type: integer
+          format: int32
+          nullable: true
+        hasDetails:
+          type: boolean
+        summaryDescription:
+          type: string
+          nullable: true
+        remarks:
+          type: string
+          nullable: true
+        chituDetails:
+          $ref: '#/components/schemas/CustomerChituPaymentDetailBreakdownDto'
+        jewelleryDetails:
+          $ref: '#/components/schemas/CustomerJewelleryPaymentDetailBreakdownDto'
+      additionalProperties: false
     CustomerPaymentQuoteDto:
       type: object
       properties:
@@ -1664,6 +3245,87 @@ components:
         isExpired:
           type: boolean
       additionalProperties: false
+    CustomerPaymentSummaryDto:
+      type: object
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        planType:
+          type: string
+          nullable: true
+        planId:
+          type: string
+          format: uuid
+          nullable: true
+        planName:
+          type: string
+          nullable: true
+        planCode:
+          type: string
+          nullable: true
+        currency:
+          type: string
+          nullable: true
+        amount:
+          type: number
+          format: double
+        status:
+          type: string
+          nullable: true
+        paymentMethod:
+          type: string
+          nullable: true
+        provider:
+          type: string
+          nullable: true
+        providerReference:
+          type: string
+          nullable: true
+        createdAtUtc:
+          type: string
+          format: date-time
+        confirmedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+        isSimulated:
+          type: boolean
+        allocationsCount:
+          type: integer
+          format: int32
+        slotsCoveredCount:
+          type: integer
+          format: int32
+          nullable: true
+        hasDetails:
+          type: boolean
+        summaryDescription:
+          type: string
+          nullable: true
+      additionalProperties: false
+    CustomerPaymentsPagedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerPaymentSummaryDto'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        totalPages:
+          type: integer
+          format: int32
+          readOnly: true
+      additionalProperties: false
     CustomerProfileDto:
       type: object
       properties:
@@ -1713,6 +3375,79 @@ components:
           type: string
           format: date-time
       additionalProperties: false
+    CustomerSlotPaymentPreviewItemDto:
+      type: object
+      properties:
+        slotId:
+          type: string
+          format: uuid
+        slotDisplayCode:
+          type: string
+          nullable: true
+        instalmentsToPayCount:
+          type: integer
+          format: int32
+        amountAllocated:
+          type: number
+          format: double
+        clearedRounds:
+          type: array
+          items:
+            type: integer
+            format: int32
+          nullable: true
+        remainingArrearsAfterPayment:
+          type: number
+          format: double
+        advanceCoverageMonthsAfterPayment:
+          type: integer
+          format: int32
+        resultingCurrentRoundCoverage:
+          type: boolean
+        resultingRaffleEligible:
+          type: boolean
+      additionalProperties: false
+    CustomerSlotPaymentReceiptDto:
+      type: object
+      properties:
+        slotId:
+          type: string
+          format: uuid
+        slotDisplayCode:
+          type: string
+          nullable: true
+        amountAllocated:
+          type: number
+          format: double
+        monthsCovered:
+          type: integer
+          format: int32
+        clearedMonthIndices:
+          type: array
+          items:
+            type: integer
+            format: int32
+          nullable: true
+      additionalProperties: false
+    CustomerSlotPaymentSelectionDto:
+      required:
+      - instalmentsToPayCount
+      - slotId
+      type: object
+      properties:
+        slotId:
+          type: string
+          format: uuid
+        instalmentsToPayCount:
+          maximum: 120
+          minimum: 1
+          type: integer
+          format: int32
+        expectedStartingMonthIndex:
+          type: integer
+          format: int32
+          nullable: true
+      additionalProperties: false
     CustomerSummaryDto:
       type: object
       properties:
@@ -1739,6 +3474,39 @@ components:
           nullable: true
         isProfileComplete:
           type: boolean
+      additionalProperties: false
+    CustomerWinnerBenefitDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        drawId:
+          type: string
+          format: uuid
+        slotId:
+          type: string
+          format: uuid
+        slotDisplayCode:
+          type: string
+          nullable: true
+        chituBenefitValue:
+          type: number
+          format: double
+        advanceExcessAmount:
+          type: number
+          format: double
+        redemptionType:
+          $ref: '#/components/schemas/ChituRedemptionType'
+        status:
+          $ref: '#/components/schemas/BenefitStatus'
+        claimedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+        claimRemarks:
+          type: string
+          nullable: true
       additionalProperties: false
     EnrolmentPreviewRequest:
       required:
@@ -1803,6 +3571,12 @@ components:
         requiresRepeatJoinConfirmation:
           type: boolean
       additionalProperties: false
+    InstalmentStatus:
+      enum:
+      - Pending
+      - Paid
+      - Overdue
+      type: string
     JewelleryCalculationPreviewResponse:
       type: object
       properties:
@@ -1936,6 +3710,12 @@ components:
         isConfigured:
           type: boolean
       additionalProperties: false
+    PlanStatus:
+      enum:
+      - Draft
+      - Active
+      - Closed
+      type: string
     ProblemDetails:
       type: object
       properties:
@@ -2152,6 +3932,9 @@ tags:
 - name: Customer Authentication
   description: Customer onboarding, phone & email verification, profile completion,
     session management, and logout.
+- name: Customer Chitu Plans
+  description: Browse active and available Chitu plans, preview join requirements,
+    purchase slots, view My Plans portfolio, and pay for existing slots.
 - name: Customer Jewellery Enrolments
   description: Preview and confirm jewellery plan enrolments (My Investments), and
     view contribution history.
@@ -2166,5 +3949,8 @@ tags:
 - name: Customer Profile & Contacts
   description: Authenticated customer profile, secondary contact verification, and
     self-service account closure.
+- name: Customer Unified Payments
+  description: Unified financial transaction history and receipts across both Chitu
+    savings plans and Jewellery gold accumulation plans.
 - name: System
   description: Health check and database connectivity verification.

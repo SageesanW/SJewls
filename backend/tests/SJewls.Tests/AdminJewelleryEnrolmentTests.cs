@@ -37,6 +37,39 @@ public class AdminJewelleryEnrolmentTests
                 IsFresh = true
             });
         }
+
+        public Task<CustomerGoldRateResponse> GetCustomerRateAsync(Guid? branchId, CancellationToken ct = default)
+        {
+            return Task.FromResult(new CustomerGoldRateResponse
+            {
+                Rate24kPerGram = MockRate,
+                Rate22kPerGram = Math.Round(MockRate * 22m / 24m, 2),
+                Currency = "LKR",
+                Source = "GoldAPI.io (Mock)",
+                IsOverridden = false,
+                EffectiveFromUtc = DateTimeOffset.UtcNow
+            });
+        }
+
+        public Task<GoldRateOverviewDto> GetOverviewAsync(Guid? branchId, CancellationToken ct = default)
+        {
+            return Task.FromResult(new GoldRateOverviewDto());
+        }
+
+        public Task<GoldRateOverviewDto> SetOverrideAsync(SetGoldRateOverrideRequest request, Guid staffId, CancellationToken ct = default)
+        {
+            return Task.FromResult(new GoldRateOverviewDto());
+        }
+
+        public Task<GoldRateOverviewDto> ToggleOverrideAsync(ToggleGoldRateOverrideRequest request, Guid staffId, CancellationToken ct = default)
+        {
+            return Task.FromResult(new GoldRateOverviewDto());
+        }
+
+        public Task<List<GoldRateHistoryDto>> GetHistoryAsync(Guid? branchId, int limit = 50, CancellationToken ct = default)
+        {
+            return Task.FromResult(new List<GoldRateHistoryDto>());
+        }
     }
 
     private async Task<(Branch branch, Staff staff, Customer customer, JewelleryPlan plan)> SetupBranchStaffCustomerAndPlanAsync(SJewlsDbContext db)

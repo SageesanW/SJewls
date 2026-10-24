@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using SJewls.Application.DTOs;
 using SJewls.Application.Exceptions;
 using SJewls.Application.Interfaces;
+using SJewls.Domain.Entities;
 using SJewls.Infrastructure.Data;
 
 namespace SJewls.Infrastructure.Services;
@@ -21,6 +22,7 @@ public class GoldRateService : IGoldRateService
     private readonly ILogger<GoldRateService> _logger;
 
     private const string CacheKeyPrefix = "gold_rate_24k_lkr_";
+    private const string LiveApiCacheKey = "gold_rate_live_api_lkr";
 
     public GoldRateService(
         HttpClient httpClient,
@@ -44,107 +46,65 @@ public class GoldRateService : IGoldRateService
             return cachedRate;
         }
 
-        var apiKey = _config["GoldApi:ApiKey"]?.Trim();
-        var baseUrl = (_config["GoldApi:BaseUrl"] ?? "https://www.goldapi.io/api").TrimEnd('/');
         var cacheMinutes = int.TryParse(_config["GoldApi:CacheDurationMinutes"], out var cm) ? cm : 15;
         var maxStalenessMinutes = int.TryParse(_config["GoldApi:MaxStalenessMinutes"], out var msm) ? msm : 1440;
-        var timeoutSeconds = int.TryParse(_config["GoldApi:TimeoutSeconds"], out var ts) ? ts : 10;
 
-        ApplicableGoldRateDto? liveRate = null;
+        // 1. Check for Active Admin Manual Override (Store Policy Override takes precedence)
+        var manualOverride = await _db.GoldRateOverrides
+            .AsNoTracking()
+            .Where(o => (o.BranchId == branchId || o.BranchId == null) && o.IsEnabled && o.Rate24k > 0)
+            .OrderByDescending(o => o.BranchId != null) // Branch-specific overrides take priority over global overrides
+            .ThenByDescending(o => o.UpdatedAtUtc)
+            .FirstOrDefaultAsync(ct);
 
-        // 1. Attempt live GoldAPI.io retrieval if an API key is configured
-        if (!string.IsNullOrEmpty(apiKey))
+        if (manualOverride != null && manualOverride.IsEnabled && manualOverride.Rate24k > 0)
         {
-            try
+            var overrideRate = new ApplicableGoldRateDto
             {
-                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+                RatePerGram = Math.Round(manualOverride.Rate24k, 4),
+                Currency = "LKR",
+                Source = "ManualOverride",
+                SourceTimestampUtc = manualOverride.UpdatedAtUtc ?? manualOverride.CreatedAtUtc,
+                RetrievedAtUtc = DateTimeOffset.UtcNow,
+                IsFresh = true
+            };
 
-                using var request = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/XAU/LKR");
-                request.Headers.Add("x-access-token", apiKey);
-                request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            _cache.Set(cacheKey, overrideRate, TimeSpan.FromMinutes(cacheMinutes));
+            _logger.LogInformation("Using active Admin Manual Override 24K gold rate: LKR {Rate}/g (branch {Branch}, updated {Ts:u})",
+                overrideRate.RatePerGram, manualOverride.BranchId?.ToString() ?? "Global", overrideRate.SourceTimestampUtc);
 
-                using var response = await _httpClient.SendAsync(request, cts.Token);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    var json = await response.Content.ReadAsStringAsync(cts.Token);
-                    var payload = JsonSerializer.Deserialize<GoldApiPayload>(json, new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true
-                    });
-
-                    if (payload != null)
-                    {
-                        // Strict currency, metal, and positive unit rate validations
-                        var isLkr = string.Equals(payload.Currency, "LKR", StringComparison.OrdinalIgnoreCase);
-                        var isGold = string.Equals(payload.Metal, "XAU", StringComparison.OrdinalIgnoreCase);
-                        var hasValid24kGramRate = payload.PriceGram24k.HasValue && payload.PriceGram24k.Value > 0;
-
-                        if (isLkr && isGold && hasValid24kGramRate)
-                        {
-                            var sourceTimestamp = payload.Timestamp > 0
-                                ? DateTimeOffset.FromUnixTimeSeconds(payload.Timestamp)
-                                : DateTimeOffset.UtcNow;
-
-                            var ageMinutes = (DateTimeOffset.UtcNow - sourceTimestamp).TotalMinutes;
-                            var isFresh = ageMinutes <= maxStalenessMinutes;
-
-                            if (isFresh)
-                            {
-                                liveRate = new ApplicableGoldRateDto
-                                {
-                                    RatePerGram = Math.Round(payload.PriceGram24k!.Value, 4),
-                                    Currency = "LKR",
-                                    Source = "GoldAPI.io",
-                                    SourceTimestampUtc = sourceTimestamp,
-                                    RetrievedAtUtc = DateTimeOffset.UtcNow,
-                                    IsFresh = true
-                                };
-
-                                _cache.Set(cacheKey, liveRate, TimeSpan.FromMinutes(cacheMinutes));
-                                _logger.LogInformation("Fetched fresh 24K gold rate from GoldAPI.io: LKR {Rate}/g (timestamp {Ts:u})",
-                                    liveRate.RatePerGram, liveRate.SourceTimestampUtc);
-
-                                return liveRate;
-                            }
-                            else
-                            {
-                                _logger.LogWarning("GoldAPI.io rate timestamp is stale ({Age:F1} mins old). Proceeding to manual fallback.", ageMinutes);
-                            }
-                        }
-                        else
-                        {
-                            _logger.LogWarning("GoldAPI.io response validation failed: isLkr={IsLkr}, isGold={IsGold}, price_gram_24k={Price24k}",
-                                isLkr, isGold, payload.PriceGram24k);
-                        }
-                    }
-                }
-                else
-                {
-                    _logger.LogWarning("GoldAPI.io returned HTTP {StatusCode}. Proceeding to branch manual rate fallback.", response.StatusCode);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to retrieve gold rate from GoldAPI.io. Proceeding to branch manual rate fallback.");
-            }
-        }
-        else
-        {
-            _logger.LogDebug("GoldAPI.io API key is not configured. Falling back to audited branch manual rates.");
+            return overrideRate;
         }
 
-        // 2. Fallback to audited branch manual rate recorded in database
+        // 2. Attempt live GoldAPI.io market retrieval if override is not active
+        var liveApi = await FetchLiveGoldApiRateAsync(ct);
+        if (liveApi.IsAvailable && liveApi.Rate24k.HasValue && liveApi.Rate24k.Value > 0)
+        {
+            var liveRate = new ApplicableGoldRateDto
+            {
+                RatePerGram = Math.Round(liveApi.Rate24k.Value, 4),
+                Currency = "LKR",
+                Source = "GoldAPI.io",
+                SourceTimestampUtc = liveApi.TimestampUtc ?? DateTimeOffset.UtcNow,
+                RetrievedAtUtc = DateTimeOffset.UtcNow,
+                IsFresh = true
+            };
+
+            _cache.Set(cacheKey, liveRate, TimeSpan.FromMinutes(cacheMinutes));
+            return liveRate;
+        }
+
+        // 3. Fallback to audited branch manual rate recorded in database
         var manualRate = await _db.GoldRates
+            .AsNoTracking()
             .Where(r => r.BranchId == branchId && r.Karat == 24 && r.EffectiveFromUtc <= DateTimeOffset.UtcNow)
             .OrderByDescending(r => r.EffectiveFromUtc)
             .FirstOrDefaultAsync(ct);
 
         if (manualRate == null || manualRate.RatePerGram <= 0)
         {
-            // If branch has no specific rate, check system-wide latest 24K rate
             manualRate = await _db.GoldRates
+                .AsNoTracking()
                 .Where(r => r.Karat == 24 && r.EffectiveFromUtc <= DateTimeOffset.UtcNow)
                 .OrderByDescending(r => r.EffectiveFromUtc)
                 .FirstOrDefaultAsync(ct);
@@ -166,7 +126,7 @@ public class GoldRateService : IGoldRateService
                 "A fresh manual gold rate must be recorded before creating customer quotes.");
         }
 
-        var result = new ApplicableGoldRateDto
+        var fallbackRate = new ApplicableGoldRateDto
         {
             RatePerGram = Math.Round(manualRate.RatePerGram, 4),
             Currency = "LKR",
@@ -176,12 +136,439 @@ public class GoldRateService : IGoldRateService
             IsFresh = true
         };
 
-        // Cache manual rate for a shorter period (e.g. 5 minutes)
-        _cache.Set(cacheKey, result, TimeSpan.FromMinutes(Math.Min(5, cacheMinutes)));
-        _logger.LogInformation("Using audited manual 24K gold rate: LKR {Rate}/g (source {Source}, effective {Ts:u})",
-            result.RatePerGram, result.Source, result.SourceTimestampUtc);
+        _cache.Set(cacheKey, fallbackRate, TimeSpan.FromMinutes(Math.Min(5, cacheMinutes)));
+        return fallbackRate;
+    }
 
-        return result;
+    public async Task<CustomerGoldRateResponse> GetCustomerRateAsync(Guid? branchId, CancellationToken ct = default)
+    {
+        var targetBranchId = branchId;
+        string? branchName = null;
+
+        if (targetBranchId.HasValue)
+        {
+            var branch = await _db.Branches.AsNoTracking().FirstOrDefaultAsync(b => b.Id == targetBranchId.Value, ct);
+            branchName = branch?.Name;
+        }
+
+        // 1. Check for active manual override
+        var customerOverrideQuery = _db.GoldRateOverrides
+            .AsNoTracking()
+            .Where(o => o.IsEnabled && o.Rate24k > 0);
+
+        if (targetBranchId.HasValue)
+        {
+            customerOverrideQuery = customerOverrideQuery.Where(o => o.BranchId == targetBranchId.Value || o.BranchId == null);
+        }
+
+        var manualOverride = await customerOverrideQuery
+            .OrderByDescending(o => o.BranchId != null)
+            .ThenByDescending(o => o.UpdatedAtUtc)
+            .FirstOrDefaultAsync(ct);
+
+        if (manualOverride != null && manualOverride.IsEnabled && manualOverride.Rate24k > 0)
+        {
+            return new CustomerGoldRateResponse
+            {
+                Rate24kPerGram = Math.Round(manualOverride.Rate24k, 2),
+                Rate22kPerGram = Math.Round(manualOverride.Rate22k > 0 ? manualOverride.Rate22k : (manualOverride.Rate24k * 22m / 24m), 2),
+                Currency = "LKR",
+                Source = "ManualOverride",
+                IsOverridden = true,
+                EffectiveFromUtc = manualOverride.UpdatedAtUtc ?? manualOverride.CreatedAtUtc,
+                BranchId = targetBranchId,
+                BranchName = branchName
+            };
+        }
+
+        // 2. Check live market API
+        var liveApi = await FetchLiveGoldApiRateAsync(ct);
+        if (liveApi.IsAvailable && liveApi.Rate24k.HasValue && liveApi.Rate24k.Value > 0)
+        {
+            var r24 = liveApi.Rate24k.Value;
+            var r22 = liveApi.Rate22k.HasValue && liveApi.Rate22k.Value > 0 ? liveApi.Rate22k.Value : (r24 * 22m / 24m);
+            return new CustomerGoldRateResponse
+            {
+                Rate24kPerGram = Math.Round(r24, 2),
+                Rate22kPerGram = Math.Round(r22, 2),
+                Currency = "LKR",
+                Source = "GoldAPI.io",
+                IsOverridden = false,
+                EffectiveFromUtc = liveApi.TimestampUtc ?? DateTimeOffset.UtcNow,
+                BranchId = targetBranchId,
+                BranchName = branchName
+            };
+        }
+
+        // 3. Fallback to latest database recorded rates
+        var r24Db = await _db.GoldRates.AsNoTracking()
+            .Where(r => (targetBranchId == null || r.BranchId == targetBranchId) && r.Karat == 24)
+            .OrderByDescending(r => r.EffectiveFromUtc)
+            .FirstOrDefaultAsync(ct);
+
+        var r22Db = await _db.GoldRates.AsNoTracking()
+            .Where(r => (targetBranchId == null || r.BranchId == targetBranchId) && r.Karat == 22)
+            .OrderByDescending(r => r.EffectiveFromUtc)
+            .FirstOrDefaultAsync(ct);
+
+        var final24k = r24Db?.RatePerGram ?? 33500m;
+        var final22k = r22Db?.RatePerGram ?? (final24k * 22m / 24m);
+
+        return new CustomerGoldRateResponse
+        {
+            Rate24kPerGram = Math.Round(final24k, 2),
+            Rate22kPerGram = Math.Round(final22k, 2),
+            Currency = "LKR",
+            Source = "BranchManual",
+            IsOverridden = false,
+            EffectiveFromUtc = r24Db?.EffectiveFromUtc ?? DateTimeOffset.UtcNow,
+            BranchId = targetBranchId,
+            BranchName = branchName
+        };
+    }
+
+    public async Task<GoldRateOverviewDto> GetOverviewAsync(Guid? branchId, CancellationToken ct = default)
+    {
+        // 1. Live API Rate
+        var liveApi = await FetchLiveGoldApiRateAsync(ct);
+
+        // 2. Active Override for target branch (or global)
+        var overrideQuery = _db.GoldRateOverrides
+            .Include(o => o.Branch)
+            .Include(o => o.UpdatedByStaff)
+            .AsNoTracking();
+
+        if (branchId.HasValue)
+        {
+            overrideQuery = overrideQuery.Where(o => o.BranchId == branchId.Value || o.BranchId == null);
+        }
+        else
+        {
+            overrideQuery = overrideQuery.Where(o => o.BranchId == null);
+        }
+
+        var manualOverride = await overrideQuery
+            .OrderByDescending(o => o.BranchId != null)
+            .ThenByDescending(o => o.UpdatedAtUtc)
+            .FirstOrDefaultAsync(ct);
+
+        // 3. All Branches summary
+        var branches = await _db.Branches.AsNoTracking().OrderBy(b => b.Name).ToListAsync(ct);
+        var allOverrides = await _db.GoldRateOverrides.AsNoTracking().ToListAsync(ct);
+
+        var branchSummaries = new List<BranchGoldRateSummaryDto>();
+        foreach (var b in branches)
+        {
+            var bOverride = allOverrides.FirstOrDefault(o => o.BranchId == b.Id);
+            var globalOverride = allOverrides.FirstOrDefault(o => o.BranchId == null);
+
+            var active = bOverride != null && bOverride.IsEnabled ? bOverride :
+                         globalOverride != null && globalOverride.IsEnabled ? globalOverride : null;
+
+            decimal b24k = active?.Rate24k ?? liveApi.Rate24k ?? 33500m;
+            decimal b22k = active?.Rate22k ?? liveApi.Rate22k ?? (b24k * 22m / 24m);
+
+            branchSummaries.Add(new BranchGoldRateSummaryDto
+            {
+                Id = b.Id,
+                Name = b.Name,
+                Code = b.Code,
+                City = b.City,
+                Rate24k = Math.Round(b24k, 2),
+                Rate22k = Math.Round(b22k, 2),
+                HasCustomOverride = bOverride != null,
+                IsOverrideEnabled = active != null && active.IsEnabled
+            });
+        }
+
+        // Determine Effective Rate
+        var effective = await GetCustomerRateAsync(branchId, ct);
+
+        return new GoldRateOverviewDto
+        {
+            EffectiveRate = new EffectiveGoldRateDetailDto
+            {
+                Rate24k = effective.Rate24kPerGram,
+                Rate22k = effective.Rate22kPerGram,
+                Currency = effective.Currency,
+                ActiveSource = effective.Source,
+                IsOverridden = effective.IsOverridden,
+                EffectiveFromUtc = effective.EffectiveFromUtc,
+                BranchId = effective.BranchId,
+                BranchName = effective.BranchName
+            },
+            LiveApiRate = liveApi,
+            ManualOverride = manualOverride == null ? null : new ManualOverrideDetailDto
+            {
+                Id = manualOverride.Id,
+                BranchId = manualOverride.BranchId,
+                BranchName = manualOverride.Branch?.Name ?? "Global (All Branches)",
+                Rate24k = manualOverride.Rate24k,
+                Rate22k = manualOverride.Rate22k,
+                IsEnabled = manualOverride.IsEnabled,
+                Reason = manualOverride.Reason,
+                UpdatedByStaffId = manualOverride.UpdatedByStaffId,
+                UpdatedByStaffName = manualOverride.UpdatedByStaff?.FullName ?? "Staff Member",
+                UpdatedAtUtc = manualOverride.UpdatedAtUtc ?? manualOverride.CreatedAtUtc
+            },
+            Branches = branchSummaries
+        };
+    }
+
+    public async Task<GoldRateOverviewDto> SetOverrideAsync(SetGoldRateOverrideRequest request, Guid staffId, CancellationToken ct = default)
+    {
+        if (request.Rate24k <= 0)
+        {
+            throw new ArgumentException("24K gold rate must be greater than zero.");
+        }
+
+        var rate22k = request.Rate22k > 0 ? request.Rate22k : Math.Round(request.Rate24k * 22m / 24m, 4);
+
+        // Find existing override record for this branch scope
+        var existing = await _db.GoldRateOverrides
+            .FirstOrDefaultAsync(o => o.BranchId == request.BranchId, ct);
+
+        var now = DateTimeOffset.UtcNow;
+
+        if (existing != null)
+        {
+            existing.Rate24k = request.Rate24k;
+            existing.Rate22k = rate22k;
+            existing.IsEnabled = request.IsEnabled;
+            existing.Reason = request.Reason;
+            existing.UpdatedByStaffId = staffId;
+            existing.UpdatedAtUtc = now;
+        }
+        else
+        {
+            existing = new GoldRateOverride
+            {
+                Id = Guid.NewGuid(),
+                BranchId = request.BranchId,
+                Rate24k = request.Rate24k,
+                Rate22k = rate22k,
+                IsEnabled = request.IsEnabled,
+                Reason = request.Reason,
+                UpdatedByStaffId = staffId,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now
+            };
+            _db.GoldRateOverrides.Add(existing);
+        }
+
+        // Also record in historical GoldRates table for full audit continuity
+        var targetBranches = new List<Guid>();
+        if (request.BranchId.HasValue)
+        {
+            targetBranches.Add(request.BranchId.Value);
+        }
+        else
+        {
+            targetBranches = await _db.Branches.Select(b => b.Id).ToListAsync(ct);
+        }
+
+        foreach (var bId in targetBranches)
+        {
+            _db.GoldRates.Add(new GoldRate
+            {
+                BranchId = bId,
+                Karat = 24,
+                RatePerGram = request.Rate24k,
+                EffectiveFromUtc = now,
+                RecordedByStaffId = staffId,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now
+            });
+
+            _db.GoldRates.Add(new GoldRate
+            {
+                BranchId = bId,
+                Karat = 22,
+                RatePerGram = rate22k,
+                EffectiveFromUtc = now,
+                RecordedByStaffId = staffId,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now
+            });
+
+            // Evict in-memory cache for this branch
+            _cache.Remove($"{CacheKeyPrefix}{bId}");
+        }
+
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation("Staff {StaffId} set manual gold rate override: 24K={R24}, 22K={R22}, Enabled={Enabled}, Scope={Scope}",
+            staffId, request.Rate24k, rate22k, request.IsEnabled, request.BranchId?.ToString() ?? "Global");
+
+        return await GetOverviewAsync(request.BranchId, ct);
+    }
+
+    public async Task<GoldRateOverviewDto> ToggleOverrideAsync(ToggleGoldRateOverrideRequest request, Guid staffId, CancellationToken ct = default)
+    {
+        var existing = await _db.GoldRateOverrides
+            .FirstOrDefaultAsync(o => o.BranchId == request.BranchId, ct);
+
+        var now = DateTimeOffset.UtcNow;
+
+        if (existing == null)
+        {
+            existing = new GoldRateOverride
+            {
+                Id = Guid.NewGuid(),
+                BranchId = request.BranchId,
+                Rate24k = 33500m,
+                Rate22k = 30700m,
+                IsEnabled = request.IsEnabled,
+                Reason = "Toggled via Gold Rate Control Panel",
+                UpdatedByStaffId = staffId,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now
+            };
+            _db.GoldRateOverrides.Add(existing);
+        }
+        else
+        {
+            existing.IsEnabled = request.IsEnabled;
+            existing.UpdatedByStaffId = staffId;
+            existing.UpdatedAtUtc = now;
+        }
+
+        // Invalidate cache
+        if (request.BranchId.HasValue)
+        {
+            _cache.Remove($"{CacheKeyPrefix}{request.BranchId.Value}");
+        }
+        else
+        {
+            var branchIds = await _db.Branches.Select(b => b.Id).ToListAsync(ct);
+            foreach (var bId in branchIds)
+            {
+                _cache.Remove($"{CacheKeyPrefix}{bId}");
+            }
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return await GetOverviewAsync(request.BranchId, ct);
+    }
+
+    public async Task<List<GoldRateHistoryDto>> GetHistoryAsync(Guid? branchId, int limit = 50, CancellationToken ct = default)
+    {
+        var query = _db.GoldRates
+            .Include(r => r.Branch)
+            .Include(r => r.RecordedByStaff)
+            .AsNoTracking();
+
+        if (branchId.HasValue)
+        {
+            query = query.Where(r => r.BranchId == branchId.Value);
+        }
+
+        var list = await query
+            .OrderByDescending(r => r.EffectiveFromUtc)
+            .Take(limit)
+            .Select(r => new GoldRateHistoryDto
+            {
+                Id = r.Id,
+                BranchId = r.BranchId,
+                BranchName = r.Branch != null ? r.Branch.Name : "Unknown",
+                Karat = r.Karat,
+                RatePerGram = Math.Round(r.RatePerGram, 2),
+                Source = "BranchManual",
+                EffectiveFromUtc = r.EffectiveFromUtc,
+                RecordedByStaffId = r.RecordedByStaffId,
+                RecordedByStaffName = r.RecordedByStaff != null ? r.RecordedByStaff.FullName : "System Admin",
+                Remarks = $"Audited {r.Karat}K rate"
+            })
+            .ToListAsync(ct);
+
+        return list;
+    }
+
+    private async Task<LiveApiGoldRateDetailDto> FetchLiveGoldApiRateAsync(CancellationToken ct)
+    {
+        if (_cache.TryGetValue(LiveApiCacheKey, out LiveApiGoldRateDetailDto? cached) && cached != null)
+        {
+            return cached;
+        }
+
+        var apiKey = _config["GoldApi:ApiKey"]?.Trim();
+        var baseUrl = (_config["GoldApi:BaseUrl"] ?? "https://www.goldapi.io/api").TrimEnd('/');
+        var timeoutSeconds = int.TryParse(_config["GoldApi:TimeoutSeconds"], out var ts) ? ts : 10;
+
+        if (string.IsNullOrEmpty(apiKey))
+        {
+            return new LiveApiGoldRateDetailDto
+            {
+                IsConfigured = false,
+                IsAvailable = false,
+                StatusMessage = "GoldAPI.io API key is not configured in backend settings."
+            };
+        }
+
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/XAU/LKR");
+            request.Headers.Add("x-access-token", apiKey);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+            using var response = await _httpClient.SendAsync(request, cts.Token);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync(cts.Token);
+                var payload = JsonSerializer.Deserialize<GoldApiPayload>(json, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                if (payload != null && payload.PriceGram24k.HasValue && payload.PriceGram24k.Value > 0)
+                {
+                    var r24 = payload.PriceGram24k.Value;
+                    var r22 = payload.PriceGram22k.HasValue && payload.PriceGram22k.Value > 0
+                        ? payload.PriceGram22k.Value
+                        : (r24 * 22m / 24m);
+
+                    var timestamp = payload.Timestamp > 0
+                        ? DateTimeOffset.FromUnixTimeSeconds(payload.Timestamp)
+                        : DateTimeOffset.UtcNow;
+
+                    var liveDetail = new LiveApiGoldRateDetailDto
+                    {
+                        Rate24k = Math.Round(r24, 2),
+                        Rate22k = Math.Round(r22, 2),
+                        Currency = "LKR",
+                        Provider = "GoldAPI.io",
+                        IsConfigured = true,
+                        IsAvailable = true,
+                        TimestampUtc = timestamp,
+                        StatusMessage = "Live feed active from GoldAPI.io"
+                    };
+
+                    _cache.Set(LiveApiCacheKey, liveDetail, TimeSpan.FromMinutes(15));
+                    return liveDetail;
+                }
+            }
+
+            return new LiveApiGoldRateDetailDto
+            {
+                IsConfigured = true,
+                IsAvailable = false,
+                StatusMessage = $"GoldAPI.io returned HTTP {response.StatusCode}."
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to connect to GoldAPI.io.");
+            return new LiveApiGoldRateDetailDto
+            {
+                IsConfigured = true,
+                IsAvailable = false,
+                StatusMessage = $"Connection failed: {ex.Message}"
+            };
+        }
     }
 
     private class GoldApiPayload

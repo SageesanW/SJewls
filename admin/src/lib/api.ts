@@ -20,6 +20,12 @@ import {
   ChituRosterQueryParameters,
   ChituRosterResponse,
 } from "../types/chitu";
+import {
+  GoldRateOverview,
+  SetGoldRateOverrideRequest,
+  ToggleGoldRateOverrideRequest,
+  GoldRateHistoryItem,
+} from "../types/goldRate";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/+$/, "");
 
@@ -565,6 +571,36 @@ export const adminApi = {
     if (query?.pageSize) qs.append("pageSize", query.pageSize.toString());
     const q = qs.toString();
     return fetchWithAuth<ChituRosterResponse>(`/api/v1/admin/chitu-plans/${planId}/roster${q ? `?${q}` : ""}`);
+  },
+
+  // ==========================================
+  // Gold Rate Management APIs
+  // ==========================================
+  async getGoldRateOverview(branchId?: string): Promise<GoldRateOverview> {
+    const qs = branchId ? `?branchId=${encodeURIComponent(branchId)}` : "";
+    return fetchWithAuth<GoldRateOverview>(`/api/v1/admin/gold-rates/overview${qs}`);
+  },
+
+  async setGoldRateOverride(data: SetGoldRateOverrideRequest): Promise<GoldRateOverview> {
+    return fetchWithAuth<GoldRateOverview>("/api/v1/admin/gold-rates/override", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async toggleGoldRateOverride(data: ToggleGoldRateOverrideRequest): Promise<GoldRateOverview> {
+    return fetchWithAuth<GoldRateOverview>("/api/v1/admin/gold-rates/override/toggle", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async getGoldRateHistory(branchId?: string, limit: number = 50): Promise<GoldRateHistoryItem[]> {
+    const params = new URLSearchParams();
+    if (branchId) params.append("branchId", branchId);
+    if (limit) params.append("limit", limit.toString());
+    const qs = params.toString();
+    return fetchWithAuth<GoldRateHistoryItem[]>(`/api/v1/admin/gold-rates/history${qs ? `?${qs}` : ""}`);
   },
 };
 

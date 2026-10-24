@@ -3,7 +3,8 @@ info:
   title: SJewls Admin & Staff Portal API
   description: API endpoints for the SJewls Admin Web Portal — Staff Authentication,
     Password Recovery, Staff User Management, Customer Management with Full Unmasked
-    NIC, and Branch Statistics.
+    NIC, Store Branch Management, Jewellery Category & Plan Management, Jewellery
+    Enrolment Lifecycle, and Chitu Monthly Lucky Draw Management.
   version: v1
 servers:
 - url: http://localhost:5230
@@ -53,6 +54,8 @@ paths:
                 $ref: '#/components/schemas/StaffLogoutResponse'
         '401':
           description: Unauthorized
+      security:
+      - Bearer: []
   /api/v1/admin/auth/me:
     get:
       tags:
@@ -70,6 +73,8 @@ paths:
                 $ref: '#/components/schemas/StaffUserDto'
         '401':
           description: Unauthorized
+      security:
+      - Bearer: []
   /api/v1/admin/auth/forgot-password:
     post:
       tags:
@@ -146,6 +151,8 @@ paths:
                   $ref: '#/components/schemas/BranchDto'
         '401':
           description: Unauthorized
+      security:
+      - Bearer: []
     post:
       tags:
       - Admin Branches
@@ -174,6 +181,8 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
   /api/v1/admin/branches/{id}:
     get:
       tags:
@@ -201,6 +210,8 @@ paths:
           description: Not Found
         '401':
           description: Unauthorized
+      security:
+      - Bearer: []
     put:
       tags:
       - Admin Branches
@@ -237,6 +248,8 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
     delete:
       tags:
       - Admin Branches
@@ -263,6 +276,8 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
   /api/v1/admin/branches/{id}/status:
     patch:
       tags:
@@ -300,6 +315,472 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
+  /api/v1/admin/chitu-plans:
+    get:
+      tags:
+      - Admin Chitu Plans
+      summary: List Chitu Plans with Database-Derived Live Card Metrics
+      description: Retrieves active, inactive, or all Chitu plans with real-time slot
+        payment coverage and overdue raffle indicators.
+      operationId: AdminGetChituPlans
+      parameters:
+      - name: branchId
+        in: query
+        style: form
+        schema:
+          type: string
+          format: uuid
+      - name: search
+        in: query
+        style: form
+        schema:
+          type: string
+      - name: status
+        in: query
+        style: form
+        schema:
+          type: string
+      - name: redemptionType
+        in: query
+        style: form
+        schema:
+          type: integer
+          format: int32
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChituPlanListResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+      security:
+      - Bearer: []
+    post:
+      tags:
+      - Admin Chitu Plans
+      summary: Create a New Chitu Plan
+      description: Creates a new Cash or Gold Chitu savings plan with scheduled raffle
+        rounds and calculated end date.
+      operationId: AdminCreateChituPlan
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateChituPlanRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChituPlanCardDto'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+      security:
+      - Bearer: []
+  /api/v1/admin/chitu-plans/{id}:
+    get:
+      tags:
+      - Admin Chitu Plans
+      summary: Get Detailed Chitu Plan Information and Schedule
+      description: Fetches plan details including the full raffle round schedule and
+        winner history.
+      operationId: AdminGetChituPlanById
+      parameters:
+      - name: id
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChituPlanDetailDto'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+      security:
+      - Bearer: []
+    put:
+      tags:
+      - Admin Chitu Plans
+      summary: Update Chitu Plan Descriptive Fields
+      description: Allows safe descriptive updates to Chitu plan name, description,
+        or status.
+      operationId: AdminUpdateChituPlan
+      parameters:
+      - name: id
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateChituPlanRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChituPlanCardDto'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+      security:
+      - Bearer: []
+  /api/v1/admin/chitu-plans/preview-assignment:
+    post:
+      tags:
+      - Admin Chitu Plans
+      summary: Preview Slot Assignment and Required Initial Payment
+      description: Calculates next sequential slot numbers, required round coverage,
+        and prepayment breakdowns before confirming assignment.
+      operationId: AdminPreviewChituSlotAssignment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChituSlotAssignmentPreviewRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChituSlotAssignmentPreviewResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+      security:
+      - Bearer: []
+  /api/v1/admin/chitu-plans/assign-slots:
+    post:
+      tags:
+      - Admin Chitu Plans
+      summary: Assign Chitu Slots with Atomic Initial Payment
+      description: Atomically creates sequentially numbered slots, marks initial scheduled
+        instalments as paid, and posts confirmed payment to the ledger.
+      operationId: AdminAssignChituSlots
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignChituSlotsRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssignChituSlotsResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+      security:
+      - Bearer: []
+  /api/v1/admin/chitu-plans/{id}/payable-slots/{customerId}:
+    get:
+      tags:
+      - Admin Chitu Plans
+      summary: Get Customer's Payable Slots in a Chitu Plan
+      description: Retrieves active slots owned by the customer with next unpaid instalments
+        and confirmed paid totals.
+      operationId: AdminGetCustomerPayableSlots
+      parameters:
+      - name: id
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      - name: customerId
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerPayableSlotsResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+      security:
+      - Bearer: []
+  /api/v1/admin/chitu-plans/preview-payment:
+    post:
+      tags:
+      - Admin Chitu Plans
+      summary: Preview Payment Allocation Across Selected Slots
+      description: Applies oldest-unpaid-first allocation per slot and verifies whole
+        multiple amounts before confirmation.
+      operationId: AdminPreviewChituPayment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChituPaymentPreviewRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChituPaymentPreviewResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+      security:
+      - Bearer: []
+  /api/v1/admin/chitu-plans/record-payment:
+    post:
+      tags:
+      - Admin Chitu Plans
+      summary: Record In-Store Chitu Instalment Payment
+      description: Atomically records confirmed cash, card, or bank transfer payments
+        and posts allocations to oldest unpaid instalments.
+      operationId: AdminRecordChituPayment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordChituPaymentRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordChituPaymentResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+      security:
+      - Bearer: []
+  /api/v1/admin/chitu-plans/{id}/raffles/{roundIndex}/eligible-slots:
+    get:
+      tags:
+      - Admin Chitu Plans
+      summary: Get Slots Eligible for a Physical Raffle Round
+      description: Retrieves active slots that have fully paid every instalment from
+        Round 1 through the specified raffle round.
+      operationId: AdminGetEligibleRaffleSlots
+      parameters:
+      - name: id
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      - name: roundIndex
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: integer
+          format: int32
+      - name: search
+        in: query
+        style: form
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChituEligibleSlotsResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+      security:
+      - Bearer: []
+  /api/v1/admin/chitu-plans/{id}/raffles/{roundIndex}/record:
+    post:
+      tags:
+      - Admin Chitu Plans
+      summary: Record the Physical Raffle Draw Winner for a Round
+      description: Records the winning slot, stops future payment obligations, calculates
+        entitlement (Price x Months), and flags advance excess for admin review.
+      operationId: AdminRecordChituRaffle
+      parameters:
+      - name: id
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      - name: roundIndex
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: integer
+          format: int32
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordChituRaffleRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordChituRaffleResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+      security:
+      - Bearer: []
+  /api/v1/admin/chitu-plans/{id}/roster:
+    get:
+      tags:
+      - Admin Chitu Plans
+      summary: Get Customer and Slot Roster for a Chitu Plan
+      description: Displays slot-by-slot roster with paid/unpaid status for a selected
+        round, paid-through month, total paid, and winner status.
+      operationId: AdminGetChituRoster
+      parameters:
+      - name: id
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      - name: roundIndex
+        in: query
+        style: form
+        schema:
+          type: integer
+          format: int32
+      - name: search
+        in: query
+        style: form
+        schema:
+          type: string
+      - name: statusFilter
+        in: query
+        style: form
+        schema:
+          type: string
+      - name: paymentFilter
+        in: query
+        style: form
+        schema:
+          type: string
+      - name: page
+        in: query
+        description: 'Page number (1-based index, default: 1).'
+        style: form
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: pageSize
+        in: query
+        description: 'Number of items per page (default: 20, max: 50).'
+        style: form
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChituRosterResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+      security:
+      - Bearer: []
   /api/v1/admin/customers:
     get:
       tags:
@@ -313,12 +794,14 @@ paths:
       parameters:
       - name: page
         in: query
+        description: 'Page number (1-based index, default: 1).'
         style: form
         schema:
           type: integer
           format: int32
       - name: pageSize
         in: query
+        description: 'Number of items per page (default: 20, max: 50).'
         style: form
         schema:
           type: integer
@@ -350,6 +833,8 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
     post:
       tags:
       - Admin Customers
@@ -377,6 +862,8 @@ paths:
           description: Conflict
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
   /api/v1/admin/customers/statistics:
     get:
       tags:
@@ -409,6 +896,8 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
   /api/v1/admin/customers/metrics:
     get:
       tags:
@@ -436,6 +925,8 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
   /api/v1/admin/customers/{id}:
     get:
       tags:
@@ -467,6 +958,8 @@ paths:
           description: Forbidden
         '404':
           description: Not Found
+      security:
+      - Bearer: []
   /api/v1/admin/customers/{id}/status:
     patch:
       tags:
@@ -503,6 +996,8 @@ paths:
           description: Forbidden
         '404':
           description: Not Found
+      security:
+      - Bearer: []
   /api/v1/admin/customers/{customerId}/jewellery-enrolments:
     get:
       tags:
@@ -535,6 +1030,50 @@ paths:
           description: Forbidden
         '404':
           description: Not Found
+      security:
+      - Bearer: []
+  /api/v1/admin/gold-rates:
+    post:
+      tags:
+      - Admin Gold Rates
+      summary: Record Branch Gold Rate
+      description: Records a branch gold rate in LKR per gram for calculations and
+        customer quotes.
+      operationId: AdminRecordGoldRate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordGoldRateRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+      security:
+      - Bearer: []
+    get:
+      tags:
+      - Admin Gold Rates
+      summary: Get Recorded Gold Rates
+      operationId: AdminGetGoldRates
+      parameters:
+      - name: branchId
+        in: query
+        style: form
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Unauthorized
+      security:
+      - Bearer: []
   /api/v1/admin/jewellery-categories:
     get:
       tags:
@@ -563,6 +1102,7 @@ paths:
           format: uuid
       - name: page
         in: query
+        description: 'Page number (1-based index, default: 1).'
         style: form
         schema:
           type: integer
@@ -570,6 +1110,7 @@ paths:
           default: 1
       - name: pageSize
         in: query
+        description: 'Number of items per page (default: 20, max: 50).'
         style: form
         schema:
           type: integer
@@ -586,6 +1127,8 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
     post:
       tags:
       - Admin Jewellery Categories
@@ -614,6 +1157,8 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
   /api/v1/admin/jewellery-categories/{id}:
     get:
       tags:
@@ -643,6 +1188,8 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
     put:
       tags:
       - Admin Jewellery Categories
@@ -681,6 +1228,8 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
     delete:
       tags:
       - Admin Jewellery Categories
@@ -707,6 +1256,8 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
   /api/v1/admin/jewellery-categories/{id}/status:
     patch:
       tags:
@@ -742,6 +1293,8 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
   /api/v1/admin/jewellery-categories/upload-image:
     post:
       tags:
@@ -777,6 +1330,426 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
+  /api/v1/admin/jewellery-enrolments/preview-assignment:
+    post:
+      tags:
+      - Admin Jewellery Enrolments
+      summary: Preview Plan Assignment Eligibility and Repeat Status
+      description: Checks customer and plan eligibility, verifies repeat enrolment
+        count, and provides read-only target grams, premium, and offered durations.
+      operationId: AdminPreviewPlanAssignment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminEnrolmentPreviewRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminEnrolmentPreviewResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+      security:
+      - Bearer: []
+  /api/v1/admin/jewellery-enrolments:
+    post:
+      tags:
+      - Admin Jewellery Enrolments
+      summary: Assign Jewellery Savings Plan to Customer by Staff
+      description: Creates a new active enrolment for an authorized customer without
+        initial payment. Enforces read-only plan target grams, offered durations,
+        branch eligibility, and repeat enrolment confirmation.
+      operationId: AdminAssignJewelleryPlan
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminAssignPlanRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminCustomerEnrolmentDto'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '409':
+          description: Conflict
+      security:
+      - Bearer: []
+  /api/v1/admin/jewellery-enrolments/{enrolmentId}:
+    get:
+      tags:
+      - Admin Jewellery Enrolments
+      summary: Get Single Jewellery Enrolment Details
+      description: Retrieves detailed snapshot terms, saved and remaining grams, progress,
+        and contributions for a specific enrolment.
+      operationId: AdminGetJewelleryEnrolmentById
+      parameters:
+      - name: enrolmentId
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminCustomerEnrolmentDto'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+      security:
+      - Bearer: []
+  /api/v1/admin/jewellery-enrolments/{enrolmentId}/payments/preview:
+    post:
+      tags:
+      - Admin Jewellery Enrolments
+      summary: Preview In-Store Cash Payment Calculation
+      description: Calculates authoritative Buy Amount or Buy Gram breakdown using
+        live 24K gold rate and enrolment premium snapshot without altering database
+        state.
+      operationId: AdminPreviewInStorePayment
+      parameters:
+      - name: enrolmentId
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminRecordPaymentPreviewRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminRecordPaymentPreviewResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '409':
+          description: Conflict
+        '503':
+          description: Server Error
+      security:
+      - Bearer: []
+  /api/v1/admin/jewellery-enrolments/{enrolmentId}/payments:
+    post:
+      tags:
+      - Admin Jewellery Enrolments
+      summary: Record In-Store Cash Received for Enrolment
+      description: Authoritatively records cash received in store on today's branch
+        date. Applies live gold rate, credits gold grams atomically, updates balances,
+        and marks enrolment Completed if target is reached.
+      operationId: AdminRecordInStorePayment
+      parameters:
+      - name: enrolmentId
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminRecordPaymentRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminRecordPaymentResult'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '409':
+          description: Conflict
+      security:
+      - Bearer: []
+    get:
+      tags:
+      - Admin Jewellery Enrolments
+      summary: Get Payment History for Enrolment
+      description: Retrieves all confirmed payments and gold contributions for a specific
+        enrolment.
+      operationId: AdminGetJewelleryEnrolmentPayments
+      parameters:
+      - name: enrolmentId
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EnrolmentContributionDto'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+      security:
+      - Bearer: []
+  /api/v1/admin/jewellery-enrolments/payments:
+    get:
+      tags:
+      - Admin Jewellery Enrolments
+      summary: List Jewellery Plan Payments across permitted branches
+      description: Retrieves confirmed online, confirmed staff cash, and genuine pending
+        payments across jewellery enrolments within the staff's branch scope. Includes
+        stable instalment numbering derived from full enrolment history, pre-pagination
+        monetary and gold aggregates, branch timezone date filtering, and customer
+        navigation links.
+      operationId: AdminGetJewelleryPaymentsPaged
+      parameters:
+      - name: BranchId
+        in: query
+        style: form
+        schema:
+          type: string
+          format: uuid
+      - name: PlanId
+        in: query
+        style: form
+        schema:
+          type: string
+          format: uuid
+      - name: Status
+        in: query
+        style: form
+        schema:
+          type: string
+      - name: Search
+        in: query
+        style: form
+        schema:
+          type: string
+      - name: FromDate
+        in: query
+        style: form
+        schema:
+          type: string
+          format: date
+      - name: ToDate
+        in: query
+        style: form
+        schema:
+          type: string
+          format: date
+      - name: Page
+        in: query
+        required: true
+        style: form
+        schema:
+          type: integer
+          format: int32
+      - name: PageSize
+        in: query
+        required: true
+        style: form
+        schema:
+          type: integer
+          format: int32
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminJewelleryPaymentsPagedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+      security:
+      - Bearer: []
+  /api/v1/admin/jewellery-enrolments/incomplete:
+    get:
+      tags:
+      - Admin Jewellery Enrolments
+      summary: List Incomplete Jewellery Plan Enrolments
+      description: Lists jewellery enrolments whose agreed duration ended below target
+        gold grams without completed settlement. Includes customers who never paid,
+        calculates remaining grams and confirmed money paid, and provides reminder
+        eligibility.
+      operationId: AdminGetIncompleteJewelleryEnrolmentsPaged
+      parameters:
+      - name: BranchId
+        in: query
+        style: form
+        schema:
+          type: string
+          format: uuid
+      - name: PlanId
+        in: query
+        style: form
+        schema:
+          type: string
+          format: uuid
+      - name: Search
+        in: query
+        style: form
+        schema:
+          type: string
+      - name: Page
+        in: query
+        required: true
+        style: form
+        schema:
+          type: integer
+          format: int32
+      - name: PageSize
+        in: query
+        required: true
+        style: form
+        schema:
+          type: integer
+          format: int32
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminIncompleteEnrolmentsPagedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+      security:
+      - Bearer: []
+  /api/v1/admin/jewellery-enrolments/{enrolmentId}/reminder-context:
+    get:
+      tags:
+      - Admin Jewellery Enrolments
+      summary: Get Authorised Reminder Context for Jewellery Enrolment
+      description: Retrieves verified customer and enrolment context, inactive/incomplete
+        reminder reason, deadline, last payment date, and available notification channels
+        for staff draft review.
+      operationId: AdminGetJewelleryReminderContext
+      parameters:
+      - name: enrolmentId
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminReminderContextDto'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+      security:
+      - Bearer: []
+  /api/v1/admin/jewellery-enrolments/{enrolmentId}/send-reminder:
+    post:
+      tags:
+      - Admin Jewellery Enrolments
+      summary: Dispatch Reminder Notification for Jewellery Enrolment
+      description: Validates staff branch authorization and dispatches a draft reminder
+        notification through the selected supported channels (In-App, Email, SMS).
+        Push notifications report honestly as unsupported.
+      operationId: AdminSendJewelleryReminder
+      parameters:
+      - name: enrolmentId
+        in: path
+        required: true
+        style: simple
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminSendReminderRequest'
+        required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSendReminderResult'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+      security:
+      - Bearer: []
   /api/v1/admin/jewellery-plans:
     get:
       tags:
@@ -796,6 +1769,8 @@ paths:
           type: string
       - name: categoryId
         in: query
+        description: Optional category filter. When provided, returns only active
+          plans belonging to this category.
         style: form
         schema:
           type: string
@@ -825,6 +1800,7 @@ paths:
           format: date
       - name: page
         in: query
+        description: 'Page number (1-based index, default: 1).'
         style: form
         schema:
           type: integer
@@ -832,6 +1808,7 @@ paths:
           default: 1
       - name: pageSize
         in: query
+        description: 'Number of items per page (default: 20, max: 50).'
         style: form
         schema:
           type: integer
@@ -848,6 +1825,8 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
     post:
       tags:
       - Admin Jewellery Plans
@@ -877,6 +1856,8 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
   /api/v1/admin/jewellery-plans/{id}:
     get:
       tags:
@@ -918,6 +1899,8 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
     put:
       tags:
       - Admin Jewellery Plans
@@ -957,6 +1940,8 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
   /api/v1/admin/jewellery-plans/{id}/status:
     patch:
       tags:
@@ -997,6 +1982,8 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
   /api/v1/admin/jewellery-plans/{id}/customers:
     get:
       tags:
@@ -1027,6 +2014,7 @@ paths:
           type: string
       - name: page
         in: query
+        description: 'Page number (1-based index, default: 1).'
         style: form
         schema:
           type: integer
@@ -1034,6 +2022,7 @@ paths:
           default: 1
       - name: pageSize
         in: query
+        description: 'Number of items per page (default: 20, max: 50).'
         style: form
         schema:
           type: integer
@@ -1052,6 +2041,8 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
   /api/v1/admin/jewellery-plans/upload-image:
     post:
       tags:
@@ -1087,6 +2078,8 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
   /api/v1/admin/jewellery-plans/financial-quote:
     post:
       tags:
@@ -1118,6 +2111,8 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
   /api/v1/admin/users:
     get:
       tags:
@@ -1140,6 +2135,8 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
     post:
       tags:
       - Admin Users
@@ -1167,6 +2164,8 @@ paths:
           description: Conflict
         '403':
           description: Forbidden
+      security:
+      - Bearer: []
   /api/v1/admin/users/{id}/status:
     patch:
       tags:
@@ -1206,6 +2205,8 @@ paths:
           description: Not Found
         '409':
           description: Conflict
+      security:
+      - Bearer: []
   /api/v1/branches:
     get:
       tags:
@@ -1232,426 +2233,30 @@ paths:
       responses:
         '200':
           description: Success
-  /api/v1/admin/gold-rates:
-    post:
-      tags:
-      - Admin Gold Rates
-      summary: Record Branch Gold Rate
-      description: Records a branch gold rate in LKR per gram for calculations and
-        customer quotes.
-      operationId: AdminRecordGoldRate
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RecordGoldRateRequest'
-        required: true
-      responses:
-        '201':
-          description: Created
-        '400':
-          description: Bad Request
-        '401':
-          description: Unauthorized
-    get:
-      tags:
-      - Admin Gold Rates
-      summary: Get Recorded Gold Rates
-      operationId: AdminGetGoldRates
-      parameters:
-      - name: branchId
-        in: query
-        style: form
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Success
-        '401':
-          description: Unauthorized
-  /api/v1/admin/jewellery-enrolments/preview-assignment:
-    post:
-      tags:
-      - Admin Jewellery Enrolments
-      summary: Preview Plan Assignment Eligibility and Repeat Status
-      description: Checks customer and plan eligibility, verifies repeat enrolment
-        count, and provides read-only target grams, premium, and offered durations.
-      operationId: AdminPreviewPlanAssignment
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AdminEnrolmentPreviewRequest'
-        required: true
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminEnrolmentPreviewResponse'
-        '400':
-          description: Bad Request
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '404':
-          description: Not Found
-  /api/v1/admin/jewellery-enrolments:
-    post:
-      tags:
-      - Admin Jewellery Enrolments
-      summary: Assign Jewellery Savings Plan to Customer by Staff
-      description: Creates a new active enrolment for an authorized customer without
-        initial payment. Enforces read-only plan target grams, offered durations,
-        branch eligibility, and repeat enrolment confirmation.
-      operationId: AdminAssignJewelleryPlan
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AdminAssignPlanRequest'
-        required: true
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminCustomerEnrolmentDto'
-        '400':
-          description: Bad Request
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '404':
-          description: Not Found
-        '409':
-          description: Conflict
-  /api/v1/admin/jewellery-enrolments/{enrolmentId}:
-    get:
-      tags:
-      - Admin Jewellery Enrolments
-      summary: Get Single Jewellery Enrolment Details
-      description: Retrieves detailed snapshot terms, saved and remaining grams, progress,
-        and contributions for a specific enrolment.
-      operationId: AdminGetJewelleryEnrolmentById
-      parameters:
-      - name: enrolmentId
-        in: path
-        required: true
-        style: simple
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminCustomerEnrolmentDto'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '404':
-          description: Not Found
-  /api/v1/admin/jewellery-enrolments/{enrolmentId}/payments/preview:
-    post:
-      tags:
-      - Admin Jewellery Enrolments
-      summary: Preview In-Store Cash Payment Calculation
-      description: Calculates authoritative Buy Amount or Buy Gram breakdown using
-        live 24K gold rate and enrolment premium snapshot without altering database
-        state.
-      operationId: AdminPreviewInStorePayment
-      parameters:
-      - name: enrolmentId
-        in: path
-        required: true
-        style: simple
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AdminRecordPaymentPreviewRequest'
-        required: true
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminRecordPaymentPreviewResponse'
-        '400':
-          description: Bad Request
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '404':
-          description: Not Found
-        '409':
-          description: Conflict
-  /api/v1/admin/jewellery-enrolments/{enrolmentId}/payments:
-    post:
-      tags:
-      - Admin Jewellery Enrolments
-      summary: Record In-Store Cash Received for Enrolment
-      description: Authoritatively records cash received in store on today's branch
-        date. Applies live gold rate, credits gold grams atomically, updates balances,
-        and marks enrolment Completed if target is reached.
-      operationId: AdminRecordInStorePayment
-      parameters:
-      - name: enrolmentId
-        in: path
-        required: true
-        style: simple
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AdminRecordPaymentRequest'
-        required: true
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminRecordPaymentResult'
-        '400':
-          description: Bad Request
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '404':
-          description: Not Found
-        '409':
-          description: Conflict
-    get:
-      tags:
-      - Admin Jewellery Enrolments
-      summary: Get Payment History for Enrolment
-      description: Retrieves all confirmed payments and gold contributions for a specific
-        enrolment.
-      operationId: AdminGetJewelleryEnrolmentPayments
-      parameters:
-      - name: enrolmentId
-        in: path
-        required: true
-        style: simple
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/EnrolmentContributionDto'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '404':
-          description: Not Found
-  /api/v1/admin/jewellery-enrolments/payments:
-    get:
-      tags:
-      - Admin Jewellery Enrolments
-      summary: List Jewellery Plan Payments across permitted branches
-      description: Retrieves confirmed online, confirmed staff cash, and genuine pending payments across jewellery enrolments within the staff's branch scope. Includes stable instalment numbering derived from full enrolment history, pre-pagination monetary and gold aggregates, branch timezone date filtering, and customer navigation links.
-      operationId: AdminGetJewelleryPaymentsPaged
-      parameters:
-      - name: branchId
-        in: query
-        required: false
-        schema:
-          type: string
-          format: uuid
-      - name: planId
-        in: query
-        required: false
-        schema:
-          type: string
-          format: uuid
-      - name: status
-        in: query
-        required: false
-        schema:
-          type: string
-          enum: [All, Successful, Pending]
-      - name: search
-        in: query
-        required: false
-        schema:
-          type: string
-      - name: fromDate
-        in: query
-        required: false
-        schema:
-          type: string
-          format: date
-      - name: toDate
-        in: query
-        required: false
-        schema:
-          type: string
-          format: date
-      - name: page
-        in: query
-        required: false
-        schema:
-          type: integer
-          default: 1
-      - name: pageSize
-        in: query
-        required: false
-        schema:
-          type: integer
-          default: 10
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminJewelleryPaymentsPagedResponse'
-        '400':
-          description: Bad Request
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-  /api/v1/admin/jewellery-enrolments/incomplete:
-    get:
-      tags:
-      - Admin Jewellery Enrolments
-      summary: List Incomplete Jewellery Plan Enrolments
-      description: Lists jewellery enrolments whose agreed duration ended below target gold grams without completed settlement. Includes customers who never paid, calculates remaining grams and confirmed money paid, and provides reminder eligibility.
-      operationId: AdminGetIncompleteJewelleryEnrolmentsPaged
-      parameters:
-      - name: branchId
-        in: query
-        required: false
-        schema:
-          type: string
-          format: uuid
-      - name: planId
-        in: query
-        required: false
-        schema:
-          type: string
-          format: uuid
-      - name: search
-        in: query
-        required: false
-        schema:
-          type: string
-      - name: page
-        in: query
-        required: false
-        schema:
-          type: integer
-          default: 1
-      - name: pageSize
-        in: query
-        required: false
-        schema:
-          type: integer
-          default: 10
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminIncompleteEnrolmentsPagedResponse'
-        '400':
-          description: Bad Request
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-  /api/v1/admin/jewellery-enrolments/{enrolmentId}/reminder-context:
-    get:
-      tags:
-      - Admin Jewellery Enrolments
-      summary: Get Authorised Reminder Context for Jewellery Enrolment
-      description: Retrieves verified customer and enrolment context, inactive/incomplete reminder reason, deadline, last payment date, and available notification channels for staff draft review.
-      operationId: AdminGetJewelleryReminderContext
-      parameters:
-      - name: enrolmentId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminReminderContextDto'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '404':
-          description: Not Found
-  /api/v1/admin/jewellery-enrolments/{enrolmentId}/send-reminder:
-    post:
-      tags:
-      - Admin Jewellery Enrolments
-      summary: Dispatch Reminder Notification for Jewellery Enrolment
-      description: Validates staff branch authorization and dispatches a draft reminder notification through the selected supported channels (In-App, Email, SMS). Push notifications report honestly as unsupported.
-      operationId: AdminSendJewelleryReminder
-      parameters:
-      - name: enrolmentId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AdminSendReminderRequest'
-        required: true
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminSendReminderResult'
-        '400':
-          description: Bad Request
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '404':
-          description: Not Found
 components:
   schemas:
+    AdminAssignPlanRequest:
+      required:
+      - customerId
+      - planId
+      - selectedDurationMonths
+      type: object
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        planId:
+          type: string
+          format: uuid
+        selectedDurationMonths:
+          type: integer
+          format: int32
+        confirmRepeatEnrolment:
+          type: boolean
+        idempotencyKey:
+          type: string
+          nullable: true
+      additionalProperties: false
     AdminCustomerDetailDto:
       type: object
       properties:
@@ -1912,6 +2517,9 @@ components:
         slotNumber:
           type: integer
           format: int32
+        slotDisplayCode:
+          type: string
+          nullable: true
         planName:
           type: string
           nullable: true
@@ -1924,11 +2532,693 @@ components:
         status:
           type: string
           nullable: true
+        monthsPaidCount:
+          type: integer
+          format: int32
+        totalPaidAmount:
+          type: number
+          format: double
+        isWinner:
+          type: boolean
+        winningRoundIndex:
+          type: integer
+          format: int32
+          nullable: true
+        entitlementAmount:
+          type: number
+          format: double
+          nullable: true
+        advanceExcessAmount:
+          type: number
+          format: double
+          nullable: true
+        redemptionType:
+          type: string
+          nullable: true
         activatedAtUtc:
           type: string
           format: date-time
           nullable: true
       additionalProperties: false
+    AdminEnrolmentPreviewRequest:
+      required:
+      - customerId
+      - planId
+      type: object
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        planId:
+          type: string
+          format: uuid
+      additionalProperties: false
+    AdminEnrolmentPreviewResponse:
+      type: object
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        customerName:
+          type: string
+          nullable: true
+        phoneNumber:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        customerBranchId:
+          type: string
+          format: uuid
+        customerBranchName:
+          type: string
+          nullable: true
+        planId:
+          type: string
+          format: uuid
+        planName:
+          type: string
+          nullable: true
+        categoryName:
+          type: string
+          nullable: true
+        targetProductGoldWeightGrams:
+          type: number
+          format: double
+        premiumPercentage:
+          type: number
+          format: double
+        allowedDurationsMonths:
+          type: array
+          items:
+            type: integer
+            format: int32
+          nullable: true
+        planStartDate:
+          type: string
+          format: date
+        isPlanActive:
+          type: boolean
+        totalExistingEnrolments:
+          type: integer
+          format: int32
+        activeExistingEnrolments:
+          type: integer
+          format: int32
+        requiresRepeatConfirmation:
+          type: boolean
+          readOnly: true
+        isEligible:
+          type: boolean
+        ineligibilityReason:
+          type: string
+          nullable: true
+      additionalProperties: false
+    AdminIncompleteEnrolmentItemDto:
+      type: object
+      properties:
+        enrolmentId:
+          type: string
+          format: uuid
+        enrolmentReference:
+          type: string
+          nullable: true
+        customerId:
+          type: string
+          format: uuid
+        customerName:
+          type: string
+          nullable: true
+        customerPhone:
+          type: string
+          nullable: true
+        customerEmail:
+          type: string
+          nullable: true
+        planId:
+          type: string
+          format: uuid
+        planName:
+          type: string
+          nullable: true
+        branchId:
+          type: string
+          format: uuid
+        branchName:
+          type: string
+          nullable: true
+        joiningDate:
+          type: string
+          format: date
+        selectedDurationMonths:
+          type: integer
+          format: int32
+        deadline:
+          type: string
+          format: date
+        targetGrams:
+          type: number
+          format: double
+        netSavedGrams:
+          type: number
+          format: double
+        remainingGrams:
+          type: number
+          format: double
+        totalConfirmedMoneyPaid:
+          type: number
+          format: double
+        currency:
+          type: string
+          nullable: true
+        progressPercentage:
+          type: number
+          format: double
+        status:
+          type: string
+          nullable: true
+        canSendReminder:
+          type: boolean
+        reminderReason:
+          type: string
+          nullable: true
+        lastSuccessfulPaymentAt:
+          type: string
+          format: date-time
+          nullable: true
+      additionalProperties: false
+    AdminIncompleteEnrolmentsPagedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminIncompleteEnrolmentItemDto'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        totalPages:
+          type: integer
+          format: int32
+          readOnly: true
+        totalIncompleteEnrolments:
+          type: integer
+          format: int32
+        totalRemainingGrams:
+          type: number
+          format: double
+        totalConfirmedMoneyPaid:
+          type: number
+          format: double
+        currency:
+          type: string
+          nullable: true
+      additionalProperties: false
+    AdminJewelleryPaymentItemDto:
+      type: object
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        contributionId:
+          type: string
+          format: uuid
+          nullable: true
+        instalmentNumber:
+          type: integer
+          format: int32
+          nullable: true
+        instalmentLabel:
+          type: string
+          nullable: true
+        customerId:
+          type: string
+          format: uuid
+        customerName:
+          type: string
+          nullable: true
+        customerPhone:
+          type: string
+          nullable: true
+        customerEmail:
+          type: string
+          nullable: true
+        enrolmentId:
+          type: string
+          format: uuid
+        enrolmentReference:
+          type: string
+          nullable: true
+        planId:
+          type: string
+          format: uuid
+        planName:
+          type: string
+          nullable: true
+        branchId:
+          type: string
+          format: uuid
+        branchName:
+          type: string
+          nullable: true
+        branchTimezone:
+          type: string
+          nullable: true
+        amount:
+          type: number
+          format: double
+        currency:
+          type: string
+          nullable: true
+        goldRate:
+          type: number
+          format: double
+        goldCredit:
+          type: number
+          format: double
+        estimatedPendingGoldCredit:
+          type: number
+          format: double
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        paymentMethod:
+          type: string
+          nullable: true
+        paymentReference:
+          type: string
+          nullable: true
+        dueDate:
+          type: string
+          format: date
+        paidAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+        createdAtUtc:
+          type: string
+          format: date-time
+        canSendReminder:
+          type: boolean
+        reminderReason:
+          type: string
+          nullable: true
+        lastSuccessfulPaymentAt:
+          type: string
+          format: date-time
+          nullable: true
+        reminderEligibleAt:
+          type: string
+          format: date-time
+          nullable: true
+      additionalProperties: false
+    AdminJewelleryPaymentsPagedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminJewelleryPaymentItemDto'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        totalPages:
+          type: integer
+          format: int32
+          readOnly: true
+        totalConfirmedAmount:
+          type: number
+          format: double
+        totalConfirmedGrams:
+          type: number
+          format: double
+        totalPendingAmount:
+          type: number
+          format: double
+        totalPendingCount:
+          type: integer
+          format: int32
+        totalSuccessfulCount:
+          type: integer
+          format: int32
+        currency:
+          type: string
+          nullable: true
+      additionalProperties: false
+    AdminRecordPaymentPreviewRequest:
+      required:
+      - mode
+      type: object
+      properties:
+        mode:
+          minLength: 1
+          type: string
+        enteredAmount:
+          type: number
+          format: double
+          nullable: true
+        requestedGrams:
+          type: number
+          format: double
+          nullable: true
+      additionalProperties: false
+    AdminRecordPaymentPreviewResponse:
+      type: object
+      properties:
+        enrolmentId:
+          type: string
+          format: uuid
+        enrolmentReference:
+          type: string
+          nullable: true
+        customerId:
+          type: string
+          format: uuid
+        customerName:
+          type: string
+          nullable: true
+        planName:
+          type: string
+          nullable: true
+        mode:
+          type: string
+          nullable: true
+        ratePerGram:
+          type: number
+          format: double
+        currency:
+          type: string
+          nullable: true
+        rateAsOf:
+          type: string
+          format: date-time
+        rateSource:
+          type: string
+          nullable: true
+        premiumPercentage:
+          type: number
+          format: double
+        baseGoldGrams:
+          type: number
+          format: double
+        premiumGrams:
+          type: number
+          format: double
+        chargeableGoldGrams:
+          type: number
+          format: double
+          nullable: true
+        netCreditedGrams:
+          type: number
+          format: double
+        amountPayable:
+          type: number
+          format: double
+        currentSavedGrams:
+          type: number
+          format: double
+        targetGrams:
+          type: number
+          format: double
+        remainingGramsBeforePayment:
+          type: number
+          format: double
+        remainingGramsAfterPayment:
+          type: number
+          format: double
+        willReachCompletion:
+          type: boolean
+        willExceedTarget:
+          type: boolean
+        paymentDate:
+          type: string
+          format: date
+      additionalProperties: false
+    AdminRecordPaymentRequest:
+      required:
+      - mode
+      type: object
+      properties:
+        mode:
+          minLength: 1
+          type: string
+        enteredAmount:
+          type: number
+          format: double
+          nullable: true
+        requestedGrams:
+          type: number
+          format: double
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        confirmedReceived:
+          type: boolean
+        idempotencyKey:
+          type: string
+          nullable: true
+      additionalProperties: false
+    AdminRecordPaymentResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+          nullable: true
+        paymentId:
+          type: string
+          format: uuid
+        paymentReference:
+          type: string
+          nullable: true
+        amountPaid:
+          type: number
+          format: double
+        currency:
+          type: string
+          nullable: true
+        netCreditedGrams:
+          type: number
+          format: double
+        appliedRatePerGram:
+          type: number
+          format: double
+        appliedPremiumPercentage:
+          type: number
+          format: double
+        newTotalSavedGrams:
+          type: number
+          format: double
+        remainingGrams:
+          type: number
+          format: double
+        progressPercentage:
+          type: number
+          format: double
+        planCompleted:
+          type: boolean
+        recordedAtUtc:
+          type: string
+          format: date-time
+      additionalProperties: false
+    AdminReminderContextDto:
+      type: object
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        customerName:
+          type: string
+          nullable: true
+        customerPhone:
+          type: string
+          nullable: true
+        customerEmail:
+          type: string
+          nullable: true
+        isPhoneVerified:
+          type: boolean
+        isEmailVerified:
+          type: boolean
+        enrolmentId:
+          type: string
+          format: uuid
+        enrolmentReference:
+          type: string
+          nullable: true
+        planId:
+          type: string
+          format: uuid
+        planName:
+          type: string
+          nullable: true
+        targetGrams:
+          type: number
+          format: double
+        savedGrams:
+          type: number
+          format: double
+        remainingGrams:
+          type: number
+          format: double
+        startDate:
+          type: string
+          format: date
+        deadline:
+          type: string
+          format: date
+        lastSuccessfulPaymentAt:
+          type: string
+          format: date-time
+          nullable: true
+        totalContributedCurrency:
+          type: number
+          format: double
+        currency:
+          type: string
+          nullable: true
+        reminderReason:
+          type: string
+          nullable: true
+        canSendReminder:
+          type: boolean
+        reminderEligibleAt:
+          type: string
+          format: date-time
+          nullable: true
+        suggestedTitle:
+          type: string
+          nullable: true
+        suggestedMessage:
+          type: string
+          nullable: true
+        inApp:
+          $ref: '#/components/schemas/ChannelStatusDto'
+        email:
+          $ref: '#/components/schemas/ChannelStatusDto'
+        sms:
+          $ref: '#/components/schemas/ChannelStatusDto'
+        push:
+          $ref: '#/components/schemas/ChannelStatusDto'
+      additionalProperties: false
+    AdminSendReminderRequest:
+      required:
+      - channels
+      - message
+      - title
+      type: object
+      properties:
+        channels:
+          type: array
+          items:
+            type: string
+        title:
+          maxLength: 200
+          minLength: 1
+          type: string
+        message:
+          maxLength: 1000
+          minLength: 1
+          type: string
+      additionalProperties: false
+    AdminSendReminderResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+          nullable: true
+        deliveredChannels:
+          type: array
+          items:
+            type: string
+          nullable: true
+        failedChannels:
+          type: array
+          items:
+            type: string
+          nullable: true
+        sentAtUtc:
+          type: string
+          format: date-time
+      additionalProperties: false
+    AssignChituSlotsRequest:
+      required:
+      - customerId
+      - paymentMethod
+      - planId
+      type: object
+      properties:
+        planId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        slotsCount:
+          maximum: 50
+          minimum: 1
+          type: integer
+          format: int32
+        additionalPrepaidMonths:
+          maximum: 120
+          minimum: 0
+          type: integer
+          format: int32
+        paymentMethod:
+          $ref: '#/components/schemas/PaymentMethod'
+        referenceNumber:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        idempotencyKey:
+          type: string
+          nullable: true
+      additionalProperties: false
+    AssignChituSlotsResponse:
+      type: object
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        totalAmountPaid:
+          type: number
+          format: double
+        createdSlots:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChituSlotDto'
+          nullable: true
+        message:
+          type: string
+          nullable: true
+      additionalProperties: false
+    BenefitStatus:
+      enum:
+      - Unclaimed
+      - Claimed
+      type: string
     BranchDto:
       type: object
       properties:
@@ -1972,6 +3262,729 @@ components:
           type: integer
           format: int32
       additionalProperties: false
+    ChannelStatusDto:
+      type: object
+      properties:
+        available:
+          type: boolean
+        description:
+          type: string
+          nullable: true
+      additionalProperties: false
+    ChituEligibleSlotDto:
+      type: object
+      properties:
+        slotId:
+          type: string
+          format: uuid
+        slotNumber:
+          type: integer
+          format: int32
+        slotDisplayCode:
+          type: string
+          nullable: true
+        customerId:
+          type: string
+          format: uuid
+        customerName:
+          type: string
+          nullable: true
+        customerPhone:
+          type: string
+          nullable: true
+        customerNic:
+          type: string
+          nullable: true
+        totalConfirmedPaid:
+          type: number
+          format: double
+        monthsPaidCount:
+          type: integer
+          format: int32
+      additionalProperties: false
+    ChituEligibleSlotsResponse:
+      type: object
+      properties:
+        planId:
+          type: string
+          format: uuid
+        planName:
+          type: string
+          nullable: true
+        roundIndex:
+          type: integer
+          format: int32
+        scheduledRaffleDate:
+          type: string
+          format: date
+        eligibleCount:
+          type: integer
+          format: int32
+        eligibleSlots:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChituEligibleSlotDto'
+          nullable: true
+      additionalProperties: false
+    ChituInstalmentAllocationItemDto:
+      type: object
+      properties:
+        monthIndex:
+          type: integer
+          format: int32
+        dueDate:
+          type: string
+          format: date
+        amount:
+          type: number
+          format: double
+      additionalProperties: false
+    ChituInstalmentDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        monthIndex:
+          type: integer
+          format: int32
+        dueDate:
+          type: string
+          format: date
+        amountDue:
+          type: number
+          format: double
+        status:
+          $ref: '#/components/schemas/InstalmentStatus'
+        paidAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+      additionalProperties: false
+    ChituPayableSlotDto:
+      type: object
+      properties:
+        slotId:
+          type: string
+          format: uuid
+        slotNumber:
+          type: integer
+          format: int32
+        slotDisplayCode:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/ChituSlotStatus'
+        nextUnpaidMonthIndex:
+          type: integer
+          format: int32
+        totalUnpaidMonthsRemaining:
+          type: integer
+          format: int32
+        instalmentsPaidCount:
+          type: integer
+          format: int32
+        totalConfirmedPaid:
+          type: number
+          format: double
+        isPaidForCurrentRound:
+          type: boolean
+        unpaidInstalments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChituInstalmentDto'
+          nullable: true
+      additionalProperties: false
+    ChituPaymentPreviewRequest:
+      required:
+      - customerId
+      - planId
+      - slotAllocations
+      type: object
+      properties:
+        planId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        slotAllocations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChituSlotAllocationInputDto'
+      additionalProperties: false
+    ChituPaymentPreviewResponse:
+      type: object
+      properties:
+        totalAmount:
+          type: number
+          format: double
+        slots:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChituSlotPaymentPreviewBreakdownDto'
+          nullable: true
+      additionalProperties: false
+    ChituPlanCardDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        branchId:
+          type: string
+          format: uuid
+        branchName:
+          type: string
+          nullable: true
+        code:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        redemptionType:
+          $ref: '#/components/schemas/ChituRedemptionType'
+        redemptionTypeLabel:
+          type: string
+          nullable: true
+          readOnly: true
+        durationMonths:
+          type: integer
+          format: int32
+        monthlyInstalmentAmount:
+          type: number
+          format: double
+        chituBenefitValue:
+          type: number
+          format: double
+        totalSlotCapacity:
+          type: integer
+          format: int32
+        assignedSlotsCount:
+          type: integer
+          format: int32
+        availableSlotsCount:
+          type: integer
+          format: int32
+          readOnly: true
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        status:
+          $ref: '#/components/schemas/PlanStatus'
+        statusLabel:
+          type: string
+          nullable: true
+          readOnly: true
+        isUpcoming:
+          type: boolean
+        currentRoundIndex:
+          type: integer
+          format: int32
+        currentRoundDueDate:
+          type: string
+          format: date
+        currentRoundPaidSlotsCount:
+          type: integer
+          format: int32
+        currentRoundUnpaidSlotsCount:
+          type: integer
+          format: int32
+        winningSlotsCount:
+          type: integer
+          format: int32
+        closedSlotsCount:
+          type: integer
+          format: int32
+        hasOverdueRaffle:
+          type: boolean
+        overdueRaffleRoundIndex:
+          type: integer
+          format: int32
+          nullable: true
+        createdAtUtc:
+          type: string
+          format: date-time
+      additionalProperties: false
+    ChituPlanDetailDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        branchId:
+          type: string
+          format: uuid
+        branchName:
+          type: string
+          nullable: true
+        code:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        redemptionType:
+          $ref: '#/components/schemas/ChituRedemptionType'
+        redemptionTypeLabel:
+          type: string
+          nullable: true
+          readOnly: true
+        durationMonths:
+          type: integer
+          format: int32
+        monthlyInstalmentAmount:
+          type: number
+          format: double
+        chituBenefitValue:
+          type: number
+          format: double
+        totalSlotCapacity:
+          type: integer
+          format: int32
+        assignedSlotsCount:
+          type: integer
+          format: int32
+        availableSlotsCount:
+          type: integer
+          format: int32
+          readOnly: true
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        status:
+          $ref: '#/components/schemas/PlanStatus'
+        statusLabel:
+          type: string
+          nullable: true
+          readOnly: true
+        isUpcoming:
+          type: boolean
+        currentRoundIndex:
+          type: integer
+          format: int32
+        currentRoundDueDate:
+          type: string
+          format: date
+        currentRoundPaidSlotsCount:
+          type: integer
+          format: int32
+        currentRoundUnpaidSlotsCount:
+          type: integer
+          format: int32
+        winningSlotsCount:
+          type: integer
+          format: int32
+        closedSlotsCount:
+          type: integer
+          format: int32
+        hasOverdueRaffle:
+          type: boolean
+        overdueRaffleRoundIndex:
+          type: integer
+          format: int32
+          nullable: true
+        createdAtUtc:
+          type: string
+          format: date-time
+        schedule:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChituPlanScheduleRoundDto'
+          nullable: true
+      additionalProperties: false
+    ChituPlanListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChituPlanCardDto'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        activeCount:
+          type: integer
+          format: int32
+        inactiveCount:
+          type: integer
+          format: int32
+      additionalProperties: false
+    ChituPlanScheduleRoundDto:
+      type: object
+      properties:
+        roundIndex:
+          type: integer
+          format: int32
+        scheduledRaffleDate:
+          type: string
+          format: date
+        isOverdue:
+          type: boolean
+        isCompleted:
+          type: boolean
+        recordedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+        winningSlotId:
+          type: string
+          format: uuid
+          nullable: true
+        winningSlotDisplayCode:
+          type: string
+          nullable: true
+        winnerCustomerName:
+          type: string
+          nullable: true
+      additionalProperties: false
+    ChituRedemptionType:
+      enum:
+      - Cash
+      - Gold
+      type: string
+    ChituRosterResponse:
+      type: object
+      properties:
+        planId:
+          type: string
+          format: uuid
+        planName:
+          type: string
+          nullable: true
+        planCode:
+          type: string
+          nullable: true
+        durationMonths:
+          type: integer
+          format: int32
+        selectedRoundIndex:
+          type: integer
+          format: int32
+        maxSlots:
+          type: integer
+          format: int32
+        assignedSlots:
+          type: integer
+          format: int32
+        availableSlots:
+          type: integer
+          format: int32
+          readOnly: true
+        activeSlotsCount:
+          type: integer
+          format: int32
+        winningSlotsCount:
+          type: integer
+          format: int32
+        closedSlotsCount:
+          type: integer
+          format: int32
+        roundPaidSlotsCount:
+          type: integer
+          format: int32
+        roundUnpaidSlotsCount:
+          type: integer
+          format: int32
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChituRosterRowDto'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    ChituRosterRowDto:
+      type: object
+      properties:
+        slotId:
+          type: string
+          format: uuid
+        slotNumber:
+          type: integer
+          format: int32
+        slotDisplayCode:
+          type: string
+          nullable: true
+        customerId:
+          type: string
+          format: uuid
+        customerName:
+          type: string
+          nullable: true
+        customerPhone:
+          type: string
+          nullable: true
+        slotStatus:
+          $ref: '#/components/schemas/ChituSlotStatus'
+        slotStatusLabel:
+          type: string
+          nullable: true
+          readOnly: true
+        isPaidForSelectedRound:
+          type: boolean
+        isFullyPaidThroughSelectedRound:
+          type: boolean
+        instalmentsPaidCount:
+          type: integer
+          format: int32
+        paidThroughMonthIndex:
+          type: integer
+          format: int32
+          nullable: true
+        outstandingDueMonthsCount:
+          type: integer
+          format: int32
+        totalConfirmedPaid:
+          type: number
+          format: double
+        isWinner:
+          type: boolean
+        winningRoundIndex:
+          type: integer
+          format: int32
+          nullable: true
+        entitlementAmount:
+          type: number
+          format: double
+          nullable: true
+        advanceExcessAmount:
+          type: number
+          format: double
+          nullable: true
+      additionalProperties: false
+    ChituSlotAllocationBreakdownDto:
+      type: object
+      properties:
+        slotNumber:
+          type: integer
+          format: int32
+        slotDisplayCode:
+          type: string
+          nullable: true
+        instalmentsToPay:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChituInstalmentAllocationItemDto'
+          nullable: true
+        totalForSlot:
+          type: number
+          format: double
+      additionalProperties: false
+    ChituSlotAllocationInputDto:
+      required:
+      - slotId
+      type: object
+      properties:
+        slotId:
+          type: string
+          format: uuid
+        amount:
+          maximum: 100000000
+          minimum: 1
+          type: number
+          format: double
+        expectedStartingMonthIndex:
+          type: integer
+          format: int32
+          nullable: true
+      additionalProperties: false
+    ChituSlotAssignmentPreviewRequest:
+      required:
+      - customerId
+      - planId
+      type: object
+      properties:
+        planId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        slotsCount:
+          maximum: 50
+          minimum: 1
+          type: integer
+          format: int32
+        additionalPrepaidMonths:
+          maximum: 120
+          minimum: 0
+          type: integer
+          format: int32
+      additionalProperties: false
+    ChituSlotAssignmentPreviewResponse:
+      type: object
+      properties:
+        planId:
+          type: string
+          format: uuid
+        planName:
+          type: string
+          nullable: true
+        planCode:
+          type: string
+          nullable: true
+        customerId:
+          type: string
+          format: uuid
+        customerName:
+          type: string
+          nullable: true
+        slotsCount:
+          type: integer
+          format: int32
+        assignedSlotNumbers:
+          type: array
+          items:
+            type: integer
+            format: int32
+          nullable: true
+        assignedSlotDisplayCodes:
+          type: array
+          items:
+            type: string
+          nullable: true
+        currentRoundIndex:
+          type: integer
+          format: int32
+        requiredMonthsPerSlot:
+          type: integer
+          format: int32
+        additionalPrepaidMonths:
+          type: integer
+          format: int32
+        totalMonthsPaidPerSlot:
+          type: integer
+          format: int32
+          readOnly: true
+        requiredAmountPerSlot:
+          type: number
+          format: double
+        totalPayableAmount:
+          type: number
+          format: double
+        allocationBreakdown:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChituSlotAllocationBreakdownDto'
+          nullable: true
+      additionalProperties: false
+    ChituSlotDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        planId:
+          type: string
+          format: uuid
+        planCode:
+          type: string
+          nullable: true
+        planName:
+          type: string
+          nullable: true
+        customerId:
+          type: string
+          format: uuid
+        customerName:
+          type: string
+          nullable: true
+        slotNumber:
+          type: integer
+          format: int32
+        slotDisplayCode:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/ChituSlotStatus'
+        statusLabel:
+          type: string
+          nullable: true
+          readOnly: true
+        monthsPaidCount:
+          type: integer
+          format: int32
+        totalPaidAmount:
+          type: number
+          format: double
+        activatedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+      additionalProperties: false
+    ChituSlotPaymentPreviewBreakdownDto:
+      type: object
+      properties:
+        slotId:
+          type: string
+          format: uuid
+        slotDisplayCode:
+          type: string
+          nullable: true
+        amount:
+          type: number
+          format: double
+        monthsCovered:
+          type: integer
+          format: int32
+        clearedInstalments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChituInstalmentDto'
+          nullable: true
+      additionalProperties: false
+    ChituSlotPaymentReceiptItemDto:
+      type: object
+      properties:
+        slotId:
+          type: string
+          format: uuid
+        slotDisplayCode:
+          type: string
+          nullable: true
+        amountAllocated:
+          type: number
+          format: double
+        monthsCovered:
+          type: integer
+          format: int32
+        clearedMonthIndices:
+          type: array
+          items:
+            type: integer
+            format: int32
+          nullable: true
+      additionalProperties: false
+    ChituSlotStatus:
+      enum:
+      - PendingReservation
+      - Active
+      - Won
+      - Closed
+      - Cancelled
+      type: string
     CreateBranchRequest:
       type: object
       properties:
@@ -1998,6 +4011,50 @@ components:
           nullable: true
         isActive:
           type: boolean
+      additionalProperties: false
+    CreateChituPlanRequest:
+      required:
+      - branchId
+      - code
+      - name
+      - redemptionType
+      - startDate
+      type: object
+      properties:
+        name:
+          maxLength: 100
+          minLength: 2
+          type: string
+        code:
+          maxLength: 20
+          minLength: 2
+          type: string
+        redemptionType:
+          $ref: '#/components/schemas/ChituRedemptionType'
+        durationMonths:
+          maximum: 120
+          minimum: 1
+          type: integer
+          format: int32
+        startDate:
+          type: string
+          format: date
+        monthlyInstalmentAmount:
+          maximum: 100000000
+          minimum: 1
+          type: number
+          format: double
+        totalSlotCapacity:
+          maximum: 10000
+          minimum: 1
+          type: integer
+          format: int32
+        branchId:
+          type: string
+          format: uuid
+        description:
+          type: string
+          nullable: true
       additionalProperties: false
     CreateCustomerRequest:
       required:
@@ -2138,6 +4195,36 @@ components:
           format: uuid
           nullable: true
       additionalProperties: false
+    CustomerPayableSlotsResponse:
+      type: object
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        customerName:
+          type: string
+          nullable: true
+        planId:
+          type: string
+          format: uuid
+        planName:
+          type: string
+          nullable: true
+        planCode:
+          type: string
+          nullable: true
+        monthlyInstalmentAmount:
+          type: number
+          format: double
+        currentRoundIndex:
+          type: integer
+          format: int32
+        slots:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChituPayableSlotDto'
+          nullable: true
+      additionalProperties: false
     CustomerStatisticsDto:
       type: object
       properties:
@@ -2268,6 +4355,12 @@ components:
           type: integer
           format: int64
       additionalProperties: false
+    InstalmentStatus:
+      enum:
+      - Pending
+      - Paid
+      - Overdue
+      type: string
     JewelleryCategoryDto:
       type: object
       properties:
@@ -2484,6 +4577,13 @@ components:
           format: double
           nullable: true
       additionalProperties: false
+    PaymentMethod:
+      enum:
+      - MockOnline
+      - Cash
+      - Card
+      - BankTransfer
+      type: string
     PlanCustomerEnrolmentDto:
       type: object
       properties:
@@ -2586,6 +4686,146 @@ components:
           type: integer
           format: int32
           readOnly: true
+      additionalProperties: false
+    PlanStatus:
+      enum:
+      - Draft
+      - Active
+      - Closed
+      type: string
+    RecordChituPaymentRequest:
+      required:
+      - customerId
+      - paymentMethod
+      - planId
+      - slotAllocations
+      type: object
+      properties:
+        planId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        slotAllocations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChituSlotAllocationInputDto'
+        paymentMethod:
+          $ref: '#/components/schemas/PaymentMethod'
+        referenceNumber:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        idempotencyKey:
+          type: string
+          nullable: true
+      additionalProperties: false
+    RecordChituPaymentResponse:
+      type: object
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        totalAmount:
+          type: number
+          format: double
+        paidAtUtc:
+          type: string
+          format: date-time
+        paymentMethod:
+          type: string
+          nullable: true
+        slotReceipts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChituSlotPaymentReceiptItemDto'
+          nullable: true
+        message:
+          type: string
+          nullable: true
+      additionalProperties: false
+    RecordChituRaffleRequest:
+      required:
+      - winningSlotId
+      type: object
+      properties:
+        winningSlotId:
+          type: string
+          format: uuid
+        referenceNumber:
+          type: string
+          nullable: true
+        remarks:
+          type: string
+          nullable: true
+      additionalProperties: false
+    RecordChituRaffleResponse:
+      type: object
+      properties:
+        drawId:
+          type: string
+          format: uuid
+        planId:
+          type: string
+          format: uuid
+        roundIndex:
+          type: integer
+          format: int32
+        scheduledDate:
+          type: string
+          format: date
+        recordedAtUtc:
+          type: string
+          format: date-time
+        winningSlotId:
+          type: string
+          format: uuid
+        winningSlotDisplayCode:
+          type: string
+          nullable: true
+        customerId:
+          type: string
+          format: uuid
+        customerName:
+          type: string
+          nullable: true
+        winningEntitlementValue:
+          type: number
+          format: double
+        advanceExcessPrepaidAmount:
+          type: number
+          format: double
+        advanceExcessSettlementDecisionRequired:
+          type: boolean
+          readOnly: true
+        benefitStatus:
+          $ref: '#/components/schemas/BenefitStatus'
+        message:
+          type: string
+          nullable: true
+      additionalProperties: false
+    RecordGoldRateRequest:
+      type: object
+      properties:
+        branchId:
+          type: string
+          format: uuid
+        karat:
+          type: integer
+          format: int32
+        ratePerGram:
+          type: number
+          format: double
+        effectiveFromUtc:
+          type: string
+          format: date-time
+          nullable: true
+        notes:
+          type: string
+          nullable: true
       additionalProperties: false
     ResetPasswordRequest:
       required:
@@ -2743,6 +4983,53 @@ components:
         isActive:
           type: boolean
       additionalProperties: false
+    UpdateChituPlanRequest:
+      type: object
+      properties:
+        name:
+          maxLength: 100
+          minLength: 2
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/PlanStatus'
+        code:
+          maxLength: 20
+          minLength: 2
+          type: string
+          nullable: true
+        redemptionType:
+          $ref: '#/components/schemas/ChituRedemptionType'
+        durationMonths:
+          maximum: 120
+          minimum: 1
+          type: integer
+          format: int32
+          nullable: true
+        monthlyInstalmentAmount:
+          maximum: 100000000
+          minimum: 1
+          type: number
+          format: double
+          nullable: true
+        totalSlotCapacity:
+          maximum: 10000
+          minimum: 1
+          type: integer
+          format: int32
+          nullable: true
+        startDate:
+          type: string
+          format: date
+          nullable: true
+        branchId:
+          type: string
+          format: uuid
+          nullable: true
+      additionalProperties: false
     UpdateCustomerStatusRequest:
       required:
       - isActive
@@ -2852,609 +5139,26 @@ components:
           type: string
           nullable: true
       additionalProperties: false
-    AdminRecordPaymentResult:
-      type: object
-      properties:
-        success:
-          type: boolean
-        message:
-          type: string
-          nullable: true
-        paymentId:
-          type: string
-          format: uuid
-        paymentReference:
-          type: string
-          nullable: true
-        amountPaid:
-          type: number
-          format: double
-        currency:
-          type: string
-          nullable: true
-        netCreditedGrams:
-          type: number
-          format: double
-        appliedRatePerGram:
-          type: number
-          format: double
-        appliedPremiumPercentage:
-          type: number
-          format: double
-        newTotalSavedGrams:
-          type: number
-          format: double
-        remainingGrams:
-          type: number
-          format: double
-        progressPercentage:
-          type: number
-          format: double
-        planCompleted:
-          type: boolean
-        recordedAtUtc:
-          type: string
-          format: date-time
-      additionalProperties: false
-    AdminRecordPaymentPreviewResponse:
-      type: object
-      properties:
-        enrolmentId:
-          type: string
-          format: uuid
-        enrolmentReference:
-          type: string
-          nullable: true
-        customerId:
-          type: string
-          format: uuid
-        customerName:
-          type: string
-          nullable: true
-        planName:
-          type: string
-          nullable: true
-        mode:
-          type: string
-          nullable: true
-        ratePerGram:
-          type: number
-          format: double
-        currency:
-          type: string
-          nullable: true
-        rateAsOf:
-          type: string
-          format: date-time
-        rateSource:
-          type: string
-          nullable: true
-        premiumPercentage:
-          type: number
-          format: double
-        baseGoldGrams:
-          type: number
-          format: double
-        premiumGrams:
-          type: number
-          format: double
-        chargeableGoldGrams:
-          type: number
-          format: double
-          nullable: true
-        netCreditedGrams:
-          type: number
-          format: double
-        amountPayable:
-          type: number
-          format: double
-        currentSavedGrams:
-          type: number
-          format: double
-        targetGrams:
-          type: number
-          format: double
-        remainingGramsBeforePayment:
-          type: number
-          format: double
-        remainingGramsAfterPayment:
-          type: number
-          format: double
-        willReachCompletion:
-          type: boolean
-        willExceedTarget:
-          type: boolean
-        paymentDate:
-          type: string
-          format: date
-      additionalProperties: false
-    AdminEnrolmentPreviewResponse:
-      type: object
-      properties:
-        customerId:
-          type: string
-          format: uuid
-        customerName:
-          type: string
-          nullable: true
-        phoneNumber:
-          type: string
-          nullable: true
-        email:
-          type: string
-          nullable: true
-        customerBranchId:
-          type: string
-          format: uuid
-        customerBranchName:
-          type: string
-          nullable: true
-        planId:
-          type: string
-          format: uuid
-        planName:
-          type: string
-          nullable: true
-        categoryName:
-          type: string
-          nullable: true
-        targetProductGoldWeightGrams:
-          type: number
-          format: double
-        premiumPercentage:
-          type: number
-          format: double
-        allowedDurationsMonths:
-          type: array
-          items:
-            type: integer
-            format: int32
-          nullable: true
-        planStartDate:
-          type: string
-          format: date
-        isPlanActive:
-          type: boolean
-        totalExistingEnrolments:
-          type: integer
-          format: int32
-        activeExistingEnrolments:
-          type: integer
-          format: int32
-        requiresRepeatConfirmation:
-          type: boolean
-          readOnly: true
-        isEligible:
-          type: boolean
-        ineligibilityReason:
-          type: string
-          nullable: true
-      additionalProperties: false
-    RecordGoldRateRequest:
-      type: object
-      properties:
-        branchId:
-          type: string
-          format: uuid
-        karat:
-          type: integer
-          format: int32
-        ratePerGram:
-          type: number
-          format: double
-        effectiveFromUtc:
-          type: string
-          format: date-time
-          nullable: true
-        notes:
-          type: string
-          nullable: true
-      additionalProperties: false
-    AdminRecordPaymentPreviewRequest:
-      required:
-      - mode
-      type: object
-      properties:
-        mode:
-          minLength: 1
-          type: string
-        enteredAmount:
-          type: number
-          format: double
-          nullable: true
-        requestedGrams:
-          type: number
-          format: double
-          nullable: true
-      additionalProperties: false
-    AdminEnrolmentPreviewRequest:
-      required:
-      - customerId
-      - planId
-      type: object
-      properties:
-        customerId:
-          type: string
-          format: uuid
-        planId:
-          type: string
-          format: uuid
-      additionalProperties: false
-    AdminAssignPlanRequest:
-      required:
-      - customerId
-      - planId
-      - selectedDurationMonths
-      type: object
-      properties:
-        customerId:
-          type: string
-          format: uuid
-        planId:
-          type: string
-          format: uuid
-        selectedDurationMonths:
-          type: integer
-          format: int32
-        confirmRepeatEnrolment:
-          type: boolean
-        idempotencyKey:
-          type: string
-          nullable: true
-      additionalProperties: false
-    AdminRecordPaymentRequest:
-      required:
-      - mode
-      type: object
-      properties:
-        mode:
-          minLength: 1
-          type: string
-        enteredAmount:
-          type: number
-          format: double
-          nullable: true
-        requestedGrams:
-          type: number
-          format: double
-          nullable: true
-        notes:
-          type: string
-          nullable: true
-        confirmedReceived:
-          type: boolean
-        idempotencyKey:
-          type: string
-          nullable: true
-      additionalProperties: false
-    AdminJewelleryPaymentsPagedResponse:
-      type: object
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/AdminJewelleryPaymentItemDto'
-        totalCount:
-          type: integer
-        page:
-          type: integer
-        pageSize:
-          type: integer
-        totalPages:
-          type: integer
-        totalConfirmedAmount:
-          type: number
-          format: double
-        totalConfirmedGrams:
-          type: number
-          format: double
-        totalPendingAmount:
-          type: number
-          format: double
-        totalPendingCount:
-          type: integer
-        totalSuccessfulCount:
-          type: integer
-        currency:
-          type: string
-    AdminJewelleryPaymentItemDto:
-      type: object
-      properties:
-        paymentId:
-          type: string
-          format: uuid
-        contributionId:
-          type: string
-          format: uuid
-          nullable: true
-        instalmentNumber:
-          type: integer
-          nullable: true
-        instalmentLabel:
-          type: string
-        customerId:
-          type: string
-          format: uuid
-        customerName:
-          type: string
-        customerPhone:
-          type: string
-          nullable: true
-        customerEmail:
-          type: string
-          nullable: true
-        enrolmentId:
-          type: string
-          format: uuid
-        enrolmentReference:
-          type: string
-        planId:
-          type: string
-          format: uuid
-        planName:
-          type: string
-        branchId:
-          type: string
-          format: uuid
-        branchName:
-          type: string
-        branchTimezone:
-          type: string
-        amount:
-          type: number
-          format: double
-        currency:
-          type: string
-        goldRate:
-          type: number
-          format: double
-        goldCredit:
-          type: number
-          format: double
-        estimatedPendingGoldCredit:
-          type: number
-          format: double
-          nullable: true
-        status:
-          type: string
-          enum: [Successful, Pending]
-        paymentMethod:
-          type: string
-        paymentReference:
-          type: string
-        dueDate:
-          type: string
-          format: date
-          description: Enrolment target deadline date (not a monthly instalment bill date).
-        paidAtUtc:
-          type: string
-          format: date-time
-          nullable: true
-        createdAtUtc:
-          type: string
-          format: date-time
-        canSendReminder:
-          type: boolean
-        reminderReason:
-          type: string
-          nullable: true
-        lastSuccessfulPaymentAt:
-          type: string
-          format: date-time
-          nullable: true
-        reminderEligibleAt:
-          type: string
-          format: date-time
-          nullable: true
-    AdminIncompleteEnrolmentsPagedResponse:
-      type: object
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/AdminIncompleteEnrolmentItemDto'
-        totalCount:
-          type: integer
-        page:
-          type: integer
-        pageSize:
-          type: integer
-        totalPages:
-          type: integer
-        totalIncompleteEnrolments:
-          type: integer
-        totalRemainingGrams:
-          type: number
-          format: double
-        totalConfirmedMoneyPaid:
-          type: number
-          format: double
-        currency:
-          type: string
-    AdminIncompleteEnrolmentItemDto:
-      type: object
-      properties:
-        enrolmentId:
-          type: string
-          format: uuid
-        enrolmentReference:
-          type: string
-        customerId:
-          type: string
-          format: uuid
-        customerName:
-          type: string
-        customerPhone:
-          type: string
-          nullable: true
-        customerEmail:
-          type: string
-          nullable: true
-        planId:
-          type: string
-          format: uuid
-        planName:
-          type: string
-        branchId:
-          type: string
-          format: uuid
-        branchName:
-          type: string
-        joiningDate:
-          type: string
-          format: date
-        selectedDurationMonths:
-          type: integer
-        deadline:
-          type: string
-          format: date
-        targetGrams:
-          type: number
-          format: double
-        netSavedGrams:
-          type: number
-          format: double
-        remainingGrams:
-          type: number
-          format: double
-        totalConfirmedMoneyPaid:
-          type: number
-          format: double
-        currency:
-          type: string
-        progressPercentage:
-          type: number
-          format: double
-        status:
-          type: string
-        canSendReminder:
-          type: boolean
-        reminderReason:
-          type: string
-          nullable: true
-        lastSuccessfulPaymentAt:
-          type: string
-          format: date-time
-          nullable: true
-    ChannelStatusDto:
-      type: object
-      properties:
-        available:
-          type: boolean
-        description:
-          type: string
-    AdminReminderContextDto:
-      type: object
-      properties:
-        customerId:
-          type: string
-          format: uuid
-        customerName:
-          type: string
-        customerPhone:
-          type: string
-          nullable: true
-        customerEmail:
-          type: string
-          nullable: true
-        isPhoneVerified:
-          type: boolean
-        isEmailVerified:
-          type: boolean
-        enrolmentId:
-          type: string
-          format: uuid
-        enrolmentReference:
-          type: string
-        planId:
-          type: string
-          format: uuid
-        planName:
-          type: string
-        targetGrams:
-          type: number
-          format: double
-        savedGrams:
-          type: number
-          format: double
-        remainingGrams:
-          type: number
-          format: double
-        startDate:
-          type: string
-          format: date
-        deadline:
-          type: string
-          format: date
-        lastSuccessfulPaymentAt:
-          type: string
-          format: date-time
-          nullable: true
-        totalContributedCurrency:
-          type: number
-          format: double
-        currency:
-          type: string
-        reminderReason:
-          type: string
-        canSendReminder:
-          type: boolean
-        reminderEligibleAt:
-          type: string
-          format: date-time
-          nullable: true
-        suggestedTitle:
-          type: string
-        suggestedMessage:
-          type: string
-        inApp:
-          $ref: '#/components/schemas/ChannelStatusDto'
-        email:
-          $ref: '#/components/schemas/ChannelStatusDto'
-        sms:
-          $ref: '#/components/schemas/ChannelStatusDto'
-        push:
-          $ref: '#/components/schemas/ChannelStatusDto'
-    AdminSendReminderRequest:
-      type: object
-      required:
-      - channels
-      - title
-      - message
-      properties:
-        channels:
-          type: array
-          items:
-            type: string
-        title:
-          type: string
-          maxLength: 200
-        message:
-          type: string
-          maxLength: 1000
-    AdminSendReminderResult:
-      type: object
-      properties:
-        success:
-          type: boolean
-        message:
-          type: string
-        deliveredChannels:
-          type: array
-          items:
-            type: string
-        failedChannels:
-          type: array
-          items:
-            type: string
-        sentAtUtc:
-          type: string
-          format: date-time
   securitySchemes:
     Bearer:
       type: http
       description: Enter your JWT Bearer token (e.g., Bearer eyJhbGci...)
       scheme: Bearer
       bearerFormat: JWT
-security:
-- Bearer: []
+tags:
+- name: Admin Auth
+- name: Admin Branches
+  description: Store branch management, staff assignment, and branch analytics.
+- name: Admin Chitu Plans
+- name: Admin Customers
+- name: Admin Gold Rates
+- name: Admin Jewellery Categories
+  description: Admin jewellery category configuration and image management.
+- name: Admin Jewellery Enrolments
+- name: Admin Jewellery Plans
+  description: Admin jewellery plan lifecycle management, terms, and lifetime tracking.
+- name: Admin Users
+- name: Branches
+  description: Active store locations for customer registration and branch lookups.
+- name: System
+  description: Health check and database connectivity verification.

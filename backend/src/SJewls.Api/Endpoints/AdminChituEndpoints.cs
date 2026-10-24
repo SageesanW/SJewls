@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using SJewls.Application.DTOs;
+using SJewls.Application.Exceptions;
 using SJewls.Application.Interfaces;
 
 namespace SJewls.Api.Endpoints;
@@ -222,6 +223,14 @@ public static class AdminChituEndpoints
                 var result = await service.AssignSlotsAsync(staffId.Value, request, ip, ct);
                 return Results.Created("/api/v1/admin/chitu-plans/assign-slots", result);
             }
+            catch (ChituCapacityUnavailableException ex)
+            {
+                return Results.Conflict(new { code = ex.Code, message = ex.Message });
+            }
+            catch (ChituIdempotencyConflictException ex)
+            {
+                return Results.Conflict(new { code = ex.Code, message = ex.Message });
+            }
             catch (KeyNotFoundException ex)
             {
                 return Results.NotFound(new { message = ex.Message });
@@ -232,6 +241,10 @@ public static class AdminChituEndpoints
             }
             catch (InvalidOperationException ex)
             {
+                if (ex.Message.Contains("Capacity", StringComparison.OrdinalIgnoreCase) || ex.Message.Contains("already assigned", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Results.Conflict(new { code = ChituCapacityUnavailableException.ErrorCode, message = ex.Message });
+                }
                 return Results.BadRequest(new { message = ex.Message });
             }
             catch (ArgumentException ex)
@@ -354,6 +367,14 @@ public static class AdminChituEndpoints
             {
                 var result = await service.RecordPaymentAsync(staffId.Value, request, ip, ct);
                 return Results.Created("/api/v1/admin/chitu-plans/record-payment", result);
+            }
+            catch (ChituIdempotencyConflictException ex)
+            {
+                return Results.Conflict(new { code = ex.Code, message = ex.Message });
+            }
+            catch (ChituPreviewExpiredOrChangedException ex)
+            {
+                return Results.Conflict(new { code = ex.Code, message = ex.Message });
             }
             catch (KeyNotFoundException ex)
             {
@@ -496,6 +517,16 @@ public static class AdminChituEndpoints
         {
             var staffId = GetStaffId(user);
             if (staffId == null) return Results.Unauthorized();
+
+            if (page <= 0)
+            {
+                return Results.BadRequest(new { message = "Page number must be greater than or equal to 1." });
+            }
+
+            if (pageSize <= 0 || pageSize > 100)
+            {
+                return Results.BadRequest(new { message = "Page size must be between 1 and 100." });
+            }
 
             var query = new ChituRosterQueryParameters
             {

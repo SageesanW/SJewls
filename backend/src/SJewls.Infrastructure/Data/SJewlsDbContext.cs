@@ -26,6 +26,7 @@ public class SJewlsDbContext : DbContext
     public DbSet<WinnerBenefit> WinnerBenefits => Set<WinnerBenefit>();
 
     public DbSet<GoldRate> GoldRates => Set<GoldRate>();
+    public DbSet<GoldRateOverride> GoldRateOverrides => Set<GoldRateOverride>();
     public DbSet<PaymentQuote> PaymentQuotes => Set<PaymentQuote>();
 
     public DbSet<JewelleryPlanCategory> JewelleryCategories => Set<JewelleryPlanCategory>();

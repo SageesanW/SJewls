@@ -279,6 +279,8 @@ public class ChituSlotAllocationInputDto
 
     [Range(1, 100000000)]
     public decimal Amount { get; set; }
+
+    public int? ExpectedStartingMonthIndex { get; set; }
 }
 
 public class ChituPaymentPreviewRequest

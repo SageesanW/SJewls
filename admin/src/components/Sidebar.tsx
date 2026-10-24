@@ -17,6 +17,7 @@ import {
   Gem,
   Coins,
   ChevronDown,
+  Scale,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -39,6 +40,7 @@ export function Sidebar({
   // Expandable Jewellery Plan state
   const isJewelleryPlanActive = pathname.startsWith("/jewellery-plans");
   const isChituPlanActive = pathname.startsWith("/chitu-plans");
+  const isGoldRateActive = pathname.startsWith("/gold-rates");
   const [jewelleryExpanded, setJewelleryExpanded] = useState<boolean>(() => {
     return pathname.startsWith("/jewellery-plans");
   });
@@ -311,6 +313,41 @@ export function Sidebar({
           {!showLabel && hoveredItem === "/chitu-plans" && (
             <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 bg-[#0A260A] text-white text-xs font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap z-50 pointer-events-none">
               Chitu Plans
+            </div>
+          )}
+        </div>
+
+        {/* Gold Rates */}
+        <div
+          className="relative"
+          onMouseEnter={() => setHoveredItem("/gold-rates")}
+          onMouseLeave={() => setHoveredItem(null)}
+        >
+          <Link
+            href="/gold-rates"
+            onClick={() => {
+              if (isMobile) onCloseMobile();
+            }}
+            className={`flex items-center gap-3.5 px-3.5 py-3 rounded-xl text-sm font-medium transition-all duration-150 ${
+              isGoldRateActive
+                ? "nav-gold-active font-bold shadow-sm"
+                : "text-emerald-100/90 hover:text-white hover:bg-white/10"
+            } ${!showLabel ? "justify-center px-0" : ""}`}
+            aria-current={isGoldRateActive ? "page" : undefined}
+          >
+            <Scale
+              className={`w-5 h-5 flex-shrink-0 transition-transform ${
+                isGoldRateActive ? "text-[#0B3D0B]" : "text-[#FFD700]"
+              }`}
+            />
+            {showLabel && (
+              <span className="truncate tracking-wide">Gold Rates</span>
+            )}
+          </Link>
+
+          {!showLabel && hoveredItem === "/gold-rates" && (
+            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 bg-[#0A260A] text-white text-xs font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap z-50 pointer-events-none">
+              Gold Rates
             </div>
           )}
         </div>
