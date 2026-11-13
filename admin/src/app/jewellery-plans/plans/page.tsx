@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useAuth } from "../../../lib/auth-context";
 import { AdminLayout } from "../../../components/AdminLayout";
+import { JewelleryPlanCard } from "../../../components/jewellery-plans/JewelleryPlanCard";
 import { adminApi, ApiError } from "../../../lib/api";
 import {
   JewelleryPlan,
@@ -43,6 +44,36 @@ import {
   ChevronRight,
   Filter,
 } from "lucide-react";
+
+const sampleJewelleryPlan: JewelleryPlan = {
+  id: "preview-jewel-001",
+  branchId: "branch-01",
+  branchName: "Colombo Flagship",
+  branchCode: "CMB-01",
+  currency: "LKR",
+  code: "SJW-22K-NCK",
+  name: "Royal Heritage 22K Gold Bridal Necklace",
+  description: "Exquisite handcrafted 22 karat gold necklace with traditional floral filigree and certified hallmark.",
+  imageUrl: "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=800&q=80",
+  categoryId: "cat-01",
+  categoryName: "Necklaces & Pendants",
+  targetProductGoldWeightGrams: 24.5,
+  karat: 22,
+  premiumPercentage: 8,
+  allowedDurationsMonths: [6, 12, 18],
+  startDate: "2026-06-01",
+  isActive: true,
+  displayStatus: "Active",
+  totalEnrolments: 28,
+  activeEnrolments: 24,
+  totalNetAccumulatedGrams: 342.8,
+  totalTargetGramsAcrossEnrolments: 686.0,
+  overallProgressPercentage: 50,
+  createdAtUtc: "2026-01-15T00:00:00Z",
+  updatedAtUtc: null,
+  deactivatedAtUtc: null,
+  reopenedAtUtc: null,
+};
 
 export default function JewelleryPlansPage() {
   const router = useRouter();
@@ -483,37 +514,37 @@ export default function JewelleryPlansPage() {
   }, [categories, formBranchId]);
 
   return (
-    <AdminLayout>
+    <AdminLayout title="Jewellery Plans">
       <div className="space-y-6 max-w-7xl mx-auto pb-12">
         {/* Top Header & Category Filter Pills */}
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-[#0B3D0B] text-[#FFD700] flex items-center justify-center shadow-md">
-                <Gem className="w-6 h-6" />
+              <div className="w-11 h-11 rounded-xl bg-[#C5A059]/15 border border-[#C5A059]/30 text-[#0B3D0B] flex items-center justify-center shadow-xs">
+                <Gem className="w-6 h-6 text-[#8C6D2D]" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-                  Jewellery Plans
+                <h1 className="text-2xl font-serif-luxury font-bold tracking-tight text-[#151A14]">
+                  Jewellery Accumulation Plans
                 </h1>
-                <p className="text-sm text-gray-500">
-                  Manage fixed gold weight savings plans, durations, and enrolled customer balances.
+                <p className="text-xs sm:text-sm text-stone-500 font-medium">
+                  Fixed gold weight savings schemes, offered durations, and customer accumulated grams
                 </p>
               </div>
             </div>
 
             {/* Branch selector if Super Admin */}
             {isSuperAdmin && branches.length > 0 && (
-              <div className="flex items-center gap-2 self-start sm:self-auto bg-white px-3 py-1.5 rounded-xl border border-gray-200 shadow-sm">
-                <Building2 className="w-4 h-4 text-emerald-800" />
-                <span className="text-xs font-semibold text-gray-600">Branch:</span>
+              <div className="flex items-center gap-2 self-start sm:self-auto bg-white px-3 py-1.5 rounded-xl border border-[#E8E5DD] shadow-2xs">
+                <Building2 className="w-4 h-4 text-[#C5A059]" />
+                <span className="text-xs font-semibold text-stone-600">Branch:</span>
                 <select
                   value={selectedBranchId}
                   onChange={(e) => {
                     setSelectedBranchId(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="text-xs font-medium bg-transparent border-none text-gray-800 focus:outline-none cursor-pointer"
+                  className="text-xs font-medium bg-transparent border-none text-[#151A14] focus:outline-hidden cursor-pointer"
                 >
                   <option value="ALL">All Branches</option>
                   {branches.map((b) => (
@@ -526,7 +557,7 @@ export default function JewelleryPlansPage() {
             )}
           </div>
 
-          {/* Horizontal Category Filter Pills (matches Screenshot 1) */}
+          {/* Horizontal Category Filter Pills */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
             <button
               type="button"
@@ -534,9 +565,9 @@ export default function JewelleryPlansPage() {
                 setSelectedCategoryFilter("ALL");
                 setCurrentPage(1);
               }}
-              className={`px-4 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap shadow-sm cursor-pointer ${selectedCategoryFilter === "ALL"
-                  ? "bg-[#0B3D0B] text-white shadow-emerald-950/20"
-                  : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-200"
+              className={`px-4 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap shadow-xs cursor-pointer ${selectedCategoryFilter === "ALL"
+                  ? "bg-[#0B3D0B] text-white shadow-2xs"
+                  : "bg-white text-stone-700 hover:bg-stone-50 border border-[#E8E5DD]"
                 }`}
             >
               All Categories
@@ -549,9 +580,9 @@ export default function JewelleryPlansPage() {
                   setSelectedCategoryFilter(cat.id);
                   setCurrentPage(1);
                 }}
-                className={`px-4 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap shadow-sm cursor-pointer ${selectedCategoryFilter === cat.id
-                    ? "bg-[#0B3D0B] text-white shadow-emerald-950/20"
-                    : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-200"
+                className={`px-4 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap shadow-xs cursor-pointer ${selectedCategoryFilter === cat.id
+                    ? "bg-[#0B3D0B] text-white shadow-2xs"
+                    : "bg-white text-stone-700 hover:bg-stone-50 border border-[#E8E5DD]"
                   }`}
               >
                 {cat.name}
@@ -564,19 +595,19 @@ export default function JewelleryPlansPage() {
         {successMessage && (
           <div className="flex items-center gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-sm animate-fadeIn">
             <CheckCircle2 className="w-5 h-5 text-emerald-700 flex-shrink-0" />
-            <span className="font-medium">{successMessage}</span>
+            <span className="font-medium text-xs sm:text-sm">{successMessage}</span>
           </div>
         )}
 
         {error && (
-          <div className="flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-xl text-red-900 text-sm">
+          <div className="flex items-center justify-between p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-900 text-sm">
             <div className="flex items-center gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-              <span>{error}</span>
+              <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0" />
+              <span className="text-xs sm:text-sm">{error}</span>
             </div>
             <button
               onClick={fetchPlans}
-              className="text-xs font-semibold text-red-700 hover:text-red-900 underline flex items-center gap-1 cursor-pointer"
+              className="text-xs font-semibold text-rose-700 hover:text-rose-900 underline flex items-center gap-1 cursor-pointer"
             >
               <RefreshCw className="w-3.5 h-3.5" /> Retry
             </button>
@@ -584,14 +615,14 @@ export default function JewelleryPlansPage() {
         )}
 
         {/* Toolbar & Subheader */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-200/90 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-[#E8E5DD] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex flex-col">
-            <span className="text-xs font-bold text-amber-600 tracking-wider uppercase">
-              Total Plans {totalCount}
+            <span className="text-[11px] font-bold text-[#8C6D2D] tracking-wider uppercase">
+              Total Catalog Plans: {totalCount}
             </span>
-            <h2 className="text-lg font-bold text-gray-900">
+            <h2 className="text-base sm:text-lg font-serif-luxury font-bold text-[#151A14]">
               {selectedCategoryFilter === "ALL"
-                ? "All Jewellery Plans"
+                ? "All Fine Jewellery Schemes"
                 : categories.find((c) => c.id === selectedCategoryFilter)?.name + " Plans"}
             </h2>
           </div>
@@ -599,30 +630,30 @@ export default function JewelleryPlansPage() {
           <div className="flex flex-wrap items-center gap-3">
             {/* Search Input */}
             <div className="relative min-w-[220px] flex-1 sm:flex-initial">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search plans..."
-                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0B3D0B]/20 focus:border-[#0B3D0B]"
+                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-[#E8E5DD] bg-[#FAF9F6] focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-[#0B3D0B]"
               />
               {searchTerm && (
                 <button
                   onClick={() => setSearchTerm("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
 
-            {/* Status Filter Tabs / Dropdown */}
-            <div className="flex items-center bg-gray-100 p-1 rounded-xl text-xs font-semibold text-gray-600">
+            {/* Status Filter Tabs */}
+            <div className="flex items-center bg-[#FAF9F6] p-1 rounded-xl border border-[#E8E5DD] text-xs font-semibold text-stone-600">
               <button
                 type="button"
                 onClick={() => setStatusFilter("ALL")}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${statusFilter === "ALL" ? "bg-white text-gray-900 shadow-sm font-bold" : "hover:text-gray-900"
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${statusFilter === "ALL" ? "bg-[#0B3D0B] text-white shadow-2xs font-bold" : "hover:text-stone-900"
                   }`}
               >
                 All
@@ -630,7 +661,7 @@ export default function JewelleryPlansPage() {
               <button
                 type="button"
                 onClick={() => setStatusFilter("Active")}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${statusFilter === "Active" ? "bg-white text-emerald-800 shadow-sm font-bold" : "hover:text-gray-900"
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${statusFilter === "Active" ? "bg-[#0B3D0B] text-white shadow-2xs font-bold" : "hover:text-stone-900"
                   }`}
               >
                 Active ({activeCount})
@@ -638,7 +669,7 @@ export default function JewelleryPlansPage() {
               <button
                 type="button"
                 onClick={() => setStatusFilter("Scheduled")}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${statusFilter === "Scheduled" ? "bg-white text-blue-800 shadow-sm font-bold" : "hover:text-gray-900"
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${statusFilter === "Scheduled" ? "bg-[#0B3D0B] text-white shadow-2xs font-bold" : "hover:text-stone-900"
                   }`}
               >
                 Scheduled ({scheduledCount})
@@ -646,7 +677,7 @@ export default function JewelleryPlansPage() {
               <button
                 type="button"
                 onClick={() => setStatusFilter("Deactivated")}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${statusFilter === "Deactivated" ? "bg-white text-red-800 shadow-sm font-bold" : "hover:text-gray-900"
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${statusFilter === "Deactivated" ? "bg-[#0B3D0B] text-white shadow-2xs font-bold" : "hover:text-stone-900"
                   }`}
               >
                 Deactivated ({deactivatedCount})
@@ -657,9 +688,9 @@ export default function JewelleryPlansPage() {
             <button
               type="button"
               onClick={openCreateModal}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#0B3D0B] hover:bg-[#082e08] transition-all shadow-md hover:shadow-lg cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl btn-primary-green text-xs font-bold transition-all shadow-xs cursor-pointer"
             >
-              <Plus className="w-4 h-4 text-[#FFD700]" />
+              <Plus className="w-4 h-4 text-[#D4AF37] stroke-[3]" />
               <span>Add New Plan</span>
             </button>
           </div>
@@ -680,209 +711,88 @@ export default function JewelleryPlansPage() {
             ))}
           </div>
         ) : plans.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center space-y-4 shadow-sm">
-            <div className="w-16 h-16 rounded-full bg-emerald-50 text-[#0B3D0B] flex items-center justify-center mx-auto">
-              <Gem className="w-8 h-8 text-[#0B3D0B]" />
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl border border-gray-200 p-10 text-center space-y-3 shadow-2xs">
+              <div className="w-14 h-14 rounded-full bg-emerald-50 text-[#0B3D0B] flex items-center justify-center mx-auto">
+                <Gem className="w-7 h-7 text-[#0B3D0B]" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900">No Jewellery Plans Found</h3>
+              <p className="text-xs text-gray-500 max-w-md mx-auto">
+                {searchTerm || selectedCategoryFilter !== "ALL" || statusFilter !== "ALL"
+                  ? "No plans match your current search and filter criteria. Try resetting filters."
+                  : "No plans have been created yet. Click 'Add New Plan' to set up your first jewellery savings plan."}
+              </p>
+              {(searchTerm || selectedCategoryFilter !== "ALL" || statusFilter !== "ALL") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm("");
+                    setSelectedCategoryFilter("ALL");
+                    setStatusFilter("ALL");
+                  }}
+                  className="text-xs font-bold text-[#0B3D0B] underline cursor-pointer"
+                >
+                  Clear all filters
+                </button>
+              )}
             </div>
-            <h3 className="text-base font-bold text-gray-900">No Jewellery Plans Found</h3>
-            <p className="text-xs text-gray-500 max-w-md mx-auto">
-              {searchTerm || selectedCategoryFilter !== "ALL" || statusFilter !== "ALL"
-                ? "No plans match your current search and filter criteria. Try resetting filters."
-                : "No plans have been created yet. Click 'Add New Plan' to set up your first jewellery savings plan."}
-            </p>
-            {(searchTerm || selectedCategoryFilter !== "ALL" || statusFilter !== "ALL") && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchTerm("");
-                  setSelectedCategoryFilter("ALL");
-                  setStatusFilter("ALL");
-                }}
-                className="text-xs font-bold text-[#0B3D0B] underline cursor-pointer"
-              >
-                Clear all filters
-              </button>
-            )}
+
+            {/* Pilot Preview with Existing Record */}
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[#FFD700]" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-stone-600">
+                    Design Pilot Preview (Existing Record)
+                  </span>
+                </div>
+                <span className="text-[11px] text-stone-500">
+                  Sample Record: 22K Royal Heritage Bridal
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <JewelleryPlanCard
+                  plan={sampleJewelleryPlan}
+                  onViewCustomers={() => {
+                    setViewCustomersPlan(sampleJewelleryPlan);
+                    setCustomersPage(1);
+                    setCustomersSearch("");
+                  }}
+                  onEdit={() => openEditModal(sampleJewelleryPlan)}
+                  onDeactivate={() => {
+                    setStatusActionPlan({ plan: sampleJewelleryPlan, action: "Deactivate" });
+                    setStatusReason("");
+                  }}
+                  onReopen={() => {
+                    setStatusActionPlan({ plan: sampleJewelleryPlan, action: "Reopen" });
+                    setStatusReason("");
+                  }}
+                />
+              </div>
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {plans.map((plan) => {
-              const isScheduled = plan.displayStatus === "Scheduled";
-              const isDeactivated = plan.displayStatus === "Deactivated";
-
-              return (
-                <div
-                  key={plan.id}
-                  className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between p-5 sm:p-6 relative group"
-                >
-                  {/* Card Header: Title & Status Badge */}
-                  <div>
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="font-bold text-gray-900 text-base leading-snug tracking-tight">
-                          {plan.name}
-                        </h3>
-                        <span className="text-[11px] font-bold text-gray-400 tracking-wider uppercase">
-                          {plan.categoryName || "General"}
-                        </span>
-                      </div>
-
-                      {/* Status badge */}
-                      <span
-                        className={`text-[11px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${isDeactivated
-                            ? "bg-red-50 text-red-700 border border-red-200"
-                            : isScheduled
-                              ? "bg-blue-50 text-blue-700 border border-blue-200"
-                              : "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                          }`}
-                      >
-                        {plan.displayStatus}
-                      </span>
-                    </div>
-
-                    {/* Image Thumbnail (if available) */}
-                    {plan.imageUrl ? (
-                      <div className="mt-4 relative w-full h-32 rounded-xl overflow-hidden bg-gray-100 border border-gray-100">
-                        <img
-                          src={plan.imageUrl}
-                          alt={plan.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          onError={(e) => {
-                            (e.target as HTMLElement).style.display = "none";
-                          }}
-                        />
-                      </div>
-                    ) : null}
-
-                    {/* PLAN GOLD PROGRESS Bar */}
-                    <div className="mt-5 space-y-2">
-                      <div className="flex items-center justify-between text-[11px] font-bold">
-                        <span className="text-gray-400 tracking-wider">PLAN GOLD PROGRESS</span>
-                        <span className="text-gray-900">{plan.overallProgressPercentage}%</span>
-                      </div>
-                      <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                        <div
-                          className="bg-[#FFD700] h-2 rounded-full transition-all duration-500"
-                          style={{ width: `${Math.min(100, Math.max(0, plan.overallProgressPercentage))}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Details Two-Column Grid (matches Screenshot 1) */}
-                    <div className="mt-5 pt-4 border-t border-gray-100 grid grid-cols-2 gap-4 text-xs">
-                      <div className="space-y-1">
-                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                          DURATION
-                        </div>
-                        <div className="font-bold text-gray-800">
-                          {plan.allowedDurationsMonths?.length > 0
-                            ? plan.allowedDurationsMonths.join(" / ") + " months"
-                            : "Flexible"}
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                          PLAN GOLD
-                        </div>
-                        <div className="font-bold text-gray-800">
-                          {plan.targetProductGoldWeightGrams} g
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                          START DATE
-                        </div>
-                        <div className="font-semibold text-gray-700 flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                          <span>{plan.startDate}</span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                          PREMIUM
-                        </div>
-                        <div className="font-bold text-gray-800">
-                          {plan.premiumPercentage}%
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Card Actions Footer (matches Screenshot 1) */}
-                  <div className="mt-6 pt-4 border-t border-gray-100 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setViewCustomersPlan(plan);
-                        setCustomersPage(1);
-                        setCustomersSearch("");
-                      }}
-                      className="flex-1 py-2.5 px-3 rounded-xl bg-[#0B3D0B] text-white hover:bg-[#082e08] text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      <Users className="w-3.5 h-3.5 text-[#FFD700]" />
-                      <span>View Customers</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => openEditModal(plan)}
-                      className="py-2.5 px-3 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-bold transition-all cursor-pointer"
-                    >
-                      Edit
-                    </button>
-
-                    {/* Three-dot menu button */}
-                    <div className="relative action-menu-container">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setActiveMenuId((prev) => (prev === plan.id ? null : plan.id))
-                        }
-                        className="p-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-all cursor-pointer"
-                        aria-label="More actions"
-                      >
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
-
-                      {activeMenuId === plan.id && (
-                        <div className="absolute right-0 bottom-full mb-2 w-44 bg-white rounded-xl shadow-xl border border-gray-200 p-1.5 z-20 animate-fadeIn">
-                          {plan.isActive ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setStatusActionPlan({ plan, action: "Deactivate" });
-                                setStatusReason("");
-                                setActiveMenuId(null);
-                              }}
-                              className="w-full text-left px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-2 transition-all cursor-pointer"
-                            >
-                              <Power className="w-3.5 h-3.5" />
-                              <span>Deactivate Plan</span>
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setStatusActionPlan({ plan, action: "Reopen" });
-                                setStatusReason("");
-                                setActiveMenuId(null);
-                              }}
-                              className="w-full text-left px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50 rounded-lg flex items-center gap-2 transition-all cursor-pointer"
-                            >
-                              <RefreshCw className="w-3.5 h-3.5" />
-                              <span>Reopen Plan</span>
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {plans.map((plan) => (
+              <JewelleryPlanCard
+                key={plan.id}
+                plan={plan}
+                onViewCustomers={() => {
+                  setViewCustomersPlan(plan);
+                  setCustomersPage(1);
+                  setCustomersSearch("");
+                }}
+                onEdit={() => openEditModal(plan)}
+                onDeactivate={() => {
+                  setStatusActionPlan({ plan, action: "Deactivate" });
+                  setStatusReason("");
+                }}
+                onReopen={() => {
+                  setStatusActionPlan({ plan, action: "Reopen" });
+                  setStatusReason("");
+                }}
+              />
+            ))}
           </div>
         )}
 

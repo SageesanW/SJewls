@@ -167,4 +167,53 @@ public class GoldRateOverrideTests
         Assert.Equal("ManualOverride", customerRate.Source);
         Assert.True(customerRate.IsOverridden);
     }
+
+    [Fact]
+    public async Task GetOverviewAsync_WhenLiveFallbackEnabled_ReturnsAvailableLiveRate()
+    {
+        using var db = CreateInMemoryDb();
+
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            { "GoldApi:EnableLiveFallback", "true" }
+        }).Build();
+
+        var cache = new MemoryCache(new MemoryCacheOptions());
+        var httpClient = new HttpClient();
+        var service = new GoldRateService(httpClient, config, cache, db, NullLogger<GoldRateService>.Instance);
+
+        var overview = await service.GetOverviewAsync(null);
+
+        Assert.NotNull(overview.LiveApiRate);
+        Assert.True(overview.LiveApiRate.IsAvailable);
+        Assert.True(overview.LiveApiRate.IsConfigured);
+        Assert.NotNull(overview.LiveApiRate.Rate24k);
+        Assert.True(overview.LiveApiRate.Rate24k > 0);
+        Assert.NotNull(overview.LiveApiRate.Rate22k);
+        Assert.True(overview.LiveApiRate.Rate22k > 0);
+        Assert.Equal("LKR", overview.LiveApiRate.Currency);
+    }
+
+    [Fact]
+    public async Task GetCustomerRateAsync_WhenNoOverrideAndLiveFallbackEnabled_ReturnsLiveMarketRate()
+    {
+        using var db = CreateInMemoryDb();
+
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            { "GoldApi:EnableLiveFallback", "true" }
+        }).Build();
+
+        var cache = new MemoryCache(new MemoryCacheOptions());
+        var httpClient = new HttpClient();
+        var service = new GoldRateService(httpClient, config, cache, db, NullLogger<GoldRateService>.Instance);
+
+        var customerRate = await service.GetCustomerRateAsync(null);
+
+        Assert.False(customerRate.IsOverridden);
+        Assert.True(customerRate.Rate24kPerGram > 0);
+        Assert.True(customerRate.Rate22kPerGram > 0);
+        Assert.Equal("LKR", customerRate.Currency);
+        Assert.NotEmpty(customerRate.Source);
+    }
 }

@@ -260,25 +260,25 @@ export default function BranchesPage() {
   };
 
   return (
-    <AdminLayout>
+    <AdminLayout title="Branch Network">
       <div className="space-y-6">
         {/* Page Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-[#E8E5DD]">
           <div>
-            <h1 className="text-2xl font-bold text-[#0B3D0B] tracking-tight">Branches Management</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Configure and oversee physical store branches, currency, and local operations.
+            <h1 className="text-2xl font-serif-luxury font-bold text-[#151A14] tracking-tight">Branch Network</h1>
+            <p className="text-xs sm:text-sm text-stone-500 mt-1 font-medium">
+              Configure and oversee physical store branches, currency, and local operations
             </p>
           </div>
           <div className="flex items-center gap-3">
             <button
               onClick={loadBranches}
               disabled={loading}
-              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition"
+              className="inline-flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold text-stone-700 bg-white border border-[#E8E5DD] rounded-xl hover:bg-stone-50 shadow-2xs transition cursor-pointer"
               title="Refresh branches list"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-[#0B3D0B]" : ""}`} />
-              Refresh
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-[#0B3D0B]" : ""}`} />
+              <span>Refresh</span>
             </button>
             {isSuperAdmin && (
               <button
@@ -287,10 +287,10 @@ export default function BranchesPage() {
                   setCreateError(null);
                   setShowCreateModal(true);
                 }}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#0B3D0B] rounded-lg hover:bg-[#082d08] shadow-sm transition"
+                className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-white btn-primary-green rounded-xl shadow-xs transition cursor-pointer"
               >
-                <Plus className="w-4 h-4" />
-                Add New Branch
+                <Plus className="w-4 h-4 text-[#D4AF37] stroke-[3]" />
+                <span>Add New Branch</span>
               </button>
             )}
           </div>

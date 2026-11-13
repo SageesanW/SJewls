@@ -68,7 +68,7 @@ function LoginForm() {
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-2xl p-8 shadow-md border border-gray-200">
+        <div className="bg-white rounded-2xl p-8 shadow-xl border border-[#E8E5DD]">
           {/* Notifications */}
           {isExpired && !error && (
             <div className="mb-6 p-3.5 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-3 text-amber-800 text-xs">
@@ -85,8 +85,8 @@ function LoginForm() {
           )}
 
           {error && (
-            <div className="mb-6 p-3.5 rounded-xl bg-red-50 border border-red-200 flex items-start gap-3 text-red-800 text-xs">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+            <div className="mb-6 p-3.5 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-3 text-rose-800 text-xs">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
               <span>{error}</span>
             </div>
           )}
@@ -94,11 +94,11 @@ function LoginForm() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Username or Email */}
             <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+              <label className="block text-[11px] font-bold text-stone-700 uppercase tracking-wider mb-1.5">
                 Username or Email
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-stone-400">
                   <User className="w-4 h-4" />
                 </div>
                 <input
@@ -108,7 +108,7 @@ function LoginForm() {
                   value={usernameOrEmail}
                   onChange={(e) => setUsernameOrEmail(e.target.value)}
                   placeholder="admin@sjewls.lk or username"
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-gray-50 border border-gray-300 text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B3D0B] focus:bg-white transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#FAF9F6] border border-[#E8E5DD] text-stone-900 placeholder-stone-400 text-xs sm:text-sm focus:outline-hidden focus:ring-2 focus:ring-[#0B3D0B] focus:bg-white transition-all font-medium"
                 />
               </div>
             </div>
@@ -116,18 +116,18 @@ function LoginForm() {
             {/* Password */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+                <label className="block text-[11px] font-bold text-stone-700 uppercase tracking-wider">
                   Password
                 </label>
                 <Link
                   href="/forgot-password"
-                  className="text-xs text-[#0B3D0B] font-semibold hover:underline"
+                  className="text-xs text-[#0B3D0B] font-bold hover:underline"
                 >
                   Forgot password?
                 </Link>
               </div>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-stone-400">
                   <Lock className="w-4 h-4" />
                 </div>
                 <input
@@ -137,12 +137,12 @@ function LoginForm() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-gray-50 border border-gray-300 text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B3D0B] focus:bg-white transition-all"
+                  className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-[#FAF9F6] border border-[#E8E5DD] text-stone-900 placeholder-stone-400 text-xs sm:text-sm focus:outline-hidden focus:ring-2 focus:ring-[#0B3D0B] focus:bg-white transition-all font-medium"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-stone-400 hover:text-stone-600 transition-colors cursor-pointer"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -153,7 +153,7 @@ function LoginForm() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full mt-2 py-3 px-4 rounded-xl btn-primary-green text-sm font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              className="w-full mt-2 py-3 px-4 rounded-xl btn-primary-green text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shadow-md"
             >
               {isSubmitting ? (
                 <>
@@ -161,7 +161,7 @@ function LoginForm() {
                   <span>Verifying credentials...</span>
                 </>
               ) : (
-                <span>Sign in to Admin Portal</span>
+                <span>Sign in to Operations Portal</span>
               )}
             </button>
           </form>

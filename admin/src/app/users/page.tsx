@@ -190,18 +190,18 @@ export default function UsersPage() {
   };
 
   return (
-    <AdminLayout>
+    <AdminLayout title="Staff Accounts">
       <div className="space-y-6">
         {/* Header Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-gray-200">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#E8E5DD]">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0B3D0B] tracking-tight">
+              <h1 className="text-2xl sm:text-3xl font-serif-luxury font-bold text-[#151A14] tracking-tight">
                 Staff & User Management
               </h1>
             </div>
-            <p className="text-sm text-gray-600 mt-1">
-              Manage platform staff roles, branch assignments, and system access permissions.
+            <p className="text-xs sm:text-sm text-stone-500 mt-1 font-medium">
+              Manage platform staff roles, branch assignments, and system access permissions
             </p>
           </div>
 

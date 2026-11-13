@@ -285,21 +285,21 @@ function PaymentsContent() {
   };
 
   return (
-    <AdminLayout>
+    <AdminLayout title="Plan Payments">
       <div className="space-y-6 pb-16">
         {/* Header and Actions */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-neutral-100">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-6 rounded-2xl shadow-xs border border-[#E8E5DD]">
           <div>
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-[#0B3D0B]/10 text-[#0B3D0B]">
-                <CreditCard className="w-6 h-6" />
+              <div className="w-11 h-11 rounded-xl bg-[#C5A059]/15 border border-[#C5A059]/30 text-[#0B3D0B] flex items-center justify-center shadow-xs">
+                <CreditCard className="w-6 h-6 text-[#8C6D2D]" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-neutral-900 tracking-tight">
+                <h1 className="text-2xl font-serif-luxury font-bold text-[#151A14] tracking-tight">
                   Jewellery Plan Payments
                 </h1>
-                <p className="text-sm text-neutral-500">
-                  Authoritative payments ledger, confirmed grams credit, and duration management.
+                <p className="text-xs sm:text-sm text-stone-500 font-medium mt-0.5">
+                  Authoritative payments ledger, confirmed grams credit, and duration management
                 </p>
               </div>
             </div>
@@ -307,25 +307,25 @@ function PaymentsContent() {
 
           {/* Refresh controls & Last updated */}
           <div className="flex items-center gap-3 self-start md:self-auto">
-            <div className="flex flex-col items-end text-xs text-neutral-500">
-              <div className="flex items-center gap-1.5 font-medium text-neutral-700">
+            <div className="flex flex-col items-end text-xs text-stone-500 font-medium">
+              <div className="flex items-center gap-1.5 font-semibold text-stone-700">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
                 Live 15s polling
               </div>
-              <span>Refreshed: {lastRefreshedAt.toLocaleTimeString()}</span>
+              <span className="text-[10px]">Refreshed: {lastRefreshedAt.toLocaleTimeString()}</span>
             </div>
 
             <button
               onClick={() => fetchData(false)}
               disabled={isRefreshing || initialLoading}
-              className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-800 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-3.5 py-2.5 text-xs font-bold rounded-xl bg-white hover:bg-stone-50 text-stone-700 border border-[#E8E5DD] shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
               title="Manual Data Refresh"
             >
               <RefreshCw
-                className={`w-4 h-4 text-[#0B3D0B] ${isRefreshing ? "animate-spin" : ""}`}
+                className={`w-3.5 h-3.5 text-[#0B3D0B] ${isRefreshing ? "animate-spin" : ""}`}
               />
               <span>Refresh</span>
             </button>
@@ -343,13 +343,13 @@ function PaymentsContent() {
         )}
 
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 border-b border-neutral-200">
+        <div className="flex items-center gap-2 border-b border-[#E8E5DD]">
           <button
             onClick={() => handleTabChange("history")}
-            className={`flex items-center gap-2.5 px-5 py-3 font-semibold text-sm border-b-2 transition-all ${
+            className={`flex items-center gap-2.5 px-5 py-3 font-semibold text-xs sm:text-sm border-b-2 transition-all cursor-pointer ${
               activeTab === "history"
-                ? "border-[#0B3D0B] text-[#0B3D0B]"
-                : "border-transparent text-neutral-500 hover:text-neutral-800"
+                ? "border-[#0B3D0B] text-[#0B3D0B] font-bold"
+                : "border-transparent text-stone-500 hover:text-stone-800"
             }`}
           >
             <CreditCard className="w-4 h-4" />

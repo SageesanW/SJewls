@@ -190,35 +190,35 @@ function NotificationComposerContent() {
   };
 
   return (
-    <AdminLayout>
+    <AdminLayout title="Notification Composer">
       <div className="max-w-4xl mx-auto space-y-6 pb-20">
         {/* Navigation Breadcrumb */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push("/jewellery-plans/payments")}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-neutral-200 bg-white hover:bg-neutral-50 text-xs font-semibold text-neutral-700 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#E8E5DD] bg-white hover:bg-stone-50 text-xs font-semibold text-stone-700 transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back to Payments</span>
           </button>
-          <span className="text-xs text-neutral-400">/</span>
-          <span className="text-xs font-semibold text-neutral-800">
+          <span className="text-xs text-stone-400">/</span>
+          <span className="text-xs font-semibold text-stone-800">
             Reminder Notification Composer
           </span>
         </div>
 
         {/* Page Title */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-neutral-100 flex items-center justify-between">
+        <div className="bg-white p-6 rounded-2xl shadow-xs border border-[#E8E5DD] flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-[#0B3D0B]/10 text-[#0B3D0B]">
-              <Bell className="w-6 h-6" />
+            <div className="w-11 h-11 rounded-xl bg-[#C5A059]/15 border border-[#C5A059]/30 text-[#0B3D0B] flex items-center justify-center shadow-xs">
+              <Bell className="w-6 h-6 text-[#8C6D2D]" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-neutral-900 tracking-tight">
+              <h1 className="text-2xl font-serif-luxury font-bold text-[#151A14] tracking-tight">
                 Draft Reminder Notification
               </h1>
-              <p className="text-sm text-neutral-500">
-                Staff-reviewed reminder dispatch with verified enrolment context and delivery channel selection.
+              <p className="text-xs sm:text-sm text-stone-500 font-medium mt-0.5">
+                Staff-reviewed reminder dispatch with verified enrolment context and delivery channel selection
               </p>
             </div>
           </div>

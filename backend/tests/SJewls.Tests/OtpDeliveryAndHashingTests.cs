@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using SJewls.Application.Common;
@@ -17,16 +18,29 @@ namespace SJewls.Tests;
 
 public class MockHttpMessageHandler : HttpMessageHandler
 {
-    private readonly Func<HttpRequestMessage, HttpResponseMessage> _handler;
+    private readonly Func<HttpRequestMessage, Task<HttpResponseMessage>> _handler;
 
     public MockHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> handler)
+    {
+        _handler = req => Task.FromResult(handler(req));
+    }
+
+    public MockHttpMessageHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> handler)
     {
         _handler = handler;
     }
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        return Task.FromResult(_handler(request));
+        return _handler(request);
+    }
+}
+
+public class TimeoutHttpMessageHandler : HttpMessageHandler
+{
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        throw new TaskCanceledException("Simulated HTTP request timeout for SMS gateway");
     }
 }
 
@@ -532,5 +546,413 @@ public class OtpDeliveryAndHashingTests
         Assert.Equal("client-secret-abc", options.EffectiveClientSecret);
         Assert.Equal("refresh-token-xyz", options.EffectiveRefreshToken);
     }
+
+    #region SMSlenz Provider Selection & Delivery Tests
+
+    [Theory]
+    [InlineData("SmsLenz", typeof(SmsLenzSmsSender))]
+    [InlineData("smslenz", typeof(SmsLenzSmsSender))]
+    [InlineData("TextLk", typeof(TextLkSmsSender))]
+    [InlineData("textlk", typeof(TextLkSmsSender))]
+    [InlineData("Mock", typeof(MockSmsSender))]
+    [InlineData("mock", typeof(MockSmsSender))]
+    [InlineData("", typeof(SmsLenzSmsSender))] // Default when empty
+    public void SmsProviderSelection_ResolvesExpectedSender(string provider, Type expectedType)
+    {
+        var services = new ServiceCollection();
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Sms:Provider"] = provider,
+                ["Sms:SmsLenz:ApiUrl"] = "https://smslenz.lk/api/send-sms",
+                ["Sms:SmsLenz:UserId"] = "2888",
+                ["Sms:SmsLenz:ApiKey"] = "fake-key",
+                ["Sms:SmsLenz:SenderId"] = "SMSlenzDEMO",
+                ["Sms:ApiUrl"] = "https://app.text.lk/api/v3/sms/send",
+                ["Sms:ApiToken"] = "fake-token",
+                ["Sms:SenderId"] = "TextLKDemo"
+            })
+            .Build();
+
+        services.AddSingleton<IConfiguration>(config);
+        services.AddLogging();
+        services.AddScoped(_ => new HttpClient());
+        services.AddScoped(sp => Options.Create(new SmsOptions
+        {
+            Provider = provider,
+            ApiUrl = "https://app.text.lk/api/v3/sms/send",
+            ApiToken = "fake-token",
+            SenderId = "TextLKDemo",
+            SmsLenz = new SmsLenzOptions
+            {
+                ApiUrl = "https://smslenz.lk/api/send-sms",
+                UserId = "2888",
+                ApiKey = "fake-key",
+                SenderId = "SMSlenzDEMO"
+            }
+        }));
+        services.AddScoped(sp => Options.Create(new SmsLenzOptions
+        {
+            ApiUrl = "https://smslenz.lk/api/send-sms",
+            UserId = "2888",
+            ApiKey = "fake-key",
+            SenderId = "SMSlenzDEMO"
+        }));
+        services.AddScoped<SmsLenzSmsSender>();
+        services.AddScoped<TextLkSmsSender>();
+        services.AddScoped<MockSmsSender>();
+
+        services.AddScoped<ISmsSender>(sp =>
+        {
+            var cfg = sp.GetRequiredService<IConfiguration>();
+            var p = cfg["Sms:Provider"]?.Trim();
+
+            if (string.Equals(p, "SmsLenz", StringComparison.OrdinalIgnoreCase))
+            {
+                return sp.GetRequiredService<SmsLenzSmsSender>();
+            }
+
+            if (string.Equals(p, "TextLk", StringComparison.OrdinalIgnoreCase))
+            {
+                return sp.GetRequiredService<TextLkSmsSender>();
+            }
+
+            if (string.Equals(p, "Mock", StringComparison.OrdinalIgnoreCase))
+            {
+                return sp.GetRequiredService<MockSmsSender>();
+            }
+
+            return sp.GetRequiredService<SmsLenzSmsSender>();
+        });
+
+        using var sp = services.BuildServiceProvider();
+        var sender = sp.GetRequiredService<ISmsSender>();
+        Assert.IsType(expectedType, sender);
+    }
+
+    [Theory]
+    [InlineData("", "fake-key", "SMSlenzDEMO")]
+    [InlineData("2888", "", "SMSlenzDEMO")]
+    [InlineData("2888", "fake-key", "")]
+    public async Task SmsLenzSmsSender_ThrowsWhenSettingsMissing(string userId, string apiKey, string senderId)
+    {
+        var options = Options.Create(new SmsLenzOptions
+        {
+            ApiUrl = "https://smslenz.lk/api/send-sms",
+            UserId = userId,
+            ApiKey = apiKey,
+            SenderId = senderId
+        });
+
+        using var httpClient = new HttpClient();
+        var sender = new SmsLenzSmsSender(httpClient, options, NullLogger<SmsLenzSmsSender>.Instance);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            sender.SendSmsAsync("+94771234567", "Test message"));
+
+        Assert.Contains("configuration is incomplete", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    public async Task SmsLenzSmsSender_RejectsEmptyPhoneNumber(string? invalidPhone)
+    {
+        var options = Options.Create(new SmsLenzOptions
+        {
+            ApiUrl = "https://smslenz.lk/api/send-sms",
+            UserId = "2888",
+            ApiKey = "fake-key",
+            SenderId = "SMSlenzDEMO"
+        });
+
+        using var httpClient = new HttpClient();
+        var sender = new SmsLenzSmsSender(httpClient, options, NullLogger<SmsLenzSmsSender>.Instance);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            sender.SendSmsAsync(invalidPhone!, "Test message"));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    public async Task SmsLenzSmsSender_RejectsEmptyMessage(string? emptyMessage)
+    {
+        var options = Options.Create(new SmsLenzOptions
+        {
+            ApiUrl = "https://smslenz.lk/api/send-sms",
+            UserId = "2888",
+            ApiKey = "fake-key",
+            SenderId = "SMSlenzDEMO"
+        });
+
+        using var httpClient = new HttpClient();
+        var sender = new SmsLenzSmsSender(httpClient, options, NullLogger<SmsLenzSmsSender>.Instance);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            sender.SendSmsAsync("+94771234567", emptyMessage!));
+    }
+
+    [Fact]
+    public async Task SmsLenzSmsSender_Success_SendsExpectedPayloadAndNormalizesPhone()
+    {
+        HttpRequestMessage? capturedRequest = null;
+        string? capturedBody = null;
+
+        var handler = new MockHttpMessageHandler(async req =>
+        {
+            capturedRequest = req;
+            capturedBody = req.Content != null ? await req.Content.ReadAsStringAsync() : null;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"success\":true,\"message\":\"Message dispatched successfully\"}", Encoding.UTF8, "application/json")
+            };
+        });
+
+        using var httpClient = new HttpClient(handler);
+        var options = Options.Create(new SmsLenzOptions
+        {
+            ApiUrl = "https://smslenz.lk/api/send-sms",
+            UserId = "2888",
+            ApiKey = "f51d51e4-9fb8-4c68-a993-82e39183af6d",
+            SenderId = "SMSlenzDEMO"
+        });
+
+        var sender = new SmsLenzSmsSender(httpClient, options, NullLogger<SmsLenzSmsSender>.Instance);
+
+        // Act: Test with local phone format '0771234567'
+        await sender.SendSmsAsync("0771234567", "Your SJewls verification code is 482910");
+
+        // Assert
+        Assert.NotNull(capturedRequest);
+        Assert.Equal(HttpMethod.Post, capturedRequest.Method);
+        Assert.Equal("https://smslenz.lk/api/send-sms", capturedRequest.RequestUri?.AbsoluteUri);
+
+        Assert.NotNull(capturedBody);
+        using var doc = JsonDocument.Parse(capturedBody);
+        var root = doc.RootElement;
+
+        Assert.Equal("2888", root.GetProperty("user_id").GetString());
+        Assert.Equal("f51d51e4-9fb8-4c68-a993-82e39183af6d", root.GetProperty("api_key").GetString());
+        Assert.Equal("SMSlenzDEMO", root.GetProperty("sender_id").GetString());
+        Assert.Equal("+94771234567", root.GetProperty("contact").GetString());
+        Assert.Equal("Your SJewls verification code is 482910", root.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task SmsLenzSmsSender_Rejection_WhenProviderReturnsSuccessFalse_Throws()
+    {
+        var handler = new MockHttpMessageHandler(req => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("{\"success\":false,\"message\":\"Insufficient SMS credits\"}", Encoding.UTF8, "application/json")
+        });
+
+        using var httpClient = new HttpClient(handler);
+        var options = Options.Create(new SmsLenzOptions
+        {
+            ApiUrl = "https://smslenz.lk/api/send-sms",
+            UserId = "2888",
+            ApiKey = "fake-key",
+            SenderId = "SMSlenzDEMO"
+        });
+
+        var sender = new SmsLenzSmsSender(httpClient, options, NullLogger<SmsLenzSmsSender>.Instance);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            sender.SendSmsAsync("+94771234567", "Your code is 123456"));
+
+        Assert.Contains("Insufficient SMS credits", ex.Message);
+    }
+
+    [Fact]
+    public async Task SmsLenzSmsSender_Rejection_WhenHttpStatusError_Throws()
+    {
+        var handler = new MockHttpMessageHandler(req => new HttpResponseMessage(HttpStatusCode.Unauthorized)
+        {
+            Content = new StringContent("{\"message\":\"Unauthorized API key\"}", Encoding.UTF8, "application/json")
+        });
+
+        using var httpClient = new HttpClient(handler);
+        var options = Options.Create(new SmsLenzOptions
+        {
+            ApiUrl = "https://smslenz.lk/api/send-sms",
+            UserId = "2888",
+            ApiKey = "fake-key",
+            SenderId = "SMSlenzDEMO"
+        });
+
+        var sender = new SmsLenzSmsSender(httpClient, options, NullLogger<SmsLenzSmsSender>.Instance);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            sender.SendSmsAsync("+94771234567", "Your code is 123456"));
+
+        Assert.Contains("HTTP status 401", ex.Message);
+    }
+
+    [Fact]
+    public async Task SmsLenzSmsSender_MalformedResponse_Throws()
+    {
+        var handler = new MockHttpMessageHandler(req => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("<html>Gateway Error</html>", Encoding.UTF8, "text/html")
+        });
+
+        using var httpClient = new HttpClient(handler);
+        var options = Options.Create(new SmsLenzOptions
+        {
+            ApiUrl = "https://smslenz.lk/api/send-sms",
+            UserId = "2888",
+            ApiKey = "fake-key",
+            SenderId = "SMSlenzDEMO"
+        });
+
+        var sender = new SmsLenzSmsSender(httpClient, options, NullLogger<SmsLenzSmsSender>.Instance);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            sender.SendSmsAsync("+94771234567", "Your code is 123456"));
+
+        Assert.Contains("Malformed response", ex.Message);
+    }
+
+    [Fact]
+    public async Task SmsLenzSmsSender_Timeout_Throws()
+    {
+        using var httpClient = new HttpClient(new TimeoutHttpMessageHandler());
+        var options = Options.Create(new SmsLenzOptions
+        {
+            ApiUrl = "https://smslenz.lk/api/send-sms",
+            UserId = "2888",
+            ApiKey = "fake-key",
+            SenderId = "SMSlenzDEMO"
+        });
+
+        var sender = new SmsLenzSmsSender(httpClient, options, NullLogger<SmsLenzSmsSender>.Instance);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            sender.SendSmsAsync("+94771234567", "Your code is 123456"));
+
+        Assert.Contains("Network error communicating with SMSlenz gateway", ex.Message);
+    }
+
+    [Fact]
+    public async Task OtpService_WhenSmsLenzFails_InvalidatesChallengeInDatabase()
+    {
+        var options = new DbContextOptionsBuilder<SJewlsDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
+            .Options;
+        using var db = new SJewlsDbContext(options);
+
+        // Handler simulating SMSlenz rejection
+        var handler = new MockHttpMessageHandler(req => new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            Content = new StringContent("{\"success\":false,\"message\":\"Sender ID unapproved\"}", Encoding.UTF8, "application/json")
+        });
+
+        using var httpClient = new HttpClient(handler);
+        var smsOptions = Options.Create(new SmsLenzOptions
+        {
+            ApiUrl = "https://smslenz.lk/api/send-sms",
+            UserId = "2888",
+            ApiKey = "fake-key",
+            SenderId = "SMSlenzDEMO"
+        });
+        var smsSender = new SmsLenzSmsSender(httpClient, smsOptions, NullLogger<SmsLenzSmsSender>.Instance);
+        var fakeEmail = new FakeEmailOtpProvider();
+        var config = new ConfigurationBuilder().Build();
+
+        var otpService = new OtpService(db, smsSender, fakeEmail, config, NullLogger<OtpService>.Instance);
+
+        // Act
+        var result = await otpService.RequestOtpAsync("+94771234567");
+
+        // Assert: RequestOtpResponse returns failure
+        Assert.False(result.Success);
+        Assert.Contains("Unable to send verification SMS", result.Message);
+
+        // Challenge in DB must be immediately invalidated (IsConsumed = true)
+        var challenge = await db.OtpChallenges.FirstOrDefaultAsync(c => c.ContactValue == "+94771234567");
+        Assert.NotNull(challenge);
+        Assert.True(challenge.IsConsumed, "Challenge must be invalidated upon SMS delivery failure");
+    }
+
+    [Fact]
+    public async Task OtpService_WhenSmsLenzTimesOut_InvalidatesChallengeInDatabase()
+    {
+        var options = new DbContextOptionsBuilder<SJewlsDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
+            .Options;
+        using var db = new SJewlsDbContext(options);
+
+        using var httpClient = new HttpClient(new TimeoutHttpMessageHandler());
+        var smsOptions = Options.Create(new SmsLenzOptions
+        {
+            ApiUrl = "https://smslenz.lk/api/send-sms",
+            UserId = "2888",
+            ApiKey = "fake-key",
+            SenderId = "SMSlenzDEMO"
+        });
+        var smsSender = new SmsLenzSmsSender(httpClient, smsOptions, NullLogger<SmsLenzSmsSender>.Instance);
+        var fakeEmail = new FakeEmailOtpProvider();
+        var config = new ConfigurationBuilder().Build();
+
+        var otpService = new OtpService(db, smsSender, fakeEmail, config, NullLogger<OtpService>.Instance);
+
+        // Act
+        var result = await otpService.RequestOtpAsync("+94771234567");
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Contains("Unable to send verification SMS", result.Message);
+
+        var challenge = await db.OtpChallenges.FirstOrDefaultAsync(c => c.ContactValue == "+94771234567");
+        Assert.NotNull(challenge);
+        Assert.True(challenge.IsConsumed, "Challenge must be invalidated upon SMS timeout");
+    }
+
+    [Fact]
+    public async Task OtpService_WhenSmsLenzSucceeds_PersistsActiveChallenge()
+    {
+        var options = new DbContextOptionsBuilder<SJewlsDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
+            .Options;
+        using var db = new SJewlsDbContext(options);
+
+        var handler = new MockHttpMessageHandler(req => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("{\"success\":true,\"message\":\"Dispatched\"}", Encoding.UTF8, "application/json")
+        });
+
+        using var httpClient = new HttpClient(handler);
+        var smsOptions = Options.Create(new SmsLenzOptions
+        {
+            ApiUrl = "https://smslenz.lk/api/send-sms",
+            UserId = "2888",
+            ApiKey = "fake-key",
+            SenderId = "SMSlenzDEMO"
+        });
+        var smsSender = new SmsLenzSmsSender(httpClient, smsOptions, NullLogger<SmsLenzSmsSender>.Instance);
+        var fakeEmail = new FakeEmailOtpProvider();
+        var config = new ConfigurationBuilder().Build();
+
+        var otpService = new OtpService(db, smsSender, fakeEmail, config, NullLogger<OtpService>.Instance);
+
+        // Act
+        var result = await otpService.RequestOtpAsync("+94771234567");
+
+        // Assert
+        Assert.True(result.Success);
+        Assert.Contains("Verification code sent to your phone number", result.Message);
+
+        var challenge = await db.OtpChallenges.FirstOrDefaultAsync(c => c.ContactValue == "+94771234567");
+        Assert.NotNull(challenge);
+        Assert.False(challenge.IsConsumed, "Challenge must remain active until verified");
+    }
+
+    #endregion
 }
 

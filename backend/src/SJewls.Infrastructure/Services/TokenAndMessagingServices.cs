@@ -57,7 +57,8 @@ public class TokenService : ITokenService
 
     public string GenerateAccessToken(Customer customer, string branchCode)
     {
-        var secret = _config["Jwt:Secret"] ?? "super-secret-key-that-must-be-at-least-32-characters-long-sjewls-dev";
+        var rawSecret = _config["Jwt:Secret"];
+        var secret = !string.IsNullOrWhiteSpace(rawSecret) ? rawSecret : "super-secret-key-that-must-be-at-least-32-characters-long-sjewls-dev";
         var issuer = _config["Jwt:Issuer"] ?? "SJewls.Api";
         var audience = _config["Jwt:Audience"] ?? "SJewls.App";
         var expiryMinutes = int.TryParse(_config["Jwt:ExpiryMinutes"], out var exp) ? exp : 1440;
@@ -87,7 +88,8 @@ public class TokenService : ITokenService
 
     public string GenerateStaffAccessToken(Staff staff, IEnumerable<string> roles, IEnumerable<string> branchCodes)
     {
-        var secret = _config["Jwt:Secret"] ?? "super-secret-key-that-must-be-at-least-32-characters-long-sjewls-dev";
+        var rawSecret = _config["Jwt:Secret"];
+        var secret = !string.IsNullOrWhiteSpace(rawSecret) ? rawSecret : "super-secret-key-that-must-be-at-least-32-characters-long-sjewls-dev";
         var issuer = _config["Jwt:Issuer"] ?? "SJewls.Api";
         var audience = _config["Jwt:Audience"] ?? "SJewls.App";
         var expiryMinutes = int.TryParse(_config["Jwt:AdminExpiryMinutes"], out var exp) ? exp : (int.TryParse(_config["Jwt:ExpiryMinutes"], out var defaultExp) ? defaultExp : 480);

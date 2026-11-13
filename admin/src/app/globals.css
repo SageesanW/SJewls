@@ -1,38 +1,89 @@
 @import "tailwindcss";
 
-:root {
-  --background: #FAF9F6;
-  --foreground: #1A1F16;
-  --sidebar-green: #0B3D0B;
-  --sidebar-green-hover: #124e12;
-  --sidebar-green-border: rgba(255, 255, 255, 0.12);
-  --gold: #FFD700;
-  --gold-hover: #e6c200;
-  --gold-soft: rgba(255, 215, 0, 0.18);
-  --card-bg: #FFFFFF;
-  --card-border: #E5E7EB;
-  --muted-text: #6B7280;
+@layer base {
+  :root {
+    --background: #FAF9F6;
+    --foreground: #151A14;
+    
+    /* SJewls Brand Theme Tokens */
+    --brand-green-deep: #051E05;
+    --brand-green: #0B3D0B;
+    --brand-green-hover: #124E12;
+    --brand-green-subtle: #082D08;
+    --brand-green-light: #165616;
+    
+    /* Warm Ivory & Surface Tokens */
+    --brand-ivory: #FAF9F6;
+    --brand-ivory-warm: #F4F1EA;
+    --card: #FFFFFF;
+    --card-foreground: #151A14;
+    --card-border: #E8E5DD;
+    --card-border-hover: #D8D3C5;
+    
+    /* Brass & Gold Accents (Muted & Prestigious) */
+    --brand-brass: #C5A059;
+    --brand-brass-hover: #B38E46;
+    --brand-brass-light: rgba(197, 160, 89, 0.12);
+    --brand-brass-border: rgba(197, 160, 89, 0.3);
+    --brand-gold: #D4AF37;
+    --brand-gold-bright: #FFD700;
+    
+    /* Charcoal Typography */
+    --charcoal-primary: #151A14;
+    --charcoal-secondary: #4B5548;
+    --charcoal-muted: #7A8577;
+    
+    /* Status Tokens */
+    --status-active-bg: #ECFDF5;
+    --status-active-text: #065F46;
+    --status-active-border: #A7F3D0;
+    
+    --status-warning-bg: #FFFBEB;
+    --status-warning-text: #92400E;
+    --status-warning-border: #FDE68A;
+    
+    --status-error-bg: #FEF2F2;
+    --status-error-text: #991B1B;
+    --status-error-border: #FECACA;
+    
+    /* Fonts */
+    --font-serif-luxury: "Playfair Display", "Cormorant Garamond", Georgia, Cambria, "Times New Roman", Times, serif;
+    --font-sans-data: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
 }
 
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-sans-data);
   min-height: 100vh;
   margin: 0;
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom Scrollbar */
+/* Serif luxury typography utility for brand, wordmarks, card headlines, and section headers */
+.font-serif-luxury {
+  font-family: var(--font-serif-luxury);
+  letter-spacing: -0.015em;
+}
+
+/* Tabular figures for numbers, metrics, currency, and weights */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom Luxury Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #f1f0eb;
+  background: #F1EFEA;
 }
 ::-webkit-scrollbar-thumb {
-  background: #c5c7ce;
+  background: #C8C5BC;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
@@ -47,59 +98,108 @@ body {
   background: transparent;
 }
 .sidebar-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(197, 160, 89, 0.25);
   border-radius: 2px;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(197, 160, 89, 0.5);
 }
 
 /* Deep Green Primary Action Button */
 .btn-primary-green {
-  background-color: #0B3D0B;
+  background: linear-gradient(135deg, #0B3D0B 0%, #072607 100%);
   color: #FFFFFF;
   font-weight: 600;
+  border: 1px solid rgba(197, 160, 89, 0.25);
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow: 0 2px 6px rgba(11, 61, 11, 0.25);
 }
 .btn-primary-green:hover:not(:disabled) {
-  background-color: #124e12;
-  box-shadow: 0 4px 12px rgba(11, 61, 11, 0.35);
+  background: linear-gradient(135deg, #124E12 0%, #0B3D0B 100%);
+  border-color: rgba(197, 160, 89, 0.45);
+  box-shadow: 0 4px 14px rgba(11, 61, 11, 0.35);
   transform: translateY(-1px);
 }
 .btn-primary-green:active:not(:disabled) {
   transform: translateY(0);
 }
 
-/* Gold Accent Button */
+/* Brass & Gold Button */
 .btn-gold {
-  background-color: #FFD700;
-  color: #0B3D0B;
+  background: linear-gradient(135deg, #D4AF37 0%, #C5A059 100%);
+  color: #061E06;
   font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.3);
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+  box-shadow: 0 2px 8px rgba(197, 160, 89, 0.3);
 }
 .btn-gold:hover:not(:disabled) {
-  background-color: #f5cc00;
-  box-shadow: 0 4px 14px rgba(255, 215, 0, 0.45);
+  background: linear-gradient(135deg, #E5C358 0%, #D4AF37 100%);
+  box-shadow: 0 4px 16px rgba(197, 160, 89, 0.45);
   transform: translateY(-1px);
 }
 
-/* Navigation Active Gold Pill */
+/* Navigation Active Indicator */
 .nav-gold-active {
-  background-color: #FFD700 !important;
-  color: #0B3D0B !important;
+  background: linear-gradient(90deg, rgba(197, 160, 89, 0.18) 0%, rgba(255, 255, 255, 0.08) 100%) !important;
+  color: #FFFFFF !important;
   font-weight: 700 !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border-left: 3px solid #C5A059 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 /* Card utilities */
-.card-surface {
+.card-luxury {
   background: #FFFFFF;
-  border: 1px solid #E5E7EB;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid #E8E5DD;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02), 0 4px 16px -2px rgba(11, 61, 11, 0.04);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.card-luxury:hover {
+  border-color: #D8D3C5;
+  box-shadow: 0 6px 24px -4px rgba(11, 61, 11, 0.08), 0 2px 6px rgba(0, 0, 0, 0.03);
+  transform: translateY(-2px);
 }
 
 .gold-gradient-text {
-  background: linear-gradient(135deg, #FFE873 0%, #FFD700 50%, #D4AF37 100%);
+  background: linear-gradient(135deg, #F3E5AB 0%, #D4AF37 50%, #AA7C11 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+.brass-gradient-text {
+  background: linear-gradient(135deg, #E6C875 0%, #C5A059 60%, #8C6D2D 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Subtle motion animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .card-luxury:hover {
+    transform: none !important;
+  }
 }

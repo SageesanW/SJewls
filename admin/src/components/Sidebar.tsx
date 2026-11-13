@@ -5,6 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "../lib/auth-context";
 import { SJewlsBrand } from "./SJewlsBrand";
+import { Badge } from "./ui/badge";
+import { cn } from "../lib/utils";
 import {
   LayoutDashboard,
   Users,
@@ -18,13 +20,18 @@ import {
   Coins,
   ChevronDown,
   Scale,
+  Sparkles,
+  MapPin,
 } from "lucide-react";
+
+import { StaffUser } from "../types/auth";
 
 interface SidebarProps {
   collapsed: boolean;
   onToggleCollapse: () => void;
   mobileOpen: boolean;
   onCloseMobile: () => void;
+  overrideUser?: StaffUser;
 }
 
 export function Sidebar({
@@ -32,42 +39,40 @@ export function Sidebar({
   onToggleCollapse,
   mobileOpen,
   onCloseMobile,
+  overrideUser,
 }: SidebarProps) {
   const pathname = usePathname();
-  const { user, logout, isSuperAdmin, isBranchAdmin } = useAuth();
+  const { user: authUser, logout, isSuperAdmin: authIsSuperAdmin, isBranchAdmin: authIsBranchAdmin } = useAuth();
+  const user = overrideUser || authUser;
+  const isSuperAdmin = Boolean(user?.roles?.some((r) => r.toLowerCase().includes("super admin"))) || authIsSuperAdmin;
+  const isBranchAdmin = Boolean(user?.roles?.some((r) => r.toLowerCase().includes("branch admin"))) || authIsBranchAdmin;
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
-  // Expandable Jewellery Plan state
   const isJewelleryPlanActive = pathname.startsWith("/jewellery-plans");
   const isChituPlanActive = pathname.startsWith("/chitu-plans");
   const isGoldRateActive = pathname.startsWith("/gold-rates");
+
   const [jewelleryExpanded, setJewelleryExpanded] = useState<boolean>(() => {
     return pathname.startsWith("/jewellery-plans");
   });
 
   useEffect(() => {
-    if (pathname.startsWith("/jewellery-plans")) {
+    if (pathname.startsWith("/jewellery-plans") && !jewelleryExpanded) {
       setJewelleryExpanded(true);
     }
-  }, [pathname]);
+  }, [pathname, jewelleryExpanded]);
 
-  const navItems = [
+  const overviewNav = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/customers", label: "Customers", icon: UserCheck },
-    { href: "/branches", label: "Branches", icon: Building2 },
-    ...(isSuperAdmin || isBranchAdmin
-      ? [{ href: "/users", label: "Users & Staff", icon: Users }]
-      : []),
   ];
 
-  const jewellerySubItems = [
+  const jewellerySubNav = [
     {
       href: "/jewellery-plans/categories",
       label: "Categories",
       isActive:
         pathname === "/jewellery-plans/categories" ||
         pathname === "/jewellery-plans",
-      enabled: true,
     },
     {
       href: "/jewellery-plans/plans",
@@ -75,20 +80,38 @@ export function Sidebar({
       isActive:
         pathname === "/jewellery-plans/plans" ||
         pathname.startsWith("/jewellery-plans/plans/"),
-      enabled: true,
     },
     {
       href: "/jewellery-plans/customers",
       label: "Plan Customers",
       isActive: pathname === "/jewellery-plans/customers",
-      enabled: true,
     },
     {
       href: "/jewellery-plans/payments",
       label: "Payments",
       isActive: pathname === "/jewellery-plans/payments",
-      enabled: true,
     },
+  ];
+
+  const operationsNav = [
+    {
+      type: "group" as const,
+      id: "jewellery-plans",
+      label: "Jewellery Plan",
+      icon: Gem,
+      isActive: isJewelleryPlanActive,
+      subItems: jewellerySubNav,
+    },
+    { href: "/chitu-plans", label: "Chitu Plans", icon: Coins, isActive: isChituPlanActive },
+    { href: "/gold-rates", label: "Gold Rates", icon: Scale, isActive: isGoldRateActive },
+  ];
+
+  const managementNav = [
+    { href: "/customers", label: "Customers", icon: UserCheck },
+    { href: "/branches", label: "Branches", icon: Building2 },
+    ...(isSuperAdmin || isBranchAdmin
+      ? [{ href: "/users", label: "Staff & Users", icon: Users }]
+      : []),
   ];
 
   const primaryBranch = user?.assignedBranches?.[0];
@@ -105,297 +128,250 @@ export function Sidebar({
     const showLabel = isMobile || !collapsed;
 
     return (
-      <nav className="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto sidebar-scroll">
-        {/* Dashboard & Customers */}
-        {navItems.slice(0, 2).map((item) => {
-          const Icon = item.icon;
-          const isActive =
-            pathname === item.href || pathname.startsWith(`${item.href}/`);
-
-          return (
-            <div
-              key={item.href}
-              className="relative"
-              onMouseEnter={() => setHoveredItem(item.href)}
-              onMouseLeave={() => setHoveredItem(null)}
-            >
-              <Link
-                href={item.href}
-                onClick={() => {
-                  if (isMobile) onCloseMobile();
-                }}
-                className={`flex items-center gap-3.5 px-3.5 py-3 rounded-xl text-sm font-medium transition-all duration-150 ${
-                  isActive
-                    ? "nav-gold-active font-bold"
-                    : "text-emerald-100/90 hover:text-white hover:bg-white/10"
-                } ${!showLabel ? "justify-center px-0" : ""}`}
-                aria-current={isActive ? "page" : undefined}
-              >
-                <Icon
-                  className={`w-5 h-5 flex-shrink-0 transition-transform ${
-                    isActive ? "text-[#0B3D0B]" : "text-[#FFD700]"
-                  }`}
-                />
-                {showLabel && (
-                  <span className="truncate tracking-wide">{item.label}</span>
-                )}
-              </Link>
-
-              {/* Tooltip for desktop collapsed mode */}
-              {!showLabel && hoveredItem === item.href && (
-                <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 bg-[#0A260A] text-white text-xs font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap z-50 pointer-events-none">
-                  {item.label}
-                </div>
-              )}
+      <nav
+        aria-label="Main Navigation"
+        className="flex-1 px-3 py-4 space-y-6 overflow-y-auto sidebar-scroll"
+      >
+        {/* SECTION 1: OVERVIEW */}
+        <div>
+          {showLabel && (
+            <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[#C5A059]/75 select-none flex items-center gap-1.5">
+              <span>Overview</span>
             </div>
-          );
-        })}
+          )}
+          <div className="space-y-1">
+            {overviewNav.map((item) => {
+              const Icon = item.icon;
+              const isActive =
+                pathname === item.href ||
+                (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
 
-        {/* Expandable Jewellery Plan Group */}
-        <div
-          className="relative"
-          onMouseEnter={() => setHoveredItem("jewellery-plan")}
-          onMouseLeave={() => setHoveredItem(null)}
-        >
-          {showLabel ? (
-            <div>
-              <button
-                type="button"
-                onClick={() => setJewelleryExpanded((prev) => !prev)}
-                className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
-                  isJewelleryPlanActive
-                    ? "nav-gold-active font-bold shadow-sm"
-                    : "text-emerald-100/90 hover:text-white hover:bg-white/10"
-                }`}
-                aria-expanded={jewelleryExpanded}
-              >
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <Gem
-                    className={`w-5 h-5 flex-shrink-0 ${
-                      isJewelleryPlanActive ? "text-[#0B3D0B]" : "text-[#FFD700]"
-                    }`}
-                  />
-                  <span className="truncate tracking-wide">Jewellery Plan</span>
-                </div>
-                <ChevronDown
-                  className={`w-4 h-4 flex-shrink-0 transition-transform duration-200 ${
-                    jewelleryExpanded ? "rotate-180" : ""
-                  } ${
-                    isJewelleryPlanActive ? "text-[#0B3D0B]" : "text-emerald-300"
-                  }`}
-                />
-              </button>
-
-              {/* Collapsible Submenu */}
-              {jewelleryExpanded && (
-                <div className="mt-1 ml-4 pl-3.5 border-l-2 border-emerald-700/50 space-y-1 py-1 animate-fadeIn">
-                  {jewellerySubItems.map((sub) => {
-                    if (sub.enabled) {
-                      return (
-                        <Link
-                          key={sub.href}
-                          href={sub.href}
-                          onClick={() => {
-                            if (isMobile) onCloseMobile();
-                          }}
-                          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-                            sub.isActive
-                              ? "bg-[#FFD700]/20 text-[#FFD700] font-bold border border-[#FFD700]/30 shadow-xs"
-                              : "text-emerald-200/90 hover:text-white hover:bg-white/5"
-                          }`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              sub.isActive ? "bg-[#FFD700]" : "bg-emerald-400/60"
-                            }`}
-                          />
-                          <span className="truncate">{sub.label}</span>
-                        </Link>
-                      );
-                    }
-
-                    return (
-                      <div
-                        key={sub.label}
-                        className="flex items-center justify-between px-3 py-2 text-xs text-emerald-400/50 cursor-not-allowed select-none rounded-lg"
-                        title="Module coming soon"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-700/60" />
-                          <span>{sub.label}</span>
-                        </div>
-                        <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/5 text-emerald-400/60 border border-white/5">
-                          Soon
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ) : (
-            /* Desktop Collapsed View */
-            <div>
-              <Link
-                href="/jewellery-plans/categories"
-                className={`flex items-center justify-center p-3 rounded-xl transition-all ${
-                  isJewelleryPlanActive
-                    ? "nav-gold-active font-bold"
-                    : "text-emerald-100/90 hover:text-white hover:bg-white/10"
-                }`}
-                title="Jewellery Plan Categories"
-              >
-                <Gem
-                  className={`w-5 h-5 flex-shrink-0 ${
-                    isJewelleryPlanActive ? "text-[#0B3D0B]" : "text-[#FFD700]"
-                  }`}
-                />
-              </Link>
-
-              {hoveredItem === "jewellery-plan" && (
-                <div className="absolute left-full top-0 ml-3 w-48 bg-[#0A260A] text-white p-2 rounded-xl shadow-2xl border border-white/10 z-50">
-                  <div className="px-2.5 py-1.5 text-xs font-bold text-[#FFD700] border-b border-white/10 mb-1">
-                    Jewellery Plan
-                  </div>
+              return (
+                <div
+                  key={item.href}
+                  className="relative"
+                  onMouseEnter={() => setHoveredItem(item.href)}
+                  onMouseLeave={() => setHoveredItem(null)}
+                >
                   <Link
-                    href="/jewellery-plans/categories"
-                    className="flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg text-emerald-100 hover:text-white hover:bg-white/10 font-medium"
+                    href={item.href}
+                    onClick={() => {
+                      if (isMobile) onCloseMobile();
+                    }}
+                    className={cn(
+                      "group flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#C5A059]",
+                      isActive
+                        ? "nav-gold-active"
+                        : "text-emerald-100/75 hover:text-white hover:bg-white/8",
+                      !showLabel && "justify-center px-0"
+                    )}
+                    aria-current={isActive ? "page" : undefined}
                   >
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#FFD700]" />
-                    Categories
+                    <Icon
+                      className={cn(
+                        "w-4 h-4 flex-shrink-0 transition-transform duration-200 group-hover:scale-110",
+                        isActive ? "text-[#D4AF37]" : "text-emerald-200/80 group-hover:text-white"
+                      )}
+                    />
+                    {showLabel && (
+                      <span className="truncate tracking-wide">{item.label}</span>
+                    )}
                   </Link>
-                  <div className="flex items-center justify-between px-2.5 py-1.5 text-xs text-emerald-400/50">
-                    <span>Plans</span>
-                    <span className="text-[9px] px-1 bg-white/5 rounded">Soon</span>
-                  </div>
-                  <div className="flex items-center justify-between px-2.5 py-1.5 text-xs text-emerald-400/50">
-                    <span>Plan Customers</span>
-                    <span className="text-[9px] px-1 bg-white/5 rounded">Soon</span>
-                  </div>
-                  <div className="flex items-center justify-between px-2.5 py-1.5 text-xs text-emerald-400/50">
-                    <span>Payments</span>
-                    <span className="text-[9px] px-1 bg-white/5 rounded">Soon</span>
-                  </div>
+
+                  {!showLabel && hoveredItem === item.href && (
+                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-[#061E06] text-white text-xs font-semibold rounded-lg shadow-xl border border-[#C5A059]/30 whitespace-nowrap z-50 pointer-events-none animate-fadeIn">
+                      {item.label}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          )}
+              );
+            })}
+          </div>
         </div>
 
-        {/* Chitu Plans */}
-        <div
-          className="relative"
-          onMouseEnter={() => setHoveredItem("/chitu-plans")}
-          onMouseLeave={() => setHoveredItem(null)}
-        >
-          <Link
-            href="/chitu-plans"
-            onClick={() => {
-              if (isMobile) onCloseMobile();
-            }}
-            className={`flex items-center gap-3.5 px-3.5 py-3 rounded-xl text-sm font-medium transition-all duration-150 ${
-              isChituPlanActive
-                ? "nav-gold-active font-bold shadow-sm"
-                : "text-emerald-100/90 hover:text-white hover:bg-white/10"
-            } ${!showLabel ? "justify-center px-0" : ""}`}
-            aria-current={isChituPlanActive ? "page" : undefined}
-          >
-            <Coins
-              className={`w-5 h-5 flex-shrink-0 transition-transform ${
-                isChituPlanActive ? "text-[#0B3D0B]" : "text-[#FFD700]"
-              }`}
-            />
-            {showLabel && (
-              <span className="truncate tracking-wide">Chitu Plans</span>
-            )}
-          </Link>
-
-          {!showLabel && hoveredItem === "/chitu-plans" && (
-            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 bg-[#0A260A] text-white text-xs font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap z-50 pointer-events-none">
-              Chitu Plans
+        {/* SECTION 2: SCHEMES & OPERATIONS */}
+        <div>
+          {showLabel && (
+            <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[#C5A059]/75 select-none flex items-center gap-1.5">
+              <span>Schemes & Catalog</span>
             </div>
           )}
-        </div>
+          <div className="space-y-1">
+            {operationsNav.map((item) => {
+              if (item.type === "group") {
+                const Icon = item.icon;
+                const isGroupActive = item.isActive;
 
-        {/* Gold Rates */}
-        <div
-          className="relative"
-          onMouseEnter={() => setHoveredItem("/gold-rates")}
-          onMouseLeave={() => setHoveredItem(null)}
-        >
-          <Link
-            href="/gold-rates"
-            onClick={() => {
-              if (isMobile) onCloseMobile();
-            }}
-            className={`flex items-center gap-3.5 px-3.5 py-3 rounded-xl text-sm font-medium transition-all duration-150 ${
-              isGoldRateActive
-                ? "nav-gold-active font-bold shadow-sm"
-                : "text-emerald-100/90 hover:text-white hover:bg-white/10"
-            } ${!showLabel ? "justify-center px-0" : ""}`}
-            aria-current={isGoldRateActive ? "page" : undefined}
-          >
-            <Scale
-              className={`w-5 h-5 flex-shrink-0 transition-transform ${
-                isGoldRateActive ? "text-[#0B3D0B]" : "text-[#FFD700]"
-              }`}
-            />
-            {showLabel && (
-              <span className="truncate tracking-wide">Gold Rates</span>
-            )}
-          </Link>
+                return (
+                  <div key={item.id} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!collapsed) {
+                          setJewelleryExpanded(!jewelleryExpanded);
+                        }
+                      }}
+                      className={cn(
+                        "w-full group flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#C5A059]",
+                        isGroupActive
+                          ? "bg-white/10 text-white font-semibold"
+                          : "text-emerald-100/75 hover:text-white hover:bg-white/8",
+                        !showLabel && "justify-center px-0"
+                      )}
+                      aria-expanded={jewelleryExpanded}
+                      aria-label="Jewellery Plan Menu"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Icon
+                          className={cn(
+                            "w-4 h-4 flex-shrink-0 transition-transform duration-200 group-hover:scale-110",
+                            isGroupActive ? "text-[#D4AF37]" : "text-emerald-200/80 group-hover:text-white"
+                          )}
+                        />
+                        {showLabel && (
+                          <span className="truncate tracking-wide">{item.label}</span>
+                        )}
+                      </div>
 
-          {!showLabel && hoveredItem === "/gold-rates" && (
-            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 bg-[#0A260A] text-white text-xs font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap z-50 pointer-events-none">
-              Gold Rates
-            </div>
-          )}
-        </div>
+                      {showLabel && (
+                        <ChevronDown
+                          className={cn(
+                            "w-3.5 h-3.5 text-emerald-300/70 transition-transform duration-200",
+                            jewelleryExpanded ? "rotate-180 text-[#D4AF37]" : ""
+                          )}
+                        />
+                      )}
+                    </button>
 
-        {/* Branches & Users */}
-        {navItems.slice(2).map((item) => {
-          const Icon = item.icon;
-          const isActive =
-            pathname === item.href || pathname.startsWith(`${item.href}/`);
+                    {/* Submenu links */}
+                    {showLabel && jewelleryExpanded && (
+                      <div className="pl-6 pr-1 py-1 space-y-1 border-l border-[#C5A059]/20 ml-5">
+                        {item.subItems.map((sub) => (
+                          <Link
+                            key={sub.href}
+                            href={sub.href}
+                            onClick={() => {
+                              if (isMobile) onCloseMobile();
+                            }}
+                            className={cn(
+                              "block px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-[#C5A059]",
+                              sub.isActive
+                                ? "text-white bg-white/12 font-bold border-l-2 border-[#D4AF37]"
+                                : "text-emerald-200/70 hover:text-white hover:bg-white/5"
+                            )}
+                            aria-current={sub.isActive ? "page" : undefined}
+                          >
+                            <span className="truncate">{sub.label}</span>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
 
-          return (
-            <div
-              key={item.href}
-              className="relative"
-              onMouseEnter={() => setHoveredItem(item.href)}
-              onMouseLeave={() => setHoveredItem(null)}
-            >
-              <Link
-                href={item.href}
-                onClick={() => {
-                  if (isMobile) onCloseMobile();
-                }}
-                className={`flex items-center gap-3.5 px-3.5 py-3 rounded-xl text-sm font-medium transition-all duration-150 ${
-                  isActive
-                    ? "nav-gold-active font-bold"
-                    : "text-emerald-100/90 hover:text-white hover:bg-white/10"
-                } ${!showLabel ? "justify-center px-0" : ""}`}
-                aria-current={isActive ? "page" : undefined}
-              >
-                <Icon
-                  className={`w-5 h-5 flex-shrink-0 transition-transform ${
-                    isActive ? "text-[#0B3D0B]" : "text-[#FFD700]"
-                  }`}
-                />
-                {showLabel && (
-                  <span className="truncate tracking-wide">{item.label}</span>
-                )}
-              </Link>
+              // Standard Link (Chitu Plans, Gold Rates)
+              const Icon = item.icon;
+              const isActive = item.isActive;
 
-              {/* Tooltip for desktop collapsed mode */}
-              {!showLabel && hoveredItem === item.href && (
-                <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 bg-[#0A260A] text-white text-xs font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap z-50 pointer-events-none">
-                  {item.label}
+              return (
+                <div
+                  key={item.href}
+                  className="relative"
+                  onMouseEnter={() => setHoveredItem(item.href)}
+                  onMouseLeave={() => setHoveredItem(null)}
+                >
+                  <Link
+                    href={item.href}
+                    onClick={() => {
+                      if (isMobile) onCloseMobile();
+                    }}
+                    className={cn(
+                      "group flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#C5A059]",
+                      isActive
+                        ? "nav-gold-active"
+                        : "text-emerald-100/75 hover:text-white hover:bg-white/8",
+                      !showLabel && "justify-center px-0"
+                    )}
+                    aria-current={isActive ? "page" : undefined}
+                  >
+                    <Icon
+                      className={cn(
+                        "w-4 h-4 flex-shrink-0 transition-transform duration-200 group-hover:scale-110",
+                        isActive ? "text-[#D4AF37]" : "text-emerald-200/80 group-hover:text-white"
+                      )}
+                    />
+                    {showLabel && (
+                      <span className="truncate tracking-wide">{item.label}</span>
+                    )}
+                  </Link>
+
+                  {!showLabel && hoveredItem === item.href && (
+                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-[#061E06] text-white text-xs font-semibold rounded-lg shadow-xl border border-[#C5A059]/30 whitespace-nowrap z-50 pointer-events-none animate-fadeIn">
+                      {item.label}
+                    </div>
+                  )}
                 </div>
-              )}
+              );
+            })}
+          </div>
+        </div>
+
+        {/* SECTION 3: MANAGEMENT */}
+        <div>
+          {showLabel && (
+            <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[#C5A059]/75 select-none flex items-center gap-1.5">
+              <span>Management & Operations</span>
             </div>
-          );
-        })}
+          )}
+          <div className="space-y-1">
+            {managementNav.map((item) => {
+              const Icon = item.icon;
+              const isActive =
+                pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+              return (
+                <div
+                  key={item.href}
+                  className="relative"
+                  onMouseEnter={() => setHoveredItem(item.href)}
+                  onMouseLeave={() => setHoveredItem(null)}
+                >
+                  <Link
+                    href={item.href}
+                    onClick={() => {
+                      if (isMobile) onCloseMobile();
+                    }}
+                    className={cn(
+                      "group flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#C5A059]",
+                      isActive
+                        ? "nav-gold-active"
+                        : "text-emerald-100/75 hover:text-white hover:bg-white/8",
+                      !showLabel && "justify-center px-0"
+                    )}
+                    aria-current={isActive ? "page" : undefined}
+                  >
+                    <Icon
+                      className={cn(
+                        "w-4 h-4 flex-shrink-0 transition-transform duration-200 group-hover:scale-110",
+                        isActive ? "text-[#D4AF37]" : "text-emerald-200/80 group-hover:text-white"
+                      )}
+                    />
+                    {showLabel && (
+                      <span className="truncate tracking-wide">{item.label}</span>
+                    )}
+                  </Link>
+
+                  {!showLabel && hoveredItem === item.href && (
+                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-[#061E06] text-white text-xs font-semibold rounded-lg shadow-xl border border-[#C5A059]/30 whitespace-nowrap z-50 pointer-events-none animate-fadeIn">
+                      {item.label}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </nav>
     );
   };
@@ -404,146 +380,186 @@ export function Sidebar({
     <>
       {/* ================= DESKTOP SIDEBAR ================= */}
       <aside
-        className={`hidden md:flex flex-col fixed inset-y-0 left-0 z-40 bg-[#0B3D0B] text-white border-r border-[#082D08] transition-all duration-200 ease-in-out ${
+        className={cn(
+          "hidden md:flex flex-col fixed top-0 left-0 bottom-0 z-30 transition-all duration-300 ease-in-out bg-gradient-to-b from-[#061E06] via-[#082808] to-[#041604] border-r border-[#C5A059]/25 shadow-2xl",
           collapsed ? "w-[72px]" : "w-[260px]"
-        }`}
+        )}
+        aria-label="Sidebar Navigation"
       >
-        {/* Brand Header & Toggle */}
-        <div className="h-18 flex items-center justify-between px-4 border-b border-white/10">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-3 overflow-hidden"
-            title="SJewls Admin"
-          >
-            <SJewlsBrand collapsed={collapsed} theme="dark" size="md" />
+        {/* Brand Header */}
+        <div className="h-16 px-4 flex items-center justify-between border-b border-[#C5A059]/20 flex-shrink-0 bg-black/10">
+          <Link href="/dashboard" className="focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#C5A059] rounded-lg">
+            <SJewlsBrand
+              collapsed={collapsed}
+              theme="dark"
+              size={collapsed ? "sm" : "md"}
+            />
           </Link>
-
-          <button
-            onClick={onToggleCollapse}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="p-1.5 rounded-lg text-emerald-200 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {collapsed ? (
-              <ChevronRight className="w-5 h-5" />
-            ) : (
-              <ChevronLeft className="w-5 h-5" />
-            )}
-          </button>
         </div>
 
-        {/* Navigation Items */}
+        {/* Selected Operating Branch Context Badge */}
+        {!collapsed && primaryBranch && (
+          <div className="px-3 pt-3.5 pb-1 flex-shrink-0">
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-white/8 to-white/4 border border-[#C5A059]/25 shadow-xs backdrop-blur-xs flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-7 h-7 rounded-lg bg-[#C5A059]/15 border border-[#C5A059]/30 flex items-center justify-center flex-shrink-0">
+                  <Building2 className="w-3.5 h-3.5 text-[#D4AF37]" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[10px] text-[#C5A059] font-bold uppercase tracking-wider block leading-none">
+                    Active Branch
+                  </span>
+                  <span className="text-xs font-semibold text-white truncate block mt-0.5" title={primaryBranch.name}>
+                    {primaryBranch.name}
+                  </span>
+                </div>
+              </div>
+              <span className="text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded bg-white/10 text-emerald-200 border border-white/15 flex-shrink-0">
+                {primaryBranch.code}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Navigation Links Scroll Area */}
         {renderNavLinks(false)}
 
-        {/* User Card & Sign Out at Bottom */}
-        <div className="p-3 border-t border-white/10 bg-[#082B08]/80">
-          {!collapsed ? (
-            <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-white/5 border border-white/5">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-9 h-9 rounded-full bg-[#FFD700] text-[#0B3D0B] font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-sm">
-                  {userInitials}
-                </div>
+        {/* Bottom User Card & Collapse Toggle */}
+        <div className="p-3 border-t border-[#C5A059]/20 bg-black/20 flex-shrink-0 space-y-2">
+          {/* User info */}
+          <div
+            className={cn(
+              "flex items-center gap-2.5 p-2 rounded-xl bg-white/6 border border-white/10 transition-colors",
+              collapsed ? "justify-center" : "justify-between"
+            )}
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div
+                className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#D4AF37] to-[#8C6D2D] text-[#061E06] font-bold text-xs flex items-center justify-center shadow-xs flex-shrink-0"
+                title={user?.fullName || "Staff"}
+              >
+                {userInitials}
+              </div>
+
+              {!collapsed && (
                 <div className="flex flex-col min-w-0">
-                  <span className="text-xs font-bold text-white truncate">
-                    {user?.fullName || "Staff Member"}
+                  <span
+                    className="text-xs font-bold text-white truncate"
+                    title={user?.fullName}
+                  >
+                    {user?.fullName || "Staff User"}
                   </span>
-                  <div className="flex items-center gap-1 text-[11px] text-emerald-200/80 truncate">
-                    <ShieldCheck className="w-3 h-3 text-[#FFD700] flex-shrink-0" />
-                    <span className="truncate">
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[9.5px] font-semibold text-[#D4AF37] bg-[#C5A059]/15 border border-[#C5A059]/30 px-1.5 py-0.2 rounded">
                       {user?.roles?.[0] || "Staff"}
                     </span>
                   </div>
                 </div>
-              </div>
+              )}
+            </div>
 
+            {!collapsed && (
               <button
+                type="button"
                 onClick={() => logout()}
-                title="Sign out"
-                className="p-1.5 text-emerald-200 hover:text-red-300 hover:bg-red-500/15 rounded-lg transition-colors cursor-pointer flex-shrink-0"
+                title="Sign out of SJewls Admin"
+                className="p-1.5 text-emerald-200/60 hover:text-rose-400 hover:bg-rose-500/15 rounded-lg transition-colors cursor-pointer focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-rose-400"
+                aria-label="Sign out"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-3.5 h-3.5" />
               </button>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-2">
-              <div
-                className="w-9 h-9 rounded-full bg-[#FFD700] text-[#0B3D0B] font-bold text-xs flex items-center justify-center shadow-sm"
-                title={`${user?.fullName} (${user?.roles?.[0]})`}
-              >
-                {userInitials}
-              </div>
-              <button
-                onClick={() => logout()}
-                title="Sign out"
-                className="p-2 text-emerald-200 hover:text-red-300 hover:bg-red-500/15 rounded-lg transition-colors cursor-pointer"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-          )}
+            )}
+          </div>
+
+          {/* Quick Collapse Arrow Button */}
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="w-full flex items-center justify-center gap-2 py-1.5 rounded-lg text-emerald-200/60 hover:text-white hover:bg-white/8 text-[11px] font-medium transition-colors cursor-pointer focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-[#C5A059]"
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {collapsed ? (
+              <ChevronRight className="w-4 h-4 text-[#D4AF37]" />
+            ) : (
+              <>
+                <ChevronLeft className="w-4 h-4" />
+                <span className="text-[10px] uppercase tracking-wider text-emerald-200/70 font-semibold">Collapse Sidebar</span>
+              </>
+            )}
+          </button>
         </div>
       </aside>
 
-      {/* ================= MOBILE DRAWER & BACKDROP ================= */}
+      {/* ================= MOBILE DRAWER (Narrow Viewports) ================= */}
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex">
-          {/* Backdrop overlay */}
+          {/* Overlay backdrop */}
           <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            className="fixed inset-0 bg-black/70 backdrop-blur-xs transition-opacity"
             onClick={onCloseMobile}
             aria-hidden="true"
           />
 
-          {/* Drawer content */}
-          <div className="relative flex-1 flex flex-col max-w-xs w-full bg-[#0B3D0B] text-white shadow-2xl z-50">
-            {/* Drawer Header */}
-            <div className="h-18 flex items-center justify-between px-5 border-b border-white/10">
-              <SJewlsBrand collapsed={false} theme="dark" size="md" />
+          {/* Offcanvas panel */}
+          <div className="relative w-4/5 max-w-xs flex-1 flex flex-col bg-gradient-to-b from-[#061E06] via-[#082808] to-[#041604] border-r border-[#C5A059]/25 text-white shadow-2xl z-10 animate-fadeIn">
+            <div className="h-16 px-4 flex items-center justify-between border-b border-[#C5A059]/20 flex-shrink-0">
+              <SJewlsBrand theme="dark" size="sm" />
               <button
+                type="button"
                 onClick={onCloseMobile}
-                aria-label="Close menu"
-                className="p-2 rounded-lg text-emerald-200 hover:text-white hover:bg-white/10 cursor-pointer"
+                className="p-1.5 rounded-lg text-emerald-200 hover:text-white hover:bg-white/10 cursor-pointer"
+                aria-label="Close navigation menu"
               >
-                <ChevronLeft className="w-6 h-6" />
+                <ChevronLeft className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Mobile Nav Links */}
+            {/* Operating Branch Context */}
+            {primaryBranch && (
+              <div className="p-3 border-b border-[#C5A059]/15 bg-white/4">
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-[#D4AF37]" />
+                  <div className="min-w-0">
+                    <span className="text-[10px] text-[#C5A059] font-bold uppercase tracking-wider block">
+                      Branch
+                    </span>
+                    <span className="text-xs font-semibold text-white truncate block">
+                      {primaryBranch.name} ({primaryBranch.code})
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {renderNavLinks(true)}
 
-            {/* Mobile User Card */}
-            <div className="p-4 border-t border-white/10 bg-[#082B08]">
-              <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-white/5 border border-white/5 mb-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-full bg-[#FFD700] text-[#0B3D0B] font-bold text-sm flex items-center justify-center flex-shrink-0">
-                    {userInitials}
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-sm font-bold text-white truncate">
-                      {user?.fullName || "Staff Member"}
-                    </span>
-                    <span className="text-xs text-emerald-300">
-                      {user?.roles?.[0] || "Staff"}
-                    </span>
-                    {primaryBranch && (
-                      <span className="text-[11px] text-gray-300 flex items-center gap-1 mt-0.5">
-                        <Building2 className="w-3 h-3 text-[#FFD700]" />
-                        {primaryBranch.name}
-                      </span>
-                    )}
-                  </div>
+            {/* Mobile Footer */}
+            <div className="p-3 border-t border-[#C5A059]/20 bg-black/20 flex-shrink-0 flex items-center justify-between">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#D4AF37] to-[#8C6D2D] text-[#061E06] font-bold text-xs flex items-center justify-center shadow-xs">
+                  {userInitials}
+                </div>
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-white truncate block">
+                    {user?.fullName}
+                  </span>
+                  <span className="text-[10px] text-[#D4AF37] block">
+                    {user?.roles?.[0] || "Staff"}
+                  </span>
                 </div>
               </div>
 
               <button
+                type="button"
                 onClick={() => {
                   onCloseMobile();
                   logout();
                 }}
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-semibold bg-red-600/20 text-red-200 hover:bg-red-600/30 border border-red-500/30 transition-colors cursor-pointer"
+                className="p-2 text-rose-300 hover:text-rose-100 hover:bg-rose-500/20 rounded-lg cursor-pointer"
+                aria-label="Sign out"
               >
                 <LogOut className="w-4 h-4" />
-                Sign Out
               </button>
             </div>
           </div>

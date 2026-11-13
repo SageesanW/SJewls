@@ -43,14 +43,12 @@ export default function CustomerDetailsPage({ params }: CustomerDetailsPageProps
   return (
     <Suspense
       fallback={
-        <AdminLayout>
-          <div className="flex flex-col items-center justify-center min-h-[400px]">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0B3D0B]" />
-            <p className="mt-4 text-xs font-bold text-gray-500 uppercase tracking-widest">
-              Loading customer details...
-            </p>
-          </div>
-        </AdminLayout>
+        <div className="min-h-screen bg-[#FAF9F6] flex flex-col items-center justify-center p-6">
+          <div className="animate-spin rounded-full h-10 w-10 border-2 border-[#0B3D0B] border-t-transparent" />
+          <p className="mt-4 text-xs font-semibold text-[#4B5548] uppercase tracking-widest">
+            Loading customer details...
+          </p>
+        </div>
       }
     >
       <CustomerDetailsInner params={params} />

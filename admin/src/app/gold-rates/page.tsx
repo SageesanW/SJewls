@@ -118,15 +118,10 @@ export default function GoldRatesPage() {
       const freshHistory = await adminApi.getGoldRateHistory(selectedBranchId || undefined, 30);
       setHistory(freshHistory);
 
-      setSuccessMessage(
-        isOverrideEnabled
-          ? `Store rate successfully updated and enforced! (24K: LKR ${r24.toLocaleString()} /g | 22K: LKR ${r22.toLocaleString()} /g)`
-          : "Manual override disabled. Switched back to live market feeds."
-      );
-
-      setTimeout(() => setSuccessMessage(null), 6000);
+      setSuccessMessage("Authoritative store gold rate successfully saved and published!");
+      setTimeout(() => setSuccessMessage(null), 5000);
     } catch (err: any) {
-      setError(err?.message || "Failed to update gold rate override.");
+      setError(err?.message || "Failed to set gold rate override.");
     } finally {
       setSaving(false);
     }
@@ -138,12 +133,11 @@ export default function GoldRatesPage() {
       setError(null);
       setSuccessMessage(null);
 
-      const updated = await adminApi.toggleGoldRateOverride({
+      const updatedOverview = await adminApi.toggleGoldRateOverride({
         branchId: selectedBranchId ? selectedBranchId : null,
         isEnabled: enabled,
       });
-
-      setOverview(updated);
+      setOverview(updatedOverview);
       setIsOverrideEnabled(enabled);
 
       const freshHistory = await adminApi.getGoldRateHistory(selectedBranchId || undefined, 30);
@@ -196,24 +190,24 @@ export default function GoldRatesPage() {
   };
 
   return (
-    <AdminLayout>
+    <AdminLayout title="Gold Rate Authority">
       <div className="space-y-6 max-w-7xl mx-auto pb-12">
         {/* Top Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-white/10 pb-5">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-6 rounded-2xl border border-[#E8E5DD] shadow-xs">
           <div>
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[#FFD700]">
-                <Scale className="w-6 h-6" />
+              <div className="w-11 h-11 rounded-xl bg-[#C5A059]/15 border border-[#C5A059]/30 text-[#0B3D0B] flex items-center justify-center shadow-xs">
+                <Scale className="w-6 h-6 text-[#8C6D2D]" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-                  Gold Rate Management
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    Active Authority
+                <h1 className="text-2xl font-serif-luxury font-bold text-[#151A14] tracking-tight flex items-center gap-2">
+                  Daily Gold Rates
+                  <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 uppercase tracking-wider">
+                    Authoritative Spot
                   </span>
                 </h1>
-                <p className="text-xs text-emerald-200/70 mt-0.5">
-                  Live market spot prices, store pricing policy, and authoritative customer rate overrides.
+                <p className="text-xs text-stone-500 font-medium mt-0.5">
+                  Live market spot pricing, store pricing policy, and authoritative customer rate overrides
                 </p>
               </div>
             </div>
@@ -221,19 +215,17 @@ export default function GoldRatesPage() {
 
           <div className="flex items-center gap-3">
             {/* Branch Scope Selector */}
-            <div className="flex items-center bg-[#072407] border border-white/10 rounded-xl px-3 py-1.5">
-              <Building2 className="w-4 h-4 text-emerald-400 mr-2" />
+            <div className="flex items-center bg-[#FAF9F6] border border-[#E8E5DD] rounded-xl px-3 py-2">
+              <Building2 className="w-4 h-4 text-[#C5A059] mr-2" />
               <select
                 aria-label="Target Branch Scope"
                 value={selectedBranchId}
                 onChange={(e) => setSelectedBranchId(e.target.value)}
-                className="bg-transparent text-xs text-white focus:outline-none cursor-pointer pr-2"
+                className="bg-transparent text-xs font-semibold text-[#151A14] focus:outline-hidden cursor-pointer pr-2"
               >
-                <option value="" className="bg-[#0A260A] text-white">
-                  Global (All Branches)
-                </option>
+                <option value="">Global (All Branches)</option>
                 {overview?.branches.map((b) => (
-                  <option key={b.id} value={b.id} className="bg-[#0A260A] text-white">
+                  <option key={b.id} value={b.id}>
                     {b.name} ({b.code})
                   </option>
                 ))}
@@ -243,30 +235,30 @@ export default function GoldRatesPage() {
             <button
               onClick={() => loadData(selectedBranchId)}
               disabled={loading}
-              className="flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-emerald-100 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all disabled:opacity-50"
+              className="flex items-center gap-2 px-3.5 py-2.5 text-xs font-bold text-stone-700 bg-white hover:bg-stone-50 border border-[#E8E5DD] rounded-xl transition-all shadow-2xs disabled:opacity-50 cursor-pointer"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-              Refresh
+              <RefreshCw className={`w-3.5 h-3.5 text-[#0B3D0B] ${loading ? "animate-spin" : ""}`} />
+              <span>Refresh</span>
             </button>
           </div>
         </div>
 
         {/* Alerts */}
         {error && (
-          <div className="flex items-start gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-sm animate-in fade-in">
-            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-400" />
-            <div className="flex-1">{error}</div>
-            <button onClick={() => setError(null)} className="text-xs text-red-400 hover:underline">
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs animate-fadeIn">
+            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-rose-600" />
+            <div className="flex-1 font-medium">{error}</div>
+            <button onClick={() => setError(null)} className="text-xs text-rose-600 hover:underline">
               Dismiss
             </button>
           </div>
         )}
 
         {successMessage && (
-          <div className="flex items-start gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-sm animate-in fade-in">
-            <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5 text-emerald-400" />
-            <div className="flex-1 font-medium">{successMessage}</div>
-            <button onClick={() => setSuccessMessage(null)} className="text-xs text-emerald-400 hover:underline">
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs animate-fadeIn">
+            <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5 text-emerald-700" />
+            <div className="flex-1 font-semibold">{successMessage}</div>
+            <button onClick={() => setSuccessMessage(null)} className="text-xs text-emerald-700 hover:underline">
               Dismiss
             </button>
           </div>
@@ -275,97 +267,111 @@ export default function GoldRatesPage() {
         {/* 4 Top KPI Metrics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* 1. Effective 24K Rate */}
-          <div className="relative overflow-hidden p-5 rounded-2xl bg-gradient-to-br from-[#0B3D0B] to-[#072407] border border-amber-500/30 shadow-lg">
+          <div className="p-5 rounded-2xl bg-white border border-[#E8E5DD] shadow-xs flex flex-col justify-between hover:border-[#D8D3C5] hover:shadow-md transition-all">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-amber-300/80">
+              <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">
                 Active Store Rate (24K)
               </span>
               <span
                 className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                   overview?.effectiveRate.isOverridden
-                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                    : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                    ? "bg-[#D4AF37]/15 text-[#8C6D2D] border-[#D4AF37]/35"
+                    : "bg-emerald-50 text-emerald-800 border-emerald-200"
                 }`}
               >
-                {overview?.effectiveRate.isOverridden ? "MANUAL OVERRIDE" : "LIVE API"}
+                {overview?.effectiveRate.isOverridden ? "MANUAL OVERRIDE" : "LIVE FEED"}
               </span>
             </div>
-            <div className="text-2xl lg:text-3xl font-extrabold text-[#FFD700] tracking-tight">
-              LKR {formatLkr(overview?.effectiveRate.rate24k)}
-              <span className="text-xs font-normal text-emerald-300/70 ml-1">/ gram</span>
+            <div className="my-1.5">
+              <span className="text-2xl sm:text-3xl font-extrabold text-[#0B3D0B] tracking-tight font-sans tabular-nums block">
+                LKR {formatLkr(overview?.effectiveRate.rate24k)}
+              </span>
+              <span className="text-[11px] text-stone-500 font-medium">Per Gram Pure Bullion</span>
             </div>
-            <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between text-[11px] text-emerald-200/60">
+            <div className="mt-2 pt-2 border-t border-stone-100 flex items-center justify-between text-[11px] text-stone-500">
               <span>Per Sovereign (8g):</span>
-              <span className="font-semibold text-white">
+              <span className="font-bold text-[#151A14] tabular-nums">
                 LKR {formatLkr((overview?.effectiveRate.rate24k || 0) * 8)}
               </span>
             </div>
           </div>
 
           {/* 2. Effective 22K Rate */}
-          <div className="relative overflow-hidden p-5 rounded-2xl bg-gradient-to-br from-[#0B3D0B] to-[#072407] border border-white/10 shadow-lg">
+          <div className="p-5 rounded-2xl bg-white border border-[#E8E5DD] shadow-xs flex flex-col justify-between hover:border-[#D8D3C5] hover:shadow-md transition-all">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-emerald-300/80">
+              <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">
                 Active Store Rate (22K)
               </span>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/10 text-emerald-200 border border-white/10">
-                Jewellery Sovereign
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#FAF9F6] text-stone-700 border border-[#E8E5DD]">
+                Jewellery Grade
               </span>
             </div>
-            <div className="text-2xl lg:text-3xl font-extrabold text-white tracking-tight">
-              LKR {formatLkr(overview?.effectiveRate.rate22k)}
-              <span className="text-xs font-normal text-emerald-300/70 ml-1">/ gram</span>
+            <div className="my-1.5">
+              <span className="text-2xl sm:text-3xl font-extrabold text-[#0B3D0B] tracking-tight font-sans tabular-nums block">
+                LKR {formatLkr(overview?.effectiveRate.rate22k)}
+              </span>
+              <span className="text-[11px] text-stone-500 font-medium">Per Gram 91.67% Gold</span>
             </div>
-            <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between text-[11px] text-emerald-200/60">
+            <div className="mt-2 pt-2 border-t border-stone-100 flex items-center justify-between text-[11px] text-stone-500">
               <span>Per Sovereign (8g):</span>
-              <span className="font-semibold text-white">
+              <span className="font-bold text-[#151A14] tabular-nums">
                 LKR {formatLkr((overview?.effectiveRate.rate22k || 0) * 8)}
               </span>
             </div>
           </div>
 
           {/* 3. Live API Spot Market */}
-          <div className="relative overflow-hidden p-5 rounded-2xl bg-[#0A260A] border border-white/10 shadow-lg">
+          <div className="p-5 rounded-2xl bg-white border border-[#E8E5DD] shadow-xs flex flex-col justify-between hover:border-[#D8D3C5] hover:shadow-md transition-all">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-emerald-300/80 flex items-center gap-1.5">
-                <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+              <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500 flex items-center gap-1.5">
+                <Radio className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
                 Live Spot Feed
               </span>
               <span
-                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                   overview?.liveApiRate.isAvailable
-                    ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
-                    : "bg-white/10 text-emerald-300/60 border-white/10"
+                    ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                    : "bg-stone-100 text-stone-600 border-stone-200"
                 }`}
               >
                 {overview?.liveApiRate.isAvailable ? "CONNECTED" : "FALLBACK"}
               </span>
             </div>
-            <div className="text-xl font-bold text-white">
-              {overview?.liveApiRate.rate24k
-                ? `LKR ${formatLkr(overview.liveApiRate.rate24k)}`
-                : "No API Key"}
+            <div className="my-1.5">
+              <span className="text-xl sm:text-2xl font-bold text-[#151A14] tracking-tight font-sans tabular-nums block">
+                {overview?.liveApiRate.rate24k
+                  ? `LKR ${formatLkr(overview.liveApiRate.rate24k)}`
+                  : "No Key Set"}
+              </span>
+              <span className="text-[11px] text-stone-500 font-medium truncate block">
+                {overview?.liveApiRate.statusMessage || "GoldAPI.io feed"}
+              </span>
             </div>
-            <div className="mt-2 pt-2 border-t border-white/10 text-[11px] text-emerald-200/60 truncate">
-              {overview?.liveApiRate.statusMessage || "GoldAPI.io feed provider"}
+            <div className="mt-2 pt-2 border-t border-stone-100 text-[11px] text-stone-400">
+              Real-time gold spot exchange
             </div>
           </div>
 
           {/* 4. Pricing Policy Status */}
-          <div className="relative overflow-hidden p-5 rounded-2xl bg-[#0A260A] border border-white/10 shadow-lg">
+          <div className="p-5 rounded-2xl bg-white border border-[#E8E5DD] shadow-xs flex flex-col justify-between hover:border-[#D8D3C5] hover:shadow-md transition-all">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-emerald-300/80">
+              <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">
                 System Guardrail
               </span>
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <ShieldCheck className="w-4 h-4 text-[#0B3D0B]" />
             </div>
-            <div className="text-sm font-semibold text-white">
-              {overview?.effectiveRate.isOverridden
-                ? "Store Override Enforced"
-                : "Live Market Feed Active"}
+            <div className="my-1.5">
+              <span className="text-sm font-bold text-[#151A14] block">
+                {overview?.effectiveRate.isOverridden
+                  ? "Store Override Active"
+                  : "Live Market Feed Active"}
+              </span>
+              <span className="text-[11px] text-stone-500 font-medium block mt-0.5">
+                5-min checkout rate guarantee
+              </span>
             </div>
-            <div className="mt-2 pt-2 border-t border-white/10 text-[11px] text-emerald-200/60">
-              Quotes & jewellery payments lock this rate for 5 minutes.
+            <div className="mt-2 pt-2 border-t border-stone-100 text-[11px] text-stone-400">
+              Customer payments locked on quote
             </div>
           </div>
         </div>
@@ -374,23 +380,23 @@ export default function GoldRatesPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left Column: Interactive Override Control Panel (7 cols) */}
           <div className="lg:col-span-7 space-y-6">
-            <div className="p-6 rounded-2xl bg-[#0A260A] border border-amber-500/20 shadow-xl space-y-5">
-              <div className="flex items-center justify-between border-b border-white/10 pb-4">
+            <div className="p-6 rounded-2xl bg-white border border-[#E8E5DD] shadow-xs space-y-5">
+              <div className="flex items-center justify-between border-b border-[#E8E5DD] pb-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-amber-500/20 text-[#FFD700]">
-                    <SlidersHorizontal className="w-5 h-5" />
+                  <div className="p-2.5 rounded-xl bg-[#C5A059]/12 text-[#0B3D0B] border border-[#C5A059]/25">
+                    <SlidersHorizontal className="w-5 h-5 text-[#8C6D2D]" />
                   </div>
                   <div>
-                    <h2 className="text-base font-bold text-white">Store Gold Rate Control Panel</h2>
-                    <p className="text-xs text-emerald-200/60">
-                      Configure custom rates that directly govern customer quotes and jewellery plans.
+                    <h2 className="text-base font-serif-luxury font-bold text-[#151A14]">Store Gold Rate Control Panel</h2>
+                    <p className="text-xs text-stone-500 font-medium">
+                      Publish authoritative rates that directly govern customer quotes and jewellery plans
                     </p>
                   </div>
                 </div>
 
                 {/* Quick Toggle Switch */}
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-emerald-200/80 font-medium">Override Mode:</span>
+                  <span className="text-xs text-stone-600 font-semibold">Override Mode:</span>
                   <button
                     type="button"
                     onClick={() => {
@@ -399,13 +405,13 @@ export default function GoldRatesPage() {
                       handleToggleOnly(next);
                     }}
                     disabled={saving}
-                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      isOverrideEnabled ? "bg-amber-500" : "bg-white/20"
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                      isOverrideEnabled ? "bg-[#0B3D0B]" : "bg-stone-200"
                     }`}
                   >
                     <span
                       aria-hidden="true"
-                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
                         isOverrideEnabled ? "translate-x-5" : "translate-x-0"
                       }`}
                     />
@@ -415,11 +421,11 @@ export default function GoldRatesPage() {
 
               <form onSubmit={handleSaveOverride} className="space-y-4">
                 {/* Notice banner */}
-                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-2.5 text-xs text-amber-200/90">
-                  <Info className="w-4 h-4 text-[#FFD700] flex-shrink-0 mt-0.5" />
+                <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200/80 flex items-start gap-2.5 text-xs text-amber-900">
+                  <Info className="w-4 h-4 text-amber-700 flex-shrink-0 mt-0.5" />
                   <div>
                     When <strong>Manual Override Mode</strong> is active, all mobile customer quotes,
-                    jewellery investment calculations, and payment conversions will strictly use these
+                    jewellery investment calculations, and payment conversions strictly use these
                     defined store rates instead of external market spot feeds.
                   </div>
                 </div>
@@ -427,11 +433,11 @@ export default function GoldRatesPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* 24K Input */}
                   <div>
-                    <label className="block text-xs font-semibold text-emerald-200 mb-1.5">
-                      24K Pure Gold Rate (LKR / gram) <span className="text-red-400">*</span>
+                    <label className="block text-xs font-bold text-stone-700 mb-1.5">
+                      24K Pure Gold Rate (LKR / gram) <span className="text-rose-600">*</span>
                     </label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-400">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-stone-500">
                         LKR
                       </span>
                       <input
@@ -442,7 +448,7 @@ export default function GoldRatesPage() {
                         value={rate24k}
                         onChange={(e) => setRate24k(e.target.value)}
                         placeholder="e.g. 33600.00"
-                        className="w-full bg-[#072407] border border-white/10 rounded-xl pl-12 pr-3 py-2.5 text-sm text-white font-semibold focus:outline-none focus:border-amber-400/60 focus:ring-1 focus:ring-amber-400/60 transition-all"
+                        className="w-full bg-[#FAF9F6] border border-[#E8E5DD] rounded-xl pl-12 pr-3 py-2.5 text-xs sm:text-sm text-[#151A14] font-bold focus:outline-hidden focus:ring-2 focus:ring-[#0B3D0B] transition-all"
                       />
                     </div>
                     {/* Quick increment buttons */}
@@ -455,7 +461,7 @@ export default function GoldRatesPage() {
                             const val = (parseFloat(rate24k) || 33500) + delta;
                             setRate24k(val.toString());
                           }}
-                          className="px-2 py-1 text-[10px] font-semibold rounded bg-white/5 hover:bg-white/10 text-emerald-200 border border-white/10 transition-colors"
+                          className="px-2 py-1 text-[10px] font-semibold rounded-lg bg-[#FAF9F6] hover:bg-stone-200/60 text-stone-700 border border-[#E8E5DD] transition-colors cursor-pointer"
                         >
                           {delta > 0 ? `+${delta}` : delta}
                         </button>
@@ -466,20 +472,20 @@ export default function GoldRatesPage() {
                   {/* 22K Input */}
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="block text-xs font-semibold text-emerald-200">
-                        22K Sovereign Gold Rate (LKR / g) <span className="text-red-400">*</span>
+                      <label className="block text-xs font-bold text-stone-700">
+                        22K Sovereign Gold Rate (LKR / g) <span className="text-rose-600">*</span>
                       </label>
                       <button
                         type="button"
                         onClick={handleAutoCalc22k}
-                        className="text-[11px] text-[#FFD700] hover:underline flex items-center gap-1"
+                        className="text-[11px] font-bold text-[#8C6D2D] hover:underline flex items-center gap-1 cursor-pointer"
                       >
-                        <Sparkles className="w-3 h-3" />
+                        <Sparkles className="w-3 h-3 text-[#D4AF37]" />
                         Auto 91.67%
                       </button>
                     </div>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-400">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-stone-500">
                         LKR
                       </span>
                       <input
@@ -490,10 +496,10 @@ export default function GoldRatesPage() {
                         value={rate22k}
                         onChange={(e) => setRate22k(e.target.value)}
                         placeholder="e.g. 30800.00"
-                        className="w-full bg-[#072407] border border-white/10 rounded-xl pl-12 pr-3 py-2.5 text-sm text-white font-semibold focus:outline-none focus:border-amber-400/60 focus:ring-1 focus:ring-amber-400/60 transition-all"
+                        className="w-full bg-[#FAF9F6] border border-[#E8E5DD] rounded-xl pl-12 pr-3 py-2.5 text-xs sm:text-sm text-[#151A14] font-bold focus:outline-hidden focus:ring-2 focus:ring-[#0B3D0B] transition-all"
                       />
                     </div>
-                    <p className="text-[10px] text-emerald-300/50 mt-1">
+                    <p className="text-[10px] text-stone-400 mt-1 font-medium">
                       Typically 22/24ths of the pure 24K gold bullion rate.
                     </p>
                   </div>
@@ -501,19 +507,19 @@ export default function GoldRatesPage() {
 
                 {/* Target Scope */}
                 <div>
-                  <label className="block text-xs font-semibold text-emerald-200 mb-1.5">
+                  <label className="block text-xs font-bold text-stone-700 mb-1.5">
                     Target Branch Scope
                   </label>
                   <select
                     value={selectedBranchId}
                     onChange={(e) => setSelectedBranchId(e.target.value)}
-                    className="w-full bg-[#072407] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-amber-400/60 cursor-pointer"
+                    className="w-full bg-[#FAF9F6] border border-[#E8E5DD] rounded-xl px-3 py-2.5 text-xs text-[#151A14] font-semibold focus:outline-hidden focus:ring-2 focus:ring-[#0B3D0B] cursor-pointer"
                   >
-                    <option value="" className="bg-[#0A260A]">
+                    <option value="">
                       Global — Applies across all store branches without custom overrides
                     </option>
                     {overview?.branches.map((b) => (
-                      <option key={b.id} value={b.id} className="bg-[#0A260A]">
+                      <option key={b.id} value={b.id}>
                         {b.name} ({b.city}) — Branch-Specific Override
                       </option>
                     ))}
@@ -522,7 +528,7 @@ export default function GoldRatesPage() {
 
                 {/* Reason / Remarks */}
                 <div>
-                  <label className="block text-xs font-semibold text-emerald-200 mb-1.5">
+                  <label className="block text-xs font-bold text-stone-700 mb-1.5">
                     Audit Remarks / Justification
                   </label>
                   <input
@@ -530,7 +536,7 @@ export default function GoldRatesPage() {
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
                     placeholder="e.g., Morning store rate approved by Head Office"
-                    className="w-full bg-[#072407] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-amber-400/60"
+                    className="w-full bg-[#FAF9F6] border border-[#E8E5DD] rounded-xl px-3 py-2.5 text-xs text-[#151A14] focus:outline-hidden focus:ring-2 focus:ring-[#0B3D0B]"
                   />
                 </div>
 
@@ -539,17 +545,17 @@ export default function GoldRatesPage() {
                   <button
                     type="submit"
                     disabled={saving}
-                    className="w-full sm:w-auto flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-xs uppercase tracking-wider shadow-lg transition-all disabled:opacity-50"
+                    className="w-full sm:w-auto flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-xl btn-primary-green text-xs font-bold tracking-wide shadow-sm transition-all disabled:opacity-50 cursor-pointer"
                   >
                     {saving ? (
                       <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        Saving & Applying Rate...
+                        <RefreshCw className="w-4 h-4 animate-spin text-[#D4AF37]" />
+                        <span>Saving & Applying Rate...</span>
                       </>
                     ) : (
                       <>
-                        <CheckCircle2 className="w-4 h-4" />
-                        Save & Enforce Store Rate
+                        <CheckCircle2 className="w-4 h-4 text-[#D4AF37]" />
+                        <span>Save & Enforce Store Rate</span>
                       </>
                     )}
                   </button>
@@ -559,7 +565,7 @@ export default function GoldRatesPage() {
                       type="button"
                       onClick={() => handleToggleOnly(false)}
                       disabled={saving}
-                      className="w-full sm:w-auto px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-emerald-200 text-xs font-medium border border-white/10 transition-colors"
+                      className="w-full sm:w-auto px-4 py-3 rounded-xl bg-white hover:bg-stone-50 text-stone-700 text-xs font-bold border border-[#E8E5DD] transition-colors cursor-pointer"
                     >
                       Revert to Live API
                     </button>
@@ -572,40 +578,40 @@ export default function GoldRatesPage() {
           {/* Right Column: Branch Summary & Info (5 cols) */}
           <div className="lg:col-span-5 space-y-6">
             {/* Branch Rates Card */}
-            <div className="p-5 rounded-2xl bg-[#0A260A] border border-white/10 shadow-xl space-y-4">
-              <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                <div className="flex items-center gap-2 text-white font-bold text-sm">
-                  <Building2 className="w-4 h-4 text-emerald-400" />
-                  Branch Rate Status
+            <div className="p-5 rounded-2xl bg-white border border-[#E8E5DD] shadow-xs space-y-4">
+              <div className="flex items-center justify-between border-b border-[#E8E5DD] pb-3">
+                <div className="flex items-center gap-2 text-[#151A14] font-serif-luxury font-bold text-sm">
+                  <Building2 className="w-4 h-4 text-[#C5A059]" />
+                  <span>Branch Rate Status</span>
                 </div>
-                <span className="text-[10px] text-emerald-300/60">
+                <span className="text-[10px] font-semibold text-stone-500">
                   {overview?.branches.length || 0} active branches
                 </span>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {overview?.branches.map((b) => (
                   <div
                     key={b.id}
-                    className="p-3.5 rounded-xl bg-[#072407] border border-white/10 hover:border-amber-500/30 transition-all flex items-center justify-between"
+                    className="p-3 rounded-xl bg-[#FAF9F6] border border-[#E8E5DD] hover:border-[#D8D3C5] transition-all flex items-center justify-between"
                   >
                     <div>
-                      <div className="font-semibold text-xs text-white flex items-center gap-1.5">
+                      <div className="font-bold text-xs text-[#151A14] flex items-center gap-1.5">
                         {b.name}
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-emerald-300">
+                        <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-white text-stone-700 border border-stone-200">
                           {b.code}
                         </span>
                       </div>
-                      <div className="text-[11px] text-emerald-300/60 mt-0.5">
+                      <div className="text-[11px] text-stone-500 mt-0.5">
                         {b.city} • {b.hasCustomOverride ? "Branch Override" : "Inherits Global"}
                       </div>
                     </div>
 
                     <div className="text-right">
-                      <div className="text-sm font-bold text-[#FFD700]">
+                      <div className="text-xs sm:text-sm font-extrabold text-[#0B3D0B] tabular-nums">
                         LKR {formatLkr(b.rate24k)}
                       </div>
-                      <div className="text-[10px] text-emerald-300/60">
+                      <div className="text-[10px] text-stone-500 tabular-nums">
                         22K: LKR {formatLkr(b.rate22k)}
                       </div>
                     </div>
@@ -615,14 +621,14 @@ export default function GoldRatesPage() {
             </div>
 
             {/* How Gold Rate Pricing Works info box */}
-            <div className="p-5 rounded-2xl bg-gradient-to-br from-[#072407] to-[#0A260A] border border-white/10 shadow-xl space-y-3">
-              <h3 className="text-xs font-bold text-white flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                Precedence & Financial Protections
+            <div className="p-5 rounded-2xl bg-white border border-[#E8E5DD] shadow-xs space-y-3">
+              <h3 className="text-xs font-bold text-[#151A14] flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-[#0B3D0B]" />
+                Financial Precedence & Safety Guardrails
               </h3>
-              <ul className="text-xs text-emerald-200/70 space-y-2 list-disc list-inside">
+              <ul className="text-xs text-stone-600 space-y-2 list-disc list-inside leading-relaxed">
                 <li>
-                  <strong className="text-white">Store Manual Override</strong> takes top priority.
+                  <strong className="text-[#151A14]">Store Manual Override</strong> takes top priority.
                   It prevents quoting volatile spikes to walk-in and mobile customers.
                 </li>
                 <li>
@@ -631,7 +637,7 @@ export default function GoldRatesPage() {
                 </li>
                 <li>
                   Instalment cash payments convert directly into pure gold grams:
-                  <div className="mt-1 p-2 rounded-lg bg-black/40 font-mono text-[11px] text-amber-300">
+                  <div className="mt-1.5 p-2 rounded-lg bg-[#FAF9F6] border border-[#E8E5DD] font-mono text-[11px] text-[#0B3D0B] font-bold">
                     Grams = Amount (LKR) ÷ Rate (LKR/g)
                   </div>
                 </li>
@@ -641,75 +647,75 @@ export default function GoldRatesPage() {
         </div>
 
         {/* Historical Audit Trail */}
-        <div className="p-6 rounded-2xl bg-[#0A260A] border border-white/10 shadow-xl space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-white/10 pb-4">
+        <div className="p-6 rounded-2xl bg-white border border-[#E8E5DD] shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-[#E8E5DD] pb-4">
             <div>
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Clock className="w-4 h-4 text-emerald-400" />
+              <h3 className="text-base font-serif-luxury font-bold text-[#151A14] flex items-center gap-2">
+                <Clock className="w-4 h-4 text-[#C5A059]" />
                 Gold Rate Audit Trail
               </h3>
-              <p className="text-xs text-emerald-200/60">
-                Audited historical log of all rate recordings, overrides, and staff approvals.
+              <p className="text-xs text-stone-500 font-medium">
+                Audited historical log of all rate recordings, overrides, and staff approvals
               </p>
             </div>
-            <div className="text-xs text-emerald-300/70 flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5" />
+            <div className="text-xs text-stone-500 flex items-center gap-1.5 font-medium">
+              <Calendar className="w-3.5 h-3.5 text-[#C5A059]" />
               Showing last {history.length} records
             </div>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-emerald-100">
-              <thead className="bg-[#072407] text-emerald-300 uppercase tracking-wider font-semibold border-b border-white/10">
+            <table className="w-full text-left text-xs text-stone-800">
+              <thead className="bg-[#FAF9F6] text-stone-500 uppercase tracking-[0.14em] font-bold text-[10.5px] border-b border-[#E8E5DD]">
                 <tr>
-                  <th className="py-3 px-4">Effective Date (SL Time)</th>
-                  <th className="py-3 px-4">Branch Scope</th>
-                  <th className="py-3 px-4">Karat</th>
-                  <th className="py-3 px-4">Rate per Gram</th>
-                  <th className="py-3 px-4">Per Sovereign (8g)</th>
-                  <th className="py-3 px-4">Source</th>
-                  <th className="py-3 px-4">Recorded By</th>
+                  <th className="py-3.5 px-4">Effective Date (SL Time)</th>
+                  <th className="py-3.5 px-4">Branch Scope</th>
+                  <th className="py-3.5 px-4">Karat</th>
+                  <th className="py-3.5 px-4">Rate per Gram</th>
+                  <th className="py-3.5 px-4">Per Sovereign (8g)</th>
+                  <th className="py-3.5 px-4">Source</th>
+                  <th className="py-3.5 px-4">Recorded By</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-stone-100">
                 {history.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-emerald-300/50">
+                    <td colSpan={7} className="py-8 text-center text-stone-400">
                       No gold rate audit records found.
                     </td>
                   </tr>
                 ) : (
                   history.map((item) => (
-                    <tr key={item.id} className="hover:bg-white/5 transition-colors">
-                      <td className="py-3 px-4 font-mono text-emerald-200">
+                    <tr key={item.id} className="hover:bg-[#FAF9F6] transition-colors">
+                      <td className="py-3.5 px-4 font-mono text-stone-600">
                         {formatDate(item.effectiveFromUtc)}
                       </td>
-                      <td className="py-3 px-4 font-medium text-white">
+                      <td className="py-3.5 px-4 font-semibold text-[#151A14]">
                         {item.branchName || "Global (All Branches)"}
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-3.5 px-4">
                         <span
                           className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                             item.karat === 24
-                              ? "bg-amber-500/20 text-[#FFD700] border-amber-500/30"
-                              : "bg-white/10 text-emerald-200 border-white/10"
+                              ? "bg-[#D4AF37]/15 text-[#8C6D2D] border-[#D4AF37]/35"
+                              : "bg-stone-100 text-stone-700 border-stone-200"
                           }`}
                         >
                           {item.karat}K
                         </span>
                       </td>
-                      <td className="py-3 px-4 font-bold text-white">
+                      <td className="py-3.5 px-4 font-bold text-[#0B3D0B] tabular-nums">
                         LKR {formatLkr(item.ratePerGram)}
                       </td>
-                      <td className="py-3 px-4 text-emerald-300/80">
+                      <td className="py-3.5 px-4 text-stone-600 tabular-nums">
                         LKR {formatLkr(item.ratePerGram * 8)}
                       </td>
-                      <td className="py-3 px-4">
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                      <td className="py-3.5 px-4">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
                           {item.source}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-emerald-200/80">
+                      <td className="py-3.5 px-4 text-stone-600 font-medium">
                         {item.recordedByStaffName || "System Admin"}
                       </td>
                     </tr>

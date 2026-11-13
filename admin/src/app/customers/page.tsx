@@ -373,16 +373,16 @@ export default function CustomersPage() {
   };
 
   return (
-    <AdminLayout>
+    <AdminLayout title="Customers Directory">
       <div className="space-y-6">
         {/* ================= PAGE HEADER & ACTIONS ================= */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-gray-200">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-[#E8E5DD]">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0B3D0B] tracking-tight">
-              Customers Directory
+            <h1 className="text-2xl sm:text-3xl font-serif-luxury font-bold text-[#151A14] tracking-tight">
+              Customer Registry
             </h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Customer identity management, branch assignments, and account lifecycle control.
+            <p className="text-xs sm:text-sm text-stone-500 mt-1">
+              Identity verification, assigned branch portfolios, and customer lifecycle management.
             </p>
           </div>
 
@@ -394,7 +394,7 @@ export default function CustomersPage() {
                 fetchCustomers();
               }}
               disabled={loading || statsLoading}
-              className="flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold rounded-xl bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
+              className="flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold rounded-xl bg-white border border-[#E8E5DD] text-stone-700 hover:bg-stone-50 hover:border-stone-300 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
               title="Refresh customer data"
             >
               <RefreshCw
@@ -410,7 +410,7 @@ export default function CustomersPage() {
               onClick={handleOpenCreateModal}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl btn-primary-green text-xs font-bold cursor-pointer shadow-sm"
             >
-              <UserPlus className="w-4 h-4 text-[#FFD700]" />
+              <UserPlus className="w-4 h-4 text-[#D4AF37]" />
               <span>Create Customer</span>
             </button>
           </div>
@@ -433,68 +433,62 @@ export default function CustomersPage() {
         )}
 
         {/* ================= SUMMARY STATISTIC CARDS ================= */}
-        {/*
-          Database-backed summary cards: All Customers, Active Customers and Inactive Customers.
-          Customer account status (IsActive) determines active/inactive, not plan or contact status.
-          Calculated across matching records before pagination.
-          Keep Active and Inactive cards as separate counts so a status filter does not make the other count misleading.
-        */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* Card 1: All Customers */}
-          <div className="bg-white rounded-2xl p-5 border border-gray-200/80 shadow-xs flex flex-col justify-between hover:border-[#0B3D0B]/30 transition-all">
+          <div className="bg-white rounded-2xl p-5 border border-[#E8E5DD] shadow-xs flex flex-col justify-between hover:border-[#D8D3C5] hover:shadow-md transition-all">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+              <span className="text-[11px] font-bold text-stone-500 uppercase tracking-[0.14em]">
                 All Customers
               </span>
-              <div className="w-10 h-10 rounded-xl bg-[#0B3D0B]/10 text-[#0B3D0B] flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-[#C5A059]/12 text-[#0B3D0B] border border-[#C5A059]/25 flex items-center justify-center">
                 <Users className="w-5 h-5" />
               </div>
             </div>
             <div className="mt-4">
-              <span className="text-3xl font-black text-gray-900 tracking-tight">
+              <span className="text-3xl font-extrabold text-[#0B3D0B] tracking-tight font-sans tabular-nums">
                 {statsLoading ? "—" : statistics.totalCustomers}
               </span>
-              <span className="text-[11px] text-gray-500 block mt-1">
+              <span className="text-[11px] text-stone-500 block mt-1 font-medium">
                 Matching search & branch scope
               </span>
             </div>
           </div>
 
           {/* Card 2: Active Customers */}
-          <div className="bg-white rounded-2xl p-5 border border-gray-200/80 shadow-xs flex flex-col justify-between hover:border-emerald-500/40 transition-all">
+          <div className="bg-white rounded-2xl p-5 border border-[#E8E5DD] shadow-xs flex flex-col justify-between hover:border-[#D8D3C5] hover:shadow-md transition-all">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">
+              <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-[0.14em]">
                 Active Customers
               </span>
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200/80 flex items-center justify-center">
                 <UserCheck className="w-5 h-5" />
               </div>
             </div>
             <div className="mt-4">
-              <span className="text-3xl font-black text-emerald-700 tracking-tight">
+              <span className="text-3xl font-extrabold text-emerald-700 tracking-tight font-sans tabular-nums">
                 {statsLoading ? "—" : statistics.activeCustomers}
               </span>
-              <span className="text-[11px] text-gray-500 block mt-1">
+              <span className="text-[11px] text-stone-500 block mt-1 font-medium">
                 Account status Active
               </span>
             </div>
           </div>
 
           {/* Card 3: Inactive Customers */}
-          <div className="bg-white rounded-2xl p-5 border border-gray-200/80 shadow-xs flex flex-col justify-between hover:border-red-400/40 transition-all">
+          <div className="bg-white rounded-2xl p-5 border border-[#E8E5DD] shadow-xs flex flex-col justify-between hover:border-[#D8D3C5] hover:shadow-md transition-all">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-red-700 uppercase tracking-wider">
+              <span className="text-[11px] font-bold text-rose-700 uppercase tracking-[0.14em]">
                 Inactive Customers
               </span>
-              <div className="w-10 h-10 rounded-xl bg-red-50 text-red-700 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-700 border border-rose-200/80 flex items-center justify-center">
                 <UserX className="w-5 h-5" />
               </div>
             </div>
             <div className="mt-4">
-              <span className="text-3xl font-black text-red-700 tracking-tight">
+              <span className="text-3xl font-extrabold text-rose-700 tracking-tight font-sans tabular-nums">
                 {statsLoading ? "—" : statistics.inactiveCustomers}
               </span>
-              <span className="text-[11px] text-gray-500 block mt-1">
+              <span className="text-[11px] text-stone-500 block mt-1 font-medium">
                 Suspended or closed accounts
               </span>
             </div>
@@ -502,29 +496,29 @@ export default function CustomersPage() {
         </div>
 
         {/* Documentation / Info note on statistics behavior */}
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100/70 border border-gray-200 text-[11px] text-gray-600">
-          <Info className="w-3.5 h-3.5 text-[#0B3D0B] flex-shrink-0" />
+        <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-[#FAF9F6] border border-[#E8E5DD] text-[11px] text-stone-600">
+          <Info className="w-4 h-4 text-[#0B3D0B] flex-shrink-0" />
           <span>
-            <strong>Statistics Behavior:</strong> Summary cards reflect total, active, and inactive counts matching the current search and branch filters before pagination. Active and Inactive cards remain separate counts so applying a table status filter does not make the opposite card count misleading.
+            <strong>Registry Insights:</strong> Summary cards reflect total, active, and inactive counts matching the current search and branch filters before pagination.
           </span>
         </div>
 
         {/* ================= SEARCH & FILTER CONTROLS ================= */}
-        <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="bg-white rounded-2xl p-4 border border-[#E8E5DD] shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
           {/* Search Input */}
           <div className="relative w-full md:max-w-md">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by name, phone, email, or NIC..."
-              className="w-full pl-10 pr-12 py-2.5 rounded-xl border border-gray-300 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0B3D0B] focus:border-transparent transition-all"
+              className="w-full pl-10 pr-12 py-2.5 rounded-xl border border-[#E8E5DD] text-xs sm:text-sm text-[#151A14] placeholder-stone-400 focus:outline-hidden focus:ring-2 focus:ring-[#0B3D0B] focus:border-transparent transition-all bg-[#FAF9F6]"
             />
             {search && (
               <button
                 onClick={() => setSearch("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs px-1.5 py-0.5 rounded cursor-pointer"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 text-xs px-1.5 py-0.5 rounded cursor-pointer"
               >
                 Clear
               </button>
@@ -534,7 +528,7 @@ export default function CustomersPage() {
           {/* Status Filter Tabs & Branch Filter */}
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
             {/* Status Segment Pills */}
-            <div className="inline-flex items-center p-1 bg-gray-100 rounded-xl border border-gray-200">
+            <div className="inline-flex items-center p-1 bg-[#FAF9F6] rounded-xl border border-[#E8E5DD]">
               {[
                 { id: "ALL", label: "All Customers" },
                 { id: "Active", label: "Active" },
@@ -551,7 +545,7 @@ export default function CustomersPage() {
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                       isActive
                         ? "bg-[#0B3D0B] text-white shadow-2xs"
-                        : "text-gray-600 hover:text-gray-900"
+                        : "text-stone-600 hover:text-stone-900"
                     }`}
                   >
                     {tab.label}
@@ -563,14 +557,14 @@ export default function CustomersPage() {
             {/* Branch Filter */}
             {isSuperAdmin ? (
               <div className="flex items-center gap-1.5">
-                <Building2 className="w-4 h-4 text-gray-400 hidden sm:block" />
+                <Building2 className="w-4 h-4 text-stone-400 hidden sm:block" />
                 <select
                   value={selectedBranch}
                   onChange={(e) => {
                     setSelectedBranch(e.target.value);
                     setPage(1);
                   }}
-                  className="px-3 py-2 rounded-xl border border-gray-300 text-xs text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#0B3D0B] cursor-pointer"
+                  className="px-3 py-2 rounded-xl border border-[#E8E5DD] text-xs text-stone-800 bg-[#FAF9F6] focus:outline-hidden focus:ring-2 focus:ring-[#0B3D0B] cursor-pointer"
                 >
                   <option value="">All Branches</option>
                   {branches.map((b) => (
@@ -582,7 +576,7 @@ export default function CustomersPage() {
               </div>
             ) : (
               user?.assignedBranches?.[0] && (
-                <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-100 border border-gray-200 text-xs font-semibold text-gray-700">
+                <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#FAF9F6] border border-[#E8E5DD] text-xs font-semibold text-stone-700">
                   <Building2 className="w-3.5 h-3.5 text-[#0B3D0B]" />
                   <span>{user.assignedBranches[0].name}</span>
                 </div>
@@ -592,7 +586,7 @@ export default function CustomersPage() {
         </div>
 
         {/* ================= PAGINATED DATA TABLE ================= */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
+        <div className="bg-white rounded-2xl border border-[#E8E5DD] shadow-xs overflow-hidden">
           {/* Error Alert */}
           {error && (
             <div className="p-6 bg-red-50/70 border-b border-red-200 flex items-start gap-3">
@@ -616,7 +610,7 @@ export default function CustomersPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-gray-50/80 border-b border-gray-200 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                <tr className="bg-[#FAF9F6] border-b border-[#E8E5DD] text-[11px] font-bold text-stone-500 uppercase tracking-[0.14em]">
                   <th className="py-3.5 px-4 sm:px-6">Customer</th>
                   <th className="py-3.5 px-4">Phone</th>
                   <th className="py-3.5 px-4">Email</th>
@@ -628,7 +622,7 @@ export default function CustomersPage() {
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-gray-100 text-sm">
+              <tbody className="divide-y divide-stone-100 text-sm">
                 {/* LOADING SKELETON */}
                 {loading && (
                   <>
@@ -727,19 +721,19 @@ export default function CustomersPage() {
                     return (
                       <tr
                         key={c.id}
-                        className="hover:bg-emerald-50/20 transition-colors group"
+                        className="hover:bg-[#FAF9F6] transition-colors group"
                       >
                         {/* Name & Initials */}
-                        <td className="py-3.5 px-4 sm:px-6">
+                        <td className="py-4 px-4 sm:px-6">
                           <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-full bg-[#0B3D0B] text-[#FFD700] font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-2xs">
+                            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#061E06] via-[#092B09] to-[#041604] text-[#D4AF37] font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-2xs border border-[#C5A059]/30">
                               {initials}
                             </div>
                             <div className="flex flex-col min-w-0">
-                              <span className="font-bold text-gray-900 group-hover:text-[#0B3D0B] transition-colors truncate">
+                              <span className="font-bold text-[#151A14] group-hover:text-[#0B3D0B] transition-colors truncate">
                                 {c.fullName}
                               </span>
-                              <span className="text-[11px] text-gray-500">
+                              <span className="text-[11px] text-stone-500 font-medium">
                                 {c.activePlansCount > 0
                                   ? `${c.activePlansCount} Active ${c.activePlansCount === 1 ? "Plan" : "Plans"}`
                                   : "No Active Plans"}
@@ -749,7 +743,7 @@ export default function CustomersPage() {
                         </td>
 
                         {/* Phone */}
-                        <td className="py-3.5 px-4 font-mono text-xs text-gray-700">
+                        <td className="py-4 px-4 font-mono text-xs text-stone-700">
                           <div className="flex items-center gap-1.5">
                             <span>{c.phoneNumber || "—"}</span>
                             {c.isPhoneVerified && (
@@ -761,7 +755,7 @@ export default function CustomersPage() {
                         </td>
 
                         {/* Email */}
-                        <td className="py-3.5 px-4 text-xs text-gray-600 truncate max-w-[170px]">
+                        <td className="py-4 px-4 text-xs text-stone-600 truncate max-w-[170px]">
                           <div className="flex items-center gap-1.5">
                             <span className="truncate">{c.email || "—"}</span>
                             {c.isEmailVerified && (
@@ -773,9 +767,9 @@ export default function CustomersPage() {
                         </td>
 
                         {/* NIC */}
-                        <td className="py-3.5 px-4 font-mono text-xs text-gray-600">
+                        <td className="py-4 px-4 font-mono text-xs text-stone-600">
                           {c.nic ? (
-                            <span className="bg-gray-100 px-2 py-0.5 rounded text-[11px]">
+                            <span className="bg-[#FAF9F6] border border-[#E8E5DD] px-2 py-0.5 rounded-md text-[11px] font-semibold text-stone-800">
                               {c.nic}
                             </span>
                           ) : (
@@ -784,15 +778,15 @@ export default function CustomersPage() {
                         </td>
 
                         {/* Status (Determined strictly by Customer.IsActive) */}
-                        <td className="py-3.5 px-4">
+                        <td className="py-4 px-4">
                           {c.isActive ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-green-100 text-green-800 border border-green-200">
-                              <span className="w-1.5 h-1.5 rounded-full bg-green-600" />
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                               Active
                             </span>
                           ) : (
                             <span
-                              className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-100 text-red-800 border border-red-200"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-800 border border-rose-200"
                               title={
                                 c.closureReason
                                   ? `Closed: ${c.closureReason}`
@@ -801,16 +795,16 @@ export default function CustomersPage() {
                                   : "Account Inactive"
                               }
                             >
-                              <span className="w-1.5 h-1.5 rounded-full bg-red-600" />
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
                               Inactive
                             </span>
                           )}
                         </td>
 
                         {/* Branch */}
-                        <td className="py-3.5 px-4">
-                          <span className="inline-flex items-center gap-1 text-xs text-gray-700 font-medium">
-                            <Building2 className="w-3 h-3 text-[#0B3D0B]" />
+                        <td className="py-4 px-4">
+                          <span className="inline-flex items-center gap-1 text-xs text-stone-700 font-medium">
+                            <Building2 className="w-3.5 h-3.5 text-[#C5A059]" />
                             <span className="truncate max-w-[120px]">
                               {c.primaryBranchName}
                             </span>
@@ -818,20 +812,20 @@ export default function CustomersPage() {
                         </td>
 
                         {/* Registration Date */}
-                        <td className="py-3.5 px-4 text-xs text-gray-500">
+                        <td className="py-4 px-4 text-xs text-stone-500 font-medium">
                           {registrationDate}
                         </td>
 
                         {/* Actions */}
-                        <td className="py-3.5 px-4 text-right">
+                        <td className="py-4 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             {/* View Detail Button */}
                             <Link
                               href={`/customers/${c.id}`}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-[#0B3D0B] bg-emerald-50 hover:bg-[#0B3D0B] hover:text-white transition-all cursor-pointer border border-[#0B3D0B]/20"
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold text-[#0B3D0B] bg-[#FAF9F6] hover:bg-[#0B3D0B] hover:text-white transition-all cursor-pointer border border-[#E8E5DD] hover:border-[#0B3D0B] shadow-2xs"
                               title="View full customer profile and verification details"
                             >
-                              <Eye className="w-3.5 h-3.5" />
+                              <Eye className="w-3.5 h-3.5 text-[#C5A059]" />
                               <span>View</span>
                             </Link>
 
@@ -839,10 +833,10 @@ export default function CustomersPage() {
                             {canManage && (
                               <button
                                 onClick={() => handleOpenStatusAction(c)}
-                                className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border shadow-2xs ${
                                   c.isActive
-                                    ? "text-red-700 bg-red-50 hover:bg-red-600 hover:text-white border-red-200"
-                                    : "text-emerald-700 bg-emerald-50 hover:bg-emerald-700 hover:text-white border-emerald-200"
+                                    ? "text-rose-700 bg-rose-50/80 hover:bg-rose-600 hover:text-white border-rose-200"
+                                    : "text-emerald-700 bg-emerald-50/80 hover:bg-emerald-700 hover:text-white border-emerald-200"
                                 }`}
                                 title={
                                   c.isActive
@@ -864,17 +858,17 @@ export default function CustomersPage() {
           </div>
 
           {/* ================= PAGINATION CONTROLS ================= */}
-          <div className="px-4 sm:px-6 py-4 bg-gray-50/50 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-600">
+          <div className="px-4 sm:px-6 py-4 bg-[#FAF9F6] border-t border-[#E8E5DD] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-stone-600">
             <div>
               Showing{" "}
-              <span className="font-bold text-gray-900">
+              <span className="font-bold text-[#151A14] tabular-nums">
                 {customers.length === 0 ? 0 : (page - 1) * pageSize + 1}
               </span>{" "}
               to{" "}
-              <span className="font-bold text-gray-900">
+              <span className="font-bold text-[#151A14] tabular-nums">
                 {Math.min(page * pageSize, totalCount)}
               </span>{" "}
-              of <span className="font-bold text-gray-900">{totalCount}</span>{" "}
+              of <span className="font-bold text-[#151A14] tabular-nums">{totalCount}</span>{" "}
               matching customers
             </div>
 
@@ -882,20 +876,20 @@ export default function CustomersPage() {
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1 || loading}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-2xs"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-[#E8E5DD] bg-white hover:bg-stone-50 text-stone-700 font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-2xs"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
                 <span>Previous</span>
               </button>
 
-              <span className="px-2 font-bold text-gray-800">
+              <span className="px-2 font-bold text-[#151A14] tabular-nums">
                 Page {page} of {Math.max(1, totalPages)}
               </span>
 
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page >= totalPages || loading}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-2xs"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-[#E8E5DD] bg-white hover:bg-stone-50 text-stone-700 font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-2xs"
               >
                 <span>Next</span>
                 <ChevronRight className="w-3.5 h-3.5" />
@@ -908,16 +902,16 @@ export default function CustomersPage() {
         {showCreateModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div
-              className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
+              className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
               onClick={() => !createSubmitLoading && setShowCreateModal(false)}
             />
 
-            <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden z-50 flex flex-col">
+            <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-[#E8E5DD] overflow-hidden z-50 flex flex-col animate-fadeIn">
               {/* Header */}
-              <div className="px-6 py-4 bg-[#0B3D0B] text-white flex items-center justify-between">
+              <div className="px-6 py-4 bg-gradient-to-r from-[#061E06] via-[#092B09] to-[#061E06] border-b border-[#C5A059]/30 text-white flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <UserPlus className="w-5 h-5 text-[#FFD700]" />
-                  <h2 className="text-base font-bold tracking-tight">
+                  <UserPlus className="w-5 h-5 text-[#D4AF37]" />
+                  <h2 className="text-base font-serif-luxury font-bold tracking-tight">
                     Create New Customer Profile
                   </h2>
                 </div>
@@ -938,16 +932,16 @@ export default function CustomersPage() {
 
                 {/* Server Error Alert */}
                 {createSubmitError && (
-                  <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 flex items-start gap-2 text-xs text-red-700">
-                    <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                  <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-2 text-xs text-rose-700">
+                    <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
                     <span>{createSubmitError}</span>
                   </div>
                 )}
 
                 {/* Full Name */}
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
-                    Full Name <span className="text-red-600">*</span>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    Full Name <span className="text-rose-600">*</span>
                   </label>
                   <input
                     type="text"
@@ -956,19 +950,19 @@ export default function CustomersPage() {
                       setCreateForm((prev) => ({ ...prev, fullName: e.target.value }))
                     }
                     placeholder="e.g. Oliver Brown"
-                    className={`w-full px-3.5 py-2 rounded-xl border text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0B3D0B] ${
-                      createErrors.fullName ? "border-red-400 bg-red-50/30" : "border-gray-300"
+                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm text-stone-900 focus:outline-hidden focus:ring-2 focus:ring-[#0B3D0B] bg-[#FAF9F6] ${
+                      createErrors.fullName ? "border-rose-400 bg-rose-50/30" : "border-[#E8E5DD]"
                     }`}
                   />
                   {createErrors.fullName && (
-                    <p className="text-[11px] text-red-600 mt-1">{createErrors.fullName}</p>
+                    <p className="text-[11px] text-rose-600 mt-1">{createErrors.fullName}</p>
                   )}
                 </div>
 
                 {/* Phone Number */}
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
-                    Phone Number <span className="text-red-600">*</span>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    Phone Number <span className="text-rose-600">*</span>
                   </label>
                   <input
                     type="tel"
@@ -977,19 +971,19 @@ export default function CustomersPage() {
                       setCreateForm((prev) => ({ ...prev, phoneNumber: e.target.value }))
                     }
                     placeholder="e.g. +94771234567 or 0771234567"
-                    className={`w-full px-3.5 py-2 rounded-xl border text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0B3D0B] ${
-                      createErrors.phoneNumber ? "border-red-400 bg-red-50/30" : "border-gray-300"
+                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm text-stone-900 focus:outline-hidden focus:ring-2 focus:ring-[#0B3D0B] bg-[#FAF9F6] ${
+                      createErrors.phoneNumber ? "border-rose-400 bg-rose-50/30" : "border-[#E8E5DD]"
                     }`}
                   />
                   {createErrors.phoneNumber && (
-                    <p className="text-[11px] text-red-600 mt-1">{createErrors.phoneNumber}</p>
+                    <p className="text-[11px] text-rose-600 mt-1">{createErrors.phoneNumber}</p>
                   )}
                 </div>
 
                 {/* Email Address */}
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
-                    Email Address <span className="text-red-600">*</span>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    Email Address <span className="text-rose-600">*</span>
                   </label>
                   <input
                     type="email"
@@ -998,19 +992,19 @@ export default function CustomersPage() {
                       setCreateForm((prev) => ({ ...prev, email: e.target.value }))
                     }
                     placeholder="e.g. oliver.brown@example.com"
-                    className={`w-full px-3.5 py-2 rounded-xl border text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0B3D0B] ${
-                      createErrors.email ? "border-red-400 bg-red-50/30" : "border-gray-300"
+                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm text-stone-900 focus:outline-hidden focus:ring-2 focus:ring-[#0B3D0B] bg-[#FAF9F6] ${
+                      createErrors.email ? "border-rose-400 bg-rose-50/30" : "border-[#E8E5DD]"
                     }`}
                   />
                   {createErrors.email && (
-                    <p className="text-[11px] text-red-600 mt-1">{createErrors.email}</p>
+                    <p className="text-[11px] text-rose-600 mt-1">{createErrors.email}</p>
                   )}
                 </div>
 
                 {/* NIC */}
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
-                    National Identity Card (NIC) <span className="text-red-600">*</span>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    National Identity Card (NIC) <span className="text-rose-600">*</span>
                   </label>
                   <input
                     type="text"
@@ -1019,19 +1013,19 @@ export default function CustomersPage() {
                       setCreateForm((prev) => ({ ...prev, nic: e.target.value }))
                     }
                     placeholder="e.g. 199512345678 or 951234567V"
-                    className={`w-full px-3.5 py-2 rounded-xl border text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0B3D0B] ${
-                      createErrors.nic ? "border-red-400 bg-red-50/30" : "border-gray-300"
+                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm text-stone-900 focus:outline-hidden focus:ring-2 focus:ring-[#0B3D0B] bg-[#FAF9F6] ${
+                      createErrors.nic ? "border-rose-400 bg-rose-50/30" : "border-[#E8E5DD]"
                     }`}
                   />
                   {createErrors.nic && (
-                    <p className="text-[11px] text-red-600 mt-1">{createErrors.nic}</p>
+                    <p className="text-[11px] text-rose-600 mt-1">{createErrors.nic}</p>
                   )}
                 </div>
 
                 {/* Branch Selection */}
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
-                    Primary Branch <span className="text-red-600">*</span>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    Primary Branch <span className="text-rose-600">*</span>
                   </label>
                   {isSuperAdmin ? (
                     <select
@@ -1039,8 +1033,8 @@ export default function CustomersPage() {
                       onChange={(e) =>
                         setCreateForm((prev) => ({ ...prev, branchId: e.target.value }))
                       }
-                      className={`w-full px-3.5 py-2 rounded-xl border text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#0B3D0B] cursor-pointer ${
-                        createErrors.branchId ? "border-red-400 bg-red-50/30" : "border-gray-300"
+                      className={`w-full px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm text-stone-900 bg-[#FAF9F6] focus:outline-hidden focus:ring-2 focus:ring-[#0B3D0B] cursor-pointer ${
+                        createErrors.branchId ? "border-rose-400 bg-rose-50/30" : "border-[#E8E5DD]"
                       }`}
                     >
                       <option value="">Select Branch...</option>
@@ -1051,7 +1045,7 @@ export default function CustomersPage() {
                       ))}
                     </select>
                   ) : (
-                    <div className="px-3.5 py-2 rounded-xl bg-gray-100 border border-gray-200 text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <div className="px-3.5 py-2.5 rounded-xl bg-[#FAF9F6] border border-[#E8E5DD] text-xs font-semibold text-stone-700 flex items-center gap-2">
                       <Building2 className="w-4 h-4 text-[#0B3D0B]" />
                       <span>
                         {user?.assignedBranches?.[0]?.name || "Assigned Branch"} (Permitted Scope)
@@ -1059,24 +1053,24 @@ export default function CustomersPage() {
                     </div>
                   )}
                   {createErrors.branchId && (
-                    <p className="text-[11px] text-red-600 mt-1">{createErrors.branchId}</p>
+                    <p className="text-[11px] text-rose-600 mt-1">{createErrors.branchId}</p>
                   )}
                 </div>
 
                 {/* Footer Buttons */}
-                <div className="pt-3 flex items-center justify-end gap-3 border-t border-gray-100">
+                <div className="pt-3 flex items-center justify-end gap-3 border-t border-stone-100">
                   <button
                     type="button"
                     onClick={() => setShowCreateModal(false)}
                     disabled={createSubmitLoading}
-                    className="px-4 py-2 rounded-xl text-xs font-bold text-gray-700 bg-white border border-gray-300 hover:bg-gray-100 transition-colors cursor-pointer"
+                    className="px-4 py-2.5 rounded-xl text-xs font-bold text-stone-700 bg-white border border-[#E8E5DD] hover:bg-stone-50 transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={createSubmitLoading}
-                    className="px-5 py-2 rounded-xl btn-primary-green text-xs font-bold flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    className="px-5 py-2.5 rounded-xl btn-primary-green text-xs font-bold flex items-center gap-2 cursor-pointer disabled:opacity-50"
                   >
                     {createSubmitLoading ? (
                       <>
@@ -1085,7 +1079,7 @@ export default function CustomersPage() {
                       </>
                     ) : (
                       <>
-                        <UserPlus className="w-3.5 h-3.5 text-[#FFD700]" />
+                        <UserPlus className="w-3.5 h-3.5 text-[#D4AF37]" />
                         <span>Save Customer</span>
                       </>
                     )}
@@ -1100,20 +1094,20 @@ export default function CustomersPage() {
         {statusActionCustomer && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div
-              className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
+              className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
               onClick={() => !statusActionLoading && setStatusActionCustomer(null)}
             />
 
-            <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden z-50 flex flex-col">
+            <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-[#E8E5DD] overflow-hidden z-50 flex flex-col animate-fadeIn">
               {/* Header */}
               <div
                 className={`px-6 py-4 text-white flex items-center justify-between ${
-                  statusActionCustomer.isActive ? "bg-red-800" : "bg-[#0B3D0B]"
+                  statusActionCustomer.isActive ? "bg-gradient-to-r from-rose-900 to-rose-950 border-b border-rose-800" : "bg-gradient-to-r from-[#061E06] via-[#092B09] to-[#061E06] border-b border-[#C5A059]/30"
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <Power className="w-5 h-5 text-[#FFD700]" />
-                  <h2 className="text-base font-bold tracking-tight">
+                  <Power className="w-5 h-5 text-[#D4AF37]" />
+                  <h2 className="text-base font-serif-luxury font-bold tracking-tight">
                     {statusActionCustomer.isActive
                       ? "Confirm Customer Deactivation"
                       : "Confirm Customer Reactivation"}
@@ -1130,21 +1124,21 @@ export default function CustomersPage() {
               {/* Body */}
               <form onSubmit={handleStatusActionSubmit} className="p-6 space-y-4">
                 {statusActionError && (
-                  <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 flex items-start gap-2 text-xs text-red-700">
-                    <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                  <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-2 text-xs text-rose-700">
+                    <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
                     <span>{statusActionError}</span>
                   </div>
                 )}
 
                 <div className="space-y-2">
-                  <p className="text-xs text-gray-700 leading-relaxed">
+                  <p className="text-xs text-stone-700 leading-relaxed font-medium">
                     You are changing the account status for:
                   </p>
-                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-xs">
-                    <div className="font-bold text-gray-900 text-sm">
+                  <div className="p-3 bg-[#FAF9F6] rounded-xl border border-[#E8E5DD] text-xs">
+                    <div className="font-bold text-[#151A14] text-sm">
                       {statusActionCustomer.fullName}
                     </div>
-                    <div className="text-gray-500 font-mono mt-0.5">
+                    <div className="text-stone-500 font-mono mt-0.5">
                       Phone: {statusActionCustomer.phoneNumber || "—"} | Branch: {statusActionCustomer.primaryBranchName}
                     </div>
                   </div>
@@ -1157,8 +1151,8 @@ export default function CustomersPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-gray-800 mb-1">
-                        Deactivation Reason <span className="text-red-600">*</span>
+                      <label className="block text-xs font-bold text-stone-800 mb-1">
+                        Deactivation Reason <span className="text-rose-600">*</span>
                       </label>
                       <textarea
                         rows={2}
@@ -1168,12 +1162,12 @@ export default function CustomersPage() {
                           if (statusActionReasonError) setStatusActionReasonError(null);
                         }}
                         placeholder="Provide reason for audit records (e.g. Compliance review, fraud check, requested suspension)..."
-                        className={`w-full px-3 py-2 rounded-xl border text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-600 ${
-                          statusActionReasonError ? "border-red-400 bg-red-50/30" : "border-gray-300"
+                        className={`w-full px-3 py-2 rounded-xl border text-xs text-stone-900 focus:outline-hidden focus:ring-2 focus:ring-rose-600 bg-[#FAF9F6] ${
+                          statusActionReasonError ? "border-rose-400 bg-rose-50/30" : "border-[#E8E5DD]"
                         }`}
                       />
                       {statusActionReasonError && (
-                        <p className="text-[11px] text-red-600 mt-1">
+                        <p className="text-[11px] text-rose-600 mt-1">
                           {statusActionReasonError}
                         </p>
                       )}
@@ -1186,7 +1180,7 @@ export default function CustomersPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-gray-800 mb-1">
+                      <label className="block text-xs font-bold text-stone-800 mb-1">
                         Optional Reason or Remarks
                       </label>
                       <input
@@ -1194,7 +1188,7 @@ export default function CustomersPage() {
                         value={statusActionReason}
                         onChange={(e) => setStatusActionReason(e.target.value)}
                         placeholder="e.g. Identity re-verified upon customer request"
-                        className="w-full px-3 py-2 rounded-xl border border-gray-300 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0B3D0B]"
+                        className="w-full px-3 py-2 rounded-xl border border-[#E8E5DD] text-xs text-stone-900 focus:outline-hidden focus:ring-2 focus:ring-[#0B3D0B] bg-[#FAF9F6]"
                       />
                     </div>
                   </>

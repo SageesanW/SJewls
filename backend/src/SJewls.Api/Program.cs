@@ -194,25 +194,44 @@ if (isProdEnvironment && isChituSimEnabled)
     throw new InvalidOperationException("CRITICAL SECURITY ERROR: ChituPayments:EnableSimulation cannot be enabled in a Production environment.");
 }
 
-// 3. SMS Configuration (Text.lk SMS Gateway)
+// 3. SMS Configuration & Provider Selection
 builder.Services.AddOptions<SmsOptions>()
-    .Bind(builder.Configuration.GetSection(SmsOptions.SectionName))
-    .ValidateDataAnnotations();
+    .Bind(builder.Configuration.GetSection(SmsOptions.SectionName));
 
+builder.Services.AddOptions<SmsLenzOptions>()
+    .Bind(builder.Configuration.GetSection(SmsLenzOptions.SectionName));
+
+builder.Services.AddHttpClient<SmsLenzSmsSender>();
 builder.Services.AddHttpClient<TextLkSmsSender>();
 builder.Services.AddScoped<MockSmsSender>();
 
-// Register ISmsSender (TextLkSmsSender for real delivery, MockSmsSender if explicitly set to Mock)
+// Register ISmsSender based on configured provider:
+// - "SmsLenz" (Active): Primary production SMS provider (SMSlenz.lk). Must be the only sender used when selected, with no automatic fallback.
+// - "TextLk": Legacy SMS provider (Text.lk). Kept intact for rollback. To restore Text.lk, set Sms:Provider = "TextLk" (or environment variable Sms__Provider=TextLk).
+// - "Mock": Local dev/testing mock sender that logs delivery to console without dispatching network requests.
 builder.Services.AddScoped<ISmsSender>(sp =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
-    var provider = config["Sms:Provider"] ?? "TextLk";
-    var apiToken = config["Sms:ApiToken"];
-    if (provider.Equals("Mock", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(apiToken))
+    var provider = config["Sms:Provider"]?.Trim();
+
+    if (string.Equals(provider, "SmsLenz", StringComparison.OrdinalIgnoreCase))
+    {
+        // SMSlenz is the only sender used when selected; no automatic fallback
+        return sp.GetRequiredService<SmsLenzSmsSender>();
+    }
+
+    if (string.Equals(provider, "TextLk", StringComparison.OrdinalIgnoreCase))
+    {
+        return sp.GetRequiredService<TextLkSmsSender>();
+    }
+
+    if (string.Equals(provider, "Mock", StringComparison.OrdinalIgnoreCase))
     {
         return sp.GetRequiredService<MockSmsSender>();
     }
-    return sp.GetRequiredService<TextLkSmsSender>();
+
+    // Default to SmsLenz if provider setting is absent or unspecified
+    return sp.GetRequiredService<SmsLenzSmsSender>();
 });
 
 // 4. Register Application & Infrastructure Services
@@ -296,7 +315,8 @@ builder.Services.AddRateLimiter(options =>
 });
 
 // 3. Configure JWT Authentication
-var jwtSecret = builder.Configuration["Jwt:Secret"] ?? "super-secret-key-that-must-be-at-least-32-characters-long-sjewls-dev";
+var rawSecret = builder.Configuration["Jwt:Secret"];
+var jwtSecret = !string.IsNullOrWhiteSpace(rawSecret) ? rawSecret : "super-secret-key-that-must-be-at-least-32-characters-long-sjewls-dev";
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "SJewls.Api";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "SJewls.App";
 
