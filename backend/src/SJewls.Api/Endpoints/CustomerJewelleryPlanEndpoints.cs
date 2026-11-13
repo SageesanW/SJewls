@@ -212,6 +212,7 @@ public static class CustomerJewelleryPlanEndpoints
             [FromHeader(Name = "X-Idempotency-Key")] string? headerIdempotencyKey,
             ClaimsPrincipal user,
             ICustomerJewelleryPlanService service,
+            ILogger<ICustomerJewelleryPlanService> logger,
             CancellationToken ct) =>
         {
             if (!TryGetCustomerId(user, out var customerId))
@@ -242,6 +243,14 @@ public static class CustomerJewelleryPlanEndpoints
                     ActiveEnrolmentCount = ex.ActiveEnrolmentCount
                 });
             }
+            catch (JewelleryPlanConflictException ex)
+            {
+                return Results.Conflict(new { message = ex.Message, code = ex.Code });
+            }
+            catch (InvalidOperationException ex) when (IsBusinessConflict(ex))
+            {
+                return Results.Conflict(new { message = ex.Message });
+            }
             catch (KeyNotFoundException ex)
             {
                 return Results.NotFound(new { message = ex.Message });
@@ -254,9 +263,12 @@ public static class CustomerJewelleryPlanEndpoints
             {
                 return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status403Forbidden);
             }
-            catch (InvalidOperationException ex)
+            catch (Exception ex)
             {
-                return Results.Conflict(new { message = ex.Message });
+                logger.LogError(ex, "Unexpected server error during jewellery enrolment for customer {CustomerId}.", customerId);
+                return Results.Problem(
+                    detail: "An unexpected error occurred while processing your enrolment request. Please try again later.",
+                    statusCode: StatusCodes.Status500InternalServerError);
             }
         })
         .WithName("CustomerCreateEnrolment")
@@ -656,5 +668,23 @@ public static class CustomerJewelleryPlanEndpoints
     {
         var idStr = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
         return Guid.TryParse(idStr, out customerId);
+    }
+
+    private static bool IsBusinessConflict(InvalidOperationException ex)
+    {
+        // Don't expose EF Core / database internal exceptions as business conflicts
+        if (ex.Source != null && (ex.Source.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.OrdinalIgnoreCase) ||
+                                  ex.Source.StartsWith("Npgsql", StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        if (ex.Message.Contains("NpgsqlRetryingExecutionStrategy", StringComparison.OrdinalIgnoreCase) ||
+            ex.Message.Contains("ExecutionStrategy", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return true;
     }
 }

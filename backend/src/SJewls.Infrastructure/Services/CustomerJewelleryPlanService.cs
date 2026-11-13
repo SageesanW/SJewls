@@ -283,94 +283,115 @@ public class CustomerJewelleryPlanService : ICustomerJewelleryPlanService
         await semaphore.WaitAsync(ct);
         try
         {
-            // Re-check idempotency key under lock in case a concurrent request with the same key just completed
-            if (!string.IsNullOrWhiteSpace(request.IdempotencyKey))
+            var executionStrategy = _db.Database.CreateExecutionStrategy();
+            var (enrolment, isNew) = await executionStrategy.ExecuteAsync(async () =>
             {
-                var trimmedKey = request.IdempotencyKey.Trim();
-                var existingEnrolment = await _db.JewelleryEnrolments
-                    .Include(e => e.Customer)
-                    .Include(e => e.Branch)
-                    .FirstOrDefaultAsync(e => e.CustomerId == customerId && e.IdempotencyKey == trimmedKey, ct);
-
-                if (existingEnrolment != null)
+                _db.ChangeTracker.Clear();
+                var isRelational = _db.Database.IsRelational();
+                await using var transaction = isRelational ? await _db.Database.BeginTransactionAsync(ct) : null;
+                try
                 {
-                    if (existingEnrolment.JewelleryPlanId != request.PlanId ||
-                        existingEnrolment.SelectedDurationMonths != request.SelectedDurationMonths)
+                    // Re-check idempotency key under transaction in case a concurrent request with the same key
+                    // just completed, or if a previous retry committed but dropped connection before receiving ack.
+                    if (!string.IsNullOrWhiteSpace(request.IdempotencyKey))
                     {
-                        throw new InvalidOperationException("The idempotency key has already been used with a different enrolment request payload.");
+                        var trimmedKey = request.IdempotencyKey.Trim();
+                        var existingEnrolment = await _db.JewelleryEnrolments
+                            .Include(e => e.Customer)
+                            .Include(e => e.Branch)
+                            .FirstOrDefaultAsync(e => e.CustomerId == customerId && e.IdempotencyKey == trimmedKey, ct);
+
+                        if (existingEnrolment != null)
+                        {
+                            if (existingEnrolment.JewelleryPlanId != request.PlanId ||
+                                existingEnrolment.SelectedDurationMonths != request.SelectedDurationMonths)
+                            {
+                                throw new InvalidOperationException("The idempotency key has already been used with a different enrolment request payload.");
+                            }
+
+                            if (transaction != null)
+                            {
+                                await transaction.CommitAsync(ct);
+                            }
+
+                            return (Enrolment: existingEnrolment, IsNew: false);
+                        }
                     }
 
-                    return MapToEnrolmentDto(existingEnrolment, customer, branchToday);
+                    // 4. Repeat enrolment verification against database inside transaction:
+                    // Check all historical enrolments (active, completed, closed, etc.) and active count separately
+                    var existingEnrolmentsQuery = _db.JewelleryEnrolments
+                        .Where(e => e.CustomerId == customerId && e.JewelleryPlanId == plan.Id);
+
+                    var totalEnrolments = await existingEnrolmentsQuery.CountAsync(ct);
+                    var activeEnrolments = await existingEnrolmentsQuery.CountAsync(e => e.Status == JewelleryEnrolmentStatus.Active, ct);
+
+                    if (totalEnrolments > 0 && !request.ConfirmRepeatEnrolment)
+                    {
+                        throw new RepeatEnrolmentConfirmationRequiredException(totalEnrolments, activeEnrolments);
+                    }
+
+                    var joiningDate = branchToday;
+                    var deadline = joiningDate.AddMonths(request.SelectedDurationMonths);
+
+                    var newEnrolment = new JewelleryEnrolment
+                    {
+                        CustomerId = customerId,
+                        JewelleryPlanId = plan.Id,
+                        BranchId = customer.PrimaryBranchId,
+                        IdempotencyKey = string.IsNullOrWhiteSpace(request.IdempotencyKey) ? null : request.IdempotencyKey.Trim(),
+                        Currency = "LKR",
+                        PlanNameSnapshot = plan.Name,
+                        CategoryNameSnapshot = plan.Category?.Name ?? string.Empty,
+                        ImageUrlSnapshot = plan.ImageUrl,
+                        TargetProductWeightGrams = plan.TargetProductGoldWeightGrams,
+                        SelectedDurationMonths = request.SelectedDurationMonths,
+                        PremiumPercentage = plan.PremiumPercentage,
+                        StartDate = joiningDate,
+                        TargetEndDate = deadline,
+                        TotalSavedGrams = 0m,
+                        TotalContributedCurrency = 0m,
+                        Status = JewelleryEnrolmentStatus.Active
+                    };
+
+                    _db.JewelleryEnrolments.Add(newEnrolment);
+                    await _db.SaveChangesAsync(ct);
+
+                    if (transaction != null)
+                    {
+                        await transaction.CommitAsync(ct);
+                    }
+
+                    return (Enrolment: newEnrolment, IsNew: true);
                 }
-            }
-
-            // 4. Repeat enrolment verification against database:
-            // Check all historical enrolments (active, completed, closed, etc.) and active count separately
-            var existingEnrolmentsQuery = _db.JewelleryEnrolments
-                .Where(e => e.CustomerId == customerId && e.JewelleryPlanId == plan.Id);
-
-            var totalEnrolments = await existingEnrolmentsQuery.CountAsync(ct);
-            var activeEnrolments = await existingEnrolmentsQuery.CountAsync(e => e.Status == JewelleryEnrolmentStatus.Active, ct);
-
-            if (totalEnrolments > 0 && !request.ConfirmRepeatEnrolment)
-            {
-                throw new RepeatEnrolmentConfirmationRequiredException(totalEnrolments, activeEnrolments);
-            }
-
-            var joiningDate = branchToday;
-            var deadline = joiningDate.AddMonths(request.SelectedDurationMonths);
-
-            var enrolment = new JewelleryEnrolment
-            {
-                CustomerId = customerId,
-                JewelleryPlanId = plan.Id,
-                BranchId = customer.PrimaryBranchId,
-                IdempotencyKey = string.IsNullOrWhiteSpace(request.IdempotencyKey) ? null : request.IdempotencyKey.Trim(),
-                Currency = "LKR",
-                PlanNameSnapshot = plan.Name,
-                CategoryNameSnapshot = plan.Category?.Name ?? string.Empty,
-                ImageUrlSnapshot = plan.ImageUrl,
-                TargetProductWeightGrams = plan.TargetProductGoldWeightGrams,
-                SelectedDurationMonths = request.SelectedDurationMonths,
-                PremiumPercentage = plan.PremiumPercentage,
-                StartDate = joiningDate,
-                TargetEndDate = deadline,
-                TotalSavedGrams = 0m,
-                TotalContributedCurrency = 0m,
-                Status = JewelleryEnrolmentStatus.Active
-            };
-
-            var isRelational = _db.Database.IsRelational();
-            await using var transaction = isRelational ? await _db.Database.BeginTransactionAsync(ct) : null;
-            try
-            {
-                _db.JewelleryEnrolments.Add(enrolment);
-                await _db.SaveChangesAsync(ct);
-
-                if (transaction != null)
+                catch
                 {
-                    await transaction.CommitAsync(ct);
+                    if (transaction != null)
+                    {
+                        await transaction.RollbackAsync(ct);
+                    }
+                    throw;
                 }
-            }
-            catch
+            });
+
+            // Keep external notification sends OUTSIDE the retry delegate so retries never duplicate notifications:
+            if (isNew)
             {
-                if (transaction != null)
-                {
-                    await transaction.RollbackAsync(ct);
-                }
-                throw;
+                await _notificationService.CreateNotificationAsync(
+                    customerId,
+                    "Jewellery Plan Activated",
+                    $"Your enrolment in {plan.Name} ({plan.TargetProductGoldWeightGrams}g) for {request.SelectedDurationMonths} months has been successfully activated.",
+                    "enrolment",
+                    ct);
+
+                _logger.LogInformation("Customer {CustomerId} created enrolment {EnrolmentId} for plan {PlanId}",
+                    customerId, enrolment.Id, plan.Id);
             }
-
-            // Persist activation notification
-            await _notificationService.CreateNotificationAsync(
-                customerId,
-                "Jewellery Plan Activated",
-                $"Your enrolment in {plan.Name} ({plan.TargetProductGoldWeightGrams}g) for {request.SelectedDurationMonths} months has been successfully activated.",
-                "enrolment",
-                ct);
-
-            _logger.LogInformation("Customer {CustomerId} created enrolment {EnrolmentId} for plan {PlanId}",
-                customerId, enrolment.Id, plan.Id);
+            else
+            {
+                _logger.LogInformation("Idempotent enrolment request deduplicated for customer {CustomerId}, key {Key}",
+                    customerId, request.IdempotencyKey);
+            }
 
             return MapToEnrolmentDto(enrolment, customer, branchToday);
         }
