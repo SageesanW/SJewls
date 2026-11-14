@@ -767,6 +767,46 @@ public class OtpDeliveryAndHashingTests
     }
 
     [Fact]
+    public async Task SmsLenzSmsSender_Http200WithSuccessFalse_SanitizesPotentialOtpInMessage()
+    {
+        // Provider returns HTTP 200 with success: false and an error echoing the message or digits
+        var handler = new MockHttpMessageHandler(req => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("{\"success\":false,\"message\":\"Delivery failed for verification code 987654 to contact\"}", Encoding.UTF8, "application/json")
+        });
+
+        using var httpClient = new HttpClient(handler);
+        var options = Options.Create(new SmsLenzOptions
+        {
+            ApiUrl = "https://smslenz.lk/api/send-sms",
+            UserId = "2888",
+            ApiKey = "fake-key",
+            SenderId = "SMSlenzDEMO"
+        });
+
+        var sender = new SmsLenzSmsSender(httpClient, options, NullLogger<SmsLenzSmsSender>.Instance);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            sender.SendSmsAsync("+94771234567", "Your code is 987654"));
+
+        // Ensure 6-digit OTP is redacted
+        Assert.DoesNotContain("987654", ex.Message);
+        Assert.Contains("[REDACTED]", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("0771234567", "+94771234567")]
+    [InlineData("+94 77 123 4567", "+94771234567")]
+    [InlineData("077-123-4567", "+94771234567")]
+    [InlineData("771234567", "+94771234567")]
+    [InlineData("+94771234567", "+94771234567")]
+    public void SmsLenzSmsSender_FormatRecipientForSmsLenz_NormalizesProperly(string input, string expected)
+    {
+        var result = SmsLenzSmsSender.FormatRecipientForSmsLenz(input);
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
     public async Task SmsLenzSmsSender_Rejection_WhenHttpStatusError_Throws()
     {
         var handler = new MockHttpMessageHandler(req => new HttpResponseMessage(HttpStatusCode.Unauthorized)
@@ -830,10 +870,10 @@ public class OtpDeliveryAndHashingTests
 
         var sender = new SmsLenzSmsSender(httpClient, options, NullLogger<SmsLenzSmsSender>.Instance);
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var ex = await Assert.ThrowsAsync<TimeoutException>(() =>
             sender.SendSmsAsync("+94771234567", "Your code is 123456"));
 
-        Assert.Contains("Network error communicating with SMSlenz gateway", ex.Message);
+        Assert.Contains("timed out", ex.Message);
     }
 
     [Fact]

@@ -201,7 +201,10 @@ builder.Services.AddOptions<SmsOptions>()
 builder.Services.AddOptions<SmsLenzOptions>()
     .Bind(builder.Configuration.GetSection(SmsLenzOptions.SectionName));
 
-builder.Services.AddHttpClient<SmsLenzSmsSender>();
+builder.Services.AddHttpClient<SmsLenzSmsSender>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
 builder.Services.AddHttpClient<TextLkSmsSender>();
 builder.Services.AddScoped<MockSmsSender>();
 

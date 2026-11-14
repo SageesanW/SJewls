@@ -2,6 +2,8 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SJewls.Application.Common;
@@ -19,7 +21,8 @@ public class SmsLenzSmsSender : ISmsSender
         HttpClient httpClient,
         IOptions<SmsLenzOptions> options,
         ILogger<SmsLenzSmsSender> logger,
-        IOptions<SmsOptions>? rootSmsOptions = null)
+        IOptions<SmsOptions>? rootSmsOptions = null,
+        IConfiguration? configuration = null)
     {
         _httpClient = httpClient;
         _logger = logger;
@@ -33,6 +36,45 @@ public class SmsLenzSmsSender : ISmsSender
             resolved.UserId = nested.UserId;
             resolved.ApiKey = nested.ApiKey;
             resolved.SenderId = !string.IsNullOrWhiteSpace(nested.SenderId) ? nested.SenderId : resolved.SenderId;
+        }
+
+        // Direct fallback to environment configuration if any key is missing
+        if (configuration != null)
+        {
+            if (string.IsNullOrWhiteSpace(resolved.UserId))
+            {
+                resolved.UserId = configuration["Sms:SmsLenz:UserId"]
+                    ?? configuration["Sms__SmsLenz__UserId"]
+                    ?? configuration["SmsLenz:UserId"]
+                    ?? configuration["SMSLENZ_USER_ID"]
+                    ?? string.Empty;
+            }
+            if (string.IsNullOrWhiteSpace(resolved.ApiKey))
+            {
+                resolved.ApiKey = configuration["Sms:SmsLenz:ApiKey"]
+                    ?? configuration["Sms__SmsLenz__ApiKey"]
+                    ?? configuration["SmsLenz:ApiKey"]
+                    ?? configuration["SMSLENZ_API_KEY"]
+                    ?? string.Empty;
+            }
+            if (string.IsNullOrWhiteSpace(resolved.SenderId) || resolved.SenderId == "SMSlenzDEMO")
+            {
+                var customSender = configuration["Sms:SmsLenz:SenderId"]
+                    ?? configuration["Sms__SmsLenz__SenderId"]
+                    ?? configuration["SmsLenz:SenderId"]
+                    ?? configuration["SMSLENZ_SENDER_ID"];
+                if (!string.IsNullOrWhiteSpace(customSender))
+                {
+                    resolved.SenderId = customSender;
+                }
+            }
+            if (string.IsNullOrWhiteSpace(resolved.ApiUrl))
+            {
+                resolved.ApiUrl = configuration["Sms:SmsLenz:ApiUrl"]
+                    ?? configuration["Sms__SmsLenz__ApiUrl"]
+                    ?? configuration["SmsLenz:ApiUrl"]
+                    ?? "https://smslenz.lk/api/send-sms";
+            }
         }
 
         _options = resolved;
@@ -76,7 +118,12 @@ public class SmsLenzSmsSender : ISmsSender
         {
             response = await _httpClient.SendAsync(request, cancellationToken);
         }
-        catch (Exception ex)
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogError("SMSlenz gateway request timed out for recipient {Recipient}.", MaskPhoneNumber(phoneNumber));
+            throw new TimeoutException("SMSlenz gateway request timed out.", ex);
+        }
+        catch (Exception ex) when (ex is not TimeoutException)
         {
             _logger.LogError(ex, "HTTP network error calling SMSlenz API for recipient {Recipient}.", MaskPhoneNumber(phoneNumber));
             throw new InvalidOperationException($"Network error communicating with SMSlenz gateway: {ex.Message}", ex);
@@ -135,10 +182,11 @@ public class SmsLenzSmsSender : ISmsSender
 
         if (!isSuccess)
         {
+            var sanitizedError = SanitizeErrorMessage(errorMessage);
             _logger.LogError("SMSlenz reported delivery failure for recipient {Recipient}: {Error}",
-                MaskPhoneNumber(phoneNumber), errorMessage ?? "Operation unsuccessful");
+                MaskPhoneNumber(phoneNumber), sanitizedError);
 
-            throw new InvalidOperationException($"SMSlenz delivery was not accepted: {errorMessage ?? "Provider returned success = false"}");
+            throw new InvalidOperationException($"SMSlenz delivery was not accepted: {sanitizedError}");
         }
 
         // Never log the raw message content or raw response body (can contain the OTP)!
@@ -172,13 +220,16 @@ public class SmsLenzSmsSender : ISmsSender
     /// </summary>
     public static string FormatRecipientForSmsLenz(string phoneNumber)
     {
-        var trimmed = phoneNumber.Trim();
-        if (trimmed.StartsWith("+94") && trimmed.Length == 12)
+        if (string.IsNullOrWhiteSpace(phoneNumber))
+            return string.Empty;
+
+        var clean = phoneNumber.Trim().Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", "");
+        if (clean.StartsWith("+94") && clean.Length == 12)
         {
-            return trimmed;
+            return clean;
         }
 
-        var digits = new string(trimmed.Where(char.IsDigit).ToArray());
+        var digits = new string(clean.Where(char.IsDigit).ToArray());
         if (digits.StartsWith("0") && digits.Length == 10)
         {
             return "+94" + digits[1..];
@@ -192,7 +243,16 @@ public class SmsLenzSmsSender : ISmsSender
             return "+94" + digits;
         }
 
-        return trimmed.StartsWith("+") ? trimmed : "+" + digits;
+        return clean.StartsWith("+") ? clean : "+" + digits;
+    }
+
+    private static string SanitizeErrorMessage(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return "Operation unsuccessful";
+
+        // Redact any sequence of 4-8 digits to ensure OTP codes are never logged or leaked in exceptions
+        return Regex.Replace(message, @"\b\d{4,8}\b", "[REDACTED]");
     }
 
     private static string MaskPhoneNumber(string phone)
