@@ -1,199 +1,157 @@
 openapi: 3.0.1
 info:
   title: SJewls Customer Mobile API
-  description: Complete API specification for the SJewls Customer Mobile Application
-    — Customer Authentication & OTP Verification, Profile Completion, Self-Service
-    Account Closure, Active Store Branches, Jewellery Plan & Category Browsing, Plan
-    Enrolment Previews & Creation, Contribution Ledger, Gold Rate & Payment Quotes,
-    Deferred Payment Initiation, and Customer Notifications.
-  version: v1
+  description: "Complete API specification for the SJewls Customer Mobile Application — Customer Authentication & OTP Verification (SMSlenz.lk HTTP API at https://smslenz.lk/api/send-sms with +94 normalization; Gmail API HTTPS REST via Google OAuth2 with fallback to SMTP port 587), Profile Completion, Self-Service Account Closure, Active Store Branches, Jewellery Plan & Category Browsing, Plan Enrolment Previews & Creation, Contribution Ledger, Gold Rate & Payment Quotes, Deferred Payment Initiation, Customer Notifications, and Persistent Plan Alerts (Chitu Raffle Winner & Jewellery Plan Completion popups/banners with acknowledgement)."
+  version: v1.3
 servers:
-- url: http://localhost:5230
-  description: Current Host
-- url: http://localhost:5230
-  description: Local Server
+  - url: https://sjewls.onrender.com
+    description: Production Server (Render)
+  - url: http://localhost:5230
+    description: Local Development Server
 paths:
   /api/v1/branches:
     get:
       tags:
-      - Branches
+        - Branches
       summary: List Active Branches
-      description: Retrieves all currently active branches for customer registration,
-        store location selection, and mobile lookups.
+      description: "Retrieves all currently active branches for customer registration, store location selection, and mobile lookups."
       operationId: GetBranches
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/BranchDto'
+                  $ref: "#/components/schemas/BranchDto"
   /api/v1/auth/check:
     post:
       tags:
-      - Customer Authentication
-      summary: Check if contact exists in database and determine next step (Login
-        or Register)
-      description: Verifies the phone number or email address against existing customers
-        in the database. Returns whether the customer exists, profile completion state,
-        and recommended next action ('Login' or 'Register').
+        - Customer Authentication
+      summary: Check if contact exists in database and determine next step (Login or Register)
+      description: "Verifies the phone number or email address against existing customers in the database. Returns whether the customer exists, profile completion state, and recommended next action ('Login' or 'Register')."
       operationId: CheckContact
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CheckContactRequest'
+              $ref: "#/components/schemas/CheckContactRequest"
         required: true
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CheckContactResponse'
-        '400':
+                $ref: "#/components/schemas/CheckContactResponse"
+        400:
           description: Bad Request
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
   /api/v1/auth/otp/request:
     post:
       tags:
-      - Customer Authentication
-      summary: Request verification OTP via Phone (Text.lk SMS) or Email (Gmail SMTP)
-      description: 'Generates and dispatches a 6-digit verification code to the specified
-        contact.
-
-
-        **Delivery Modes:**
-
-        • **Email Address**: Dispatched via real Gmail SMTP (`smtp.gmail.com:587`,
-        STARTTLS) from `w.sagee5@gmail.com` with subject ''Your SJewls verification
-        code''. Returns 200 OK only after the SMTP server explicitly accepts the message.
-        If delivery fails (e.g., SMTP auth/network failure), the challenge is immediately
-        invalidated and a safe 400 error is returned (no fallback to mock).
-
-        • **Phone Number**: Dispatched via real Text.lk SMS Gateway (`https://app.text.lk/api/v3/sms/send`,
-        Bearer auth) with sender ID `TextLKDemo`. Returns 200 OK only after the SMS
-        gateway accepts delivery. On failure, the challenge is immediately invalidated
-        and a safe 400 error is returned.
-
-
-        **Outcomes & Error Responses:**
-
-        • `200 OK`: Verification code successfully accepted by delivery provider.
-        Valid for 5 minutes (resend cooldown 60 seconds).
-
-        • `400 Bad Request`: Active resend cooldown in effect, invalid phone/email
-        format, or provider delivery failure.'
+        - Customer Authentication
+      summary: Request verification OTP via Phone (SMSlenz.lk) or Email (Gmail API / SMTP)
+      description: "Generates and dispatches a 6-digit verification code to the customer's phone (dispatched via SMSlenz.lk HTTP POST to https://smslenz.lk/api/send-sms with E.164 +94 normalization; Text.lk is preserved strictly for configuration-only rollback via Sms:Provider=TextLk with no automatic runtime fallback) or email address (dispatched via Gmail API HTTPS REST endpoint https://gmail.googleapis.com/gmail/v1/users/me/messages/send with OAuth2 tokens, or SMTP port 587 STARTTLS via MailKit). Enforces rate-limiting and 5-minute expiry."
       operationId: RequestOtp
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RequestOtpRequest'
+              $ref: "#/components/schemas/RequestOtpRequest"
         required: true
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RequestOtpResponse'
-        '400':
+                $ref: "#/components/schemas/RequestOtpResponse"
+        400:
           description: Bad Request
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
   /api/v1/auth/otp/verify:
     post:
       tags:
-      - Customer Authentication
+        - Customer Authentication
       summary: Verify submitted OTP code and authenticate or continue registration
-      description: 'Verifies the submitted 6-digit OTP against active challenges.
-
-
-        **Outcomes & Responses:**
-
-        • `200 OK (nextAction: ''Dashboard'')`: Customer exists and profile is complete.
-        Returns JWT access token, refresh token, and customer details.
-
-        • `200 OK (nextAction: ''CompleteProfile'')`: Customer is new or profile is
-        incomplete. Returns temporary 1-hour `registrationToken`.
-
-        • `400 Bad Request`: Verification code incorrect (attempts decremented, max
-        5 allowed), challenge expired (after 5 minutes), or challenge already consumed.
-
-        • `401 Unauthorized`: Customer account is deactivated or closed.'
+      description: |-
+          Verifies the submitted 6-digit OTP against active challenges.
+          
+          **Outcomes & Responses:**
+          • `200 OK (nextAction: 'Dashboard')`: Customer exists and profile is complete. Returns JWT access token, refresh token, and customer details.
+          • `200 OK (nextAction: 'CompleteProfile')`: Customer is new or profile is incomplete. Returns temporary 1-hour `registrationToken`.
+          • `400 Bad Request`: Verification code incorrect (attempts decremented, max 5 allowed), challenge expired (after 5 minutes), or challenge already consumed.
+          • `401 Unauthorized`: Customer account is deactivated or closed.
       operationId: VerifyOtp
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/VerifyOtpRequest'
+              $ref: "#/components/schemas/VerifyOtpRequest"
         required: true
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VerifyOtpResponse'
-        '400':
+                $ref: "#/components/schemas/VerifyOtpResponse"
+        400:
           description: Bad Request
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
+                $ref: "#/components/schemas/ProblemDetails"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
   /api/v1/auth/registration/complete:
     post:
       tags:
-      - Customer Authentication
+        - Customer Authentication
       summary: Complete customer profile registration
-      description: Finalizes customer registration using the registrationToken. Automatically
-        preserves the initially entered OTP-verified contact and saves any provided
-        secondary email/phone number. Requires FullName, DateOfBirth (18+), and valid
-        Sri Lankan NIC. Returns JWT access and refresh tokens.
+      description: "Finalizes customer registration using the registrationToken. Automatically preserves the initially entered OTP-verified contact and saves any provided secondary email/phone number. Requires FullName, DateOfBirth (18+), and valid Sri Lankan NIC. Returns JWT access and refresh tokens."
       operationId: CompleteRegistration
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CompleteRegistrationRequest'
+              $ref: "#/components/schemas/CompleteRegistrationRequest"
         required: true
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VerifyOtpResponse'
-        '400':
+                $ref: "#/components/schemas/VerifyOtpResponse"
+        400:
           description: Bad Request
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
+                $ref: "#/components/schemas/ProblemDetails"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
   /api/v1/auth/token/refresh:
     post:
       tags:
-      - Customer Authentication
+        - Customer Authentication
       summary: Exchange refresh token for a new access token
       description: Rotates the refresh token and returns a new active access token.
       operationId: RefreshToken
@@ -201,1620 +159,1620 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RefreshTokenRequest'
+              $ref: "#/components/schemas/RefreshTokenRequest"
         required: true
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RefreshTokenResponse'
-        '401':
+                $ref: "#/components/schemas/RefreshTokenResponse"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
   /api/v1/auth/logout:
     post:
       tags:
-      - Customer Authentication
+        - Customer Authentication
       summary: Revoke refresh token and log out
-      description: Revokes the specified refresh token, terminating the active mobile
-        session.
+      description: "Revokes the specified refresh token, terminating the active mobile session."
       operationId: Logout
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LogoutRequest'
+              $ref: "#/components/schemas/LogoutRequest"
         required: true
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LogoutResponse'
+                $ref: "#/components/schemas/LogoutResponse"
   /api/v1/customer/chitu-plans:
     get:
       tags:
-      - Customer Chitu Plans
+        - Customer Chitu Plans
       summary: Browse active and available Chitu plans
-      description: Retrieves paginated Chitu plans open for joining or late-joining
-        in the customer's registered branch.
+      description: Retrieves paginated Chitu plans open for joining or late-joining in the customer's registered branch.
       operationId: CustomerGetAvailableChituPlans
       parameters:
-      - name: page
-        in: query
-        description: 'Page number (1-based index, default: 1).'
-        style: form
-        schema:
-          type: integer
-          format: int32
-      - name: pageSize
-        in: query
-        description: 'Number of items per page (default: 20, max: 50).'
-        style: form
-        schema:
-          type: integer
-          format: int32
+        - name: page
+          in: query
+          description: "Page number (1-based index, default: 1)."
+          style: form
+          schema:
+            type: integer
+            format: int32
+        - name: pageSize
+          in: query
+          description: "Number of items per page (default: 20, max: 50)."
+          style: form
+          schema:
+            type: integer
+            format: int32
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerChituPlansPagedResponse'
-        '401':
+                $ref: "#/components/schemas/CustomerChituPlansPagedResponse"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
+                $ref: "#/components/schemas/ProblemDetails"
+        403:
           description: Forbidden
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
-  /api/v1/customer/chitu-plans/{planId}:
+        - Bearer: []
+  "/api/v1/customer/chitu-plans/{planId}":
     get:
       tags:
-      - Customer Chitu Plans
+        - Customer Chitu Plans
       summary: Get Chitu plan details with schedule and terms
-      description: Retrieves full details, round schedule, and terms for a specific
-        Chitu plan.
+      description: "Retrieves full details, round schedule, and terms for a specific Chitu plan."
       operationId: CustomerGetChituPlanDetails
       parameters:
-      - name: planId
-        in: path
-        required: true
-        style: simple
-        schema:
-          type: string
-          format: uuid
+        - name: planId
+          in: path
+          required: true
+          style: simple
+          schema:
+            type: string
+            format: uuid
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerChituPlanDetailDto'
-        '401':
+                $ref: "#/components/schemas/CustomerChituPlanDetailDto"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
+                $ref: "#/components/schemas/ProblemDetails"
+        404:
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
-  /api/v1/customer/chitu-plans/{planId}/join-preview:
+        - Bearer: []
+  "/api/v1/customer/chitu-plans/{planId}/join-preview":
     post:
       tags:
-      - Customer Chitu Plans
+        - Customer Chitu Plans
       summary: Preview initial payment for joining a Chitu plan
-      description: Calculates required initial payment covering Round 1 (pre-enrolment)
-        or all elapsed rounds (late joining) for requested slot quantity.
+      description: Calculates required initial payment covering Round 1 (pre-enrolment) or all elapsed rounds (late joining) for requested slot quantity.
       operationId: CustomerPreviewChituJoin
       parameters:
-      - name: planId
-        in: path
-        required: true
-        style: simple
-        schema:
-          type: string
-          format: uuid
+        - name: planId
+          in: path
+          required: true
+          style: simple
+          schema:
+            type: string
+            format: uuid
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CustomerChituJoinPreviewRequest'
+              $ref: "#/components/schemas/CustomerChituJoinPreviewRequest"
         required: true
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerChituJoinPreviewResponse'
-        '400':
+                $ref: "#/components/schemas/CustomerChituJoinPreviewResponse"
+        400:
           description: Bad Request
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
+                $ref: "#/components/schemas/ProblemDetails"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
+                $ref: "#/components/schemas/ProblemDetails"
+        404:
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
-  /api/v1/customer/chitu-plans/{planId}/join:
+        - Bearer: []
+  "/api/v1/customer/chitu-plans/{planId}/join":
     post:
       tags:
-      - Customer Chitu Plans
+        - Customer Chitu Plans
       summary: Confirm and join Chitu plan with slot purchase
-      description: Idempotently processes initial payment (or simulated payment in
-        test mode) and assigns sequential permanent slots.
+      description: Idempotently processes initial payment (or simulated payment in test mode) and assigns sequential permanent slots.
       operationId: CustomerConfirmChituJoin
       parameters:
-      - name: planId
-        in: path
-        required: true
-        style: simple
-        schema:
-          type: string
-          format: uuid
-      - name: X-Idempotency-Key
-        in: header
-        description: Optional client-generated UUID idempotency key to prevent duplicate
-          enrolment creations across network retries.
-        style: simple
-        schema:
-          type: string
+        - name: planId
+          in: path
+          required: true
+          style: simple
+          schema:
+            type: string
+            format: uuid
+        - name: X-Idempotency-Key
+          in: header
+          description: Optional client-generated UUID idempotency key to prevent duplicate enrolment creations across network retries.
+          style: simple
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CustomerChituJoinRequest'
+              $ref: "#/components/schemas/CustomerChituJoinRequest"
         required: true
       responses:
-        '201':
+        201:
           description: Created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerChituJoinResponse'
-        '400':
+                $ref: "#/components/schemas/CustomerChituJoinResponse"
+        400:
           description: Bad Request
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
+                $ref: "#/components/schemas/ProblemDetails"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
+                $ref: "#/components/schemas/ProblemDetails"
+        409:
           description: Conflict
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '501':
+                $ref: "#/components/schemas/ProblemDetails"
+        501:
           description: Server Error
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
+        - Bearer: []
   /api/v1/customer/chitu-investments:
     get:
       tags:
-      - Customer Chitu Plans
+        - Customer Chitu Plans
       summary: Get customer's Chitu portfolio (My Plans)
-      description: Returns paginated Chitu plans owned by the customer, grouped by
-        plan, with individual slot breakdowns, arrears, and eligibility.
+      description: "Returns paginated Chitu plans owned by the customer, grouped by plan, with individual slot breakdowns, arrears, and eligibility."
       operationId: CustomerGetChituInvestments
       parameters:
-      - name: status
-        in: query
-        style: form
-        schema:
-          type: string
-      - name: page
-        in: query
-        description: 'Page number (1-based index, default: 1).'
-        style: form
-        schema:
-          type: integer
-          format: int32
-      - name: pageSize
-        in: query
-        description: 'Number of items per page (default: 20, max: 50).'
-        style: form
-        schema:
-          type: integer
-          format: int32
+        - name: status
+          in: query
+          style: form
+          schema:
+            type: string
+        - name: page
+          in: query
+          description: "Page number (1-based index, default: 1)."
+          style: form
+          schema:
+            type: integer
+            format: int32
+        - name: pageSize
+          in: query
+          description: "Number of items per page (default: 20, max: 50)."
+          style: form
+          schema:
+            type: integer
+            format: int32
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerChituInvestmentsPagedResponse'
-        '401':
+                $ref: "#/components/schemas/CustomerChituInvestmentsPagedResponse"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
+        - Bearer: []
   /api/v1/customer/my-plans:
     get:
       tags:
-      - Customer Chitu Plans
+        - Customer Chitu Plans
       summary: Alias for Customer Chitu investments (My Plans)
       operationId: CustomerGetMyPlansAlias
       parameters:
-      - name: status
-        in: query
-        style: form
-        schema:
-          type: string
-      - name: page
-        in: query
-        description: 'Page number (1-based index, default: 1).'
-        style: form
-        schema:
-          type: integer
-          format: int32
-      - name: pageSize
-        in: query
-        description: 'Number of items per page (default: 20, max: 50).'
-        style: form
-        schema:
-          type: integer
-          format: int32
+        - name: status
+          in: query
+          style: form
+          schema:
+            type: string
+        - name: page
+          in: query
+          description: "Page number (1-based index, default: 1)."
+          style: form
+          schema:
+            type: integer
+            format: int32
+        - name: pageSize
+          in: query
+          description: "Number of items per page (default: 20, max: 50)."
+          style: form
+          schema:
+            type: integer
+            format: int32
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerChituInvestmentsPagedResponse'
+                $ref: "#/components/schemas/CustomerChituInvestmentsPagedResponse"
       security:
-      - Bearer: []
-  /api/v1/customer/chitu-investments/{planId}:
+        - Bearer: []
+  "/api/v1/customer/chitu-investments/{planId}":
     get:
       tags:
-      - Customer Chitu Plans
+        - Customer Chitu Plans
       summary: Get single Chitu plan portfolio details
       operationId: CustomerGetChituInvestmentPlanDetails
       parameters:
-      - name: planId
-        in: path
-        required: true
-        style: simple
-        schema:
-          type: string
-          format: uuid
+        - name: planId
+          in: path
+          required: true
+          style: simple
+          schema:
+            type: string
+            format: uuid
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerChituInvestmentPlanDto'
-        '404':
+                $ref: "#/components/schemas/CustomerChituInvestmentPlanDto"
+        404:
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
-  /api/v1/customer/chitu-slots/{slotId}:
+        - Bearer: []
+  "/api/v1/customer/chitu-slots/{slotId}":
     get:
       tags:
-      - Customer Chitu Plans
+        - Customer Chitu Plans
       summary: Get detailed information for an individual slot
-      description: Retrieves slot instalment schedule, payment statuses, arrears,
-        and winner entitlement claim data.
+      description: "Retrieves slot instalment schedule, payment statuses, arrears, and winner entitlement claim data."
       operationId: CustomerGetChituSlotDetails
       parameters:
-      - name: slotId
-        in: path
-        required: true
-        style: simple
-        schema:
-          type: string
-          format: uuid
+        - name: slotId
+          in: path
+          required: true
+          style: simple
+          schema:
+            type: string
+            format: uuid
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerChituSlotDetailDto'
-        '404':
+                $ref: "#/components/schemas/CustomerChituSlotDetailDto"
+        404:
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
-  /api/v1/customer/chitu-slots/{slotId}/payments:
+        - Bearer: []
+  "/api/v1/customer/chitu-slots/{slotId}/payments":
     get:
       tags:
-      - Customer Chitu Plans
+        - Customer Chitu Plans
       summary: Get payment history for a specific slot
       operationId: CustomerGetChituSlotPayments
       parameters:
-      - name: slotId
-        in: path
-        required: true
-        style: simple
-        schema:
-          type: string
-          format: uuid
+        - name: slotId
+          in: path
+          required: true
+          style: simple
+          schema:
+            type: string
+            format: uuid
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/CustomerPaymentSummaryDto'
-        '404':
+                  $ref: "#/components/schemas/CustomerPaymentSummaryDto"
+        404:
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
-  /api/v1/customer/chitu-plans/{planId}/payable-slots:
+        - Bearer: []
+  "/api/v1/customer/chitu-plans/{planId}/payable-slots":
     get:
       tags:
-      - Customer Chitu Plans
+        - Customer Chitu Plans
       summary: Get customer's payable slots for a Chitu plan
-      description: Returns all slots owned by the customer in this plan with payment
-        eligibility, outstanding due, and unpaid rounds.
+      description: "Returns all slots owned by the customer in this plan with payment eligibility, outstanding due, and unpaid rounds."
       operationId: CustomerGetPayableSlots
       parameters:
-      - name: planId
-        in: path
-        required: true
-        style: simple
-        schema:
-          type: string
-          format: uuid
+        - name: planId
+          in: path
+          required: true
+          style: simple
+          schema:
+            type: string
+            format: uuid
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerPayableSlotsDto'
-        '404':
+                $ref: "#/components/schemas/CustomerPayableSlotsDto"
+        404:
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
-  /api/v1/customer/chitu-plans/{planId}/payments/preview:
+        - Bearer: []
+  "/api/v1/customer/chitu-plans/{planId}/payments/preview":
     post:
       tags:
-      - Customer Chitu Plans
+        - Customer Chitu Plans
       summary: Preview payment allocation for existing slots
-      description: Calculates per-slot oldest-unpaid-first allocations, resulting
-        arrears, and raffle eligibility.
+      description: "Calculates per-slot oldest-unpaid-first allocations, resulting arrears, and raffle eligibility."
       operationId: CustomerPreviewChituExistingSlotPayment
       parameters:
-      - name: planId
-        in: path
-        required: true
-        style: simple
-        schema:
-          type: string
-          format: uuid
+        - name: planId
+          in: path
+          required: true
+          style: simple
+          schema:
+            type: string
+            format: uuid
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CustomerChituPaymentPreviewRequest'
+              $ref: "#/components/schemas/CustomerChituPaymentPreviewRequest"
         required: true
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerChituPaymentPreviewResponse'
-        '400':
+                $ref: "#/components/schemas/CustomerChituPaymentPreviewResponse"
+        400:
           description: Bad Request
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
+                $ref: "#/components/schemas/ProblemDetails"
+        404:
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
-  /api/v1/customer/chitu-plans/{planId}/payments:
+        - Bearer: []
+  "/api/v1/customer/chitu-plans/{planId}/payments":
     post:
       tags:
-      - Customer Chitu Plans
+        - Customer Chitu Plans
       summary: Confirm and post payment for existing slots
-      description: Idempotently processes contribution payment, marks instalments
-        as Paid, and updates slot coverage.
+      description: "Idempotently processes contribution payment, marks instalments as Paid, and updates slot coverage."
       operationId: CustomerConfirmChituExistingSlotPayment
       parameters:
-      - name: planId
-        in: path
-        required: true
-        style: simple
-        schema:
-          type: string
-          format: uuid
-      - name: X-Idempotency-Key
-        in: header
-        description: Optional client-generated UUID idempotency key to prevent duplicate
-          enrolment creations across network retries.
-        style: simple
-        schema:
-          type: string
+        - name: planId
+          in: path
+          required: true
+          style: simple
+          schema:
+            type: string
+            format: uuid
+        - name: X-Idempotency-Key
+          in: header
+          description: Optional client-generated UUID idempotency key to prevent duplicate enrolment creations across network retries.
+          style: simple
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CustomerChituPaymentConfirmRequest'
+              $ref: "#/components/schemas/CustomerChituPaymentConfirmRequest"
         required: true
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerChituPaymentConfirmResponse'
-        '400':
+                $ref: "#/components/schemas/CustomerChituPaymentConfirmResponse"
+        400:
           description: Bad Request
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
+                $ref: "#/components/schemas/ProblemDetails"
+        409:
           description: Conflict
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '501':
+                $ref: "#/components/schemas/ProblemDetails"
+        501:
           description: Server Error
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
+        - Bearer: []
   /api/v1/customer/jewellery-enrolments/preview:
     post:
       tags:
-      - Customer Jewellery Enrolments
+        - Customer Jewellery Enrolments
       summary: Preview enrolment confirmation summary
-      description: Returns a proposed enrolment confirmation summary containing plan
-        snapshot, target grams, premium percentage, proposed joining date and deadline.
+      description: "Returns a proposed enrolment confirmation summary containing plan snapshot, target grams, premium percentage, proposed joining date and deadline."
       operationId: CustomerPreviewEnrolment
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/EnrolmentPreviewRequest'
+              $ref: "#/components/schemas/EnrolmentPreviewRequest"
         required: true
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EnrolmentPreviewResponse'
-        '400':
+                $ref: "#/components/schemas/EnrolmentPreviewResponse"
+        400:
           description: Bad Request
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
+                $ref: "#/components/schemas/ProblemDetails"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
+                $ref: "#/components/schemas/ProblemDetails"
+        403:
           description: Forbidden
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
+                $ref: "#/components/schemas/ProblemDetails"
+        404:
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
+                $ref: "#/components/schemas/ProblemDetails"
+        409:
           description: Conflict
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
+        - Bearer: []
   /api/v1/customer/jewellery-enrolments:
     post:
       tags:
-      - Customer Jewellery Enrolments
+        - Customer Jewellery Enrolments
       summary: Confirm and join jewellery plan
-      description: Creates an active enrolment immediately without requiring an initial
-        payment. Idempotent across retries with the same IdempotencyKey. Triggers
-        an activation notification. Requires explicit confirmation if the customer
-        has previously enrolled in this plan.
+      description: Creates an active enrolment immediately without requiring an initial payment. Idempotent across retries with the same IdempotencyKey. Triggers an activation notification. Requires explicit confirmation if the customer has previously enrolled in this plan.
       operationId: CustomerCreateEnrolment
       parameters:
-      - name: X-Idempotency-Key
-        in: header
-        description: Optional client-generated UUID idempotency key to prevent duplicate
-          enrolment creations across network retries.
-        style: simple
-        schema:
-          type: string
+        - name: X-Idempotency-Key
+          in: header
+          description: Optional client-generated UUID idempotency key to prevent duplicate enrolment creations across network retries.
+          style: simple
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateCustomerEnrolmentRequest'
+              $ref: "#/components/schemas/CreateCustomerEnrolmentRequest"
         required: true
       responses:
-        '201':
+        201:
           description: Created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerEnrolmentDto'
-        '409':
+                $ref: "#/components/schemas/CustomerEnrolmentDto"
+        409:
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RepeatEnrolmentConflictResponse'
-        '400':
+                $ref: "#/components/schemas/RepeatEnrolmentConflictResponse"
+        400:
           description: Bad Request
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
+                $ref: "#/components/schemas/ProblemDetails"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
+                $ref: "#/components/schemas/ProblemDetails"
+        403:
           description: Forbidden
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
+                $ref: "#/components/schemas/ProblemDetails"
+        404:
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
+        - Bearer: []
     get:
       tags:
-      - Customer Jewellery Enrolments
+        - Customer Jewellery Enrolments
       summary: List customer enrolments (My Investments)
-      description: Retrieves paginated jewellery plan enrolments for the authenticated
-        customer, showing target grams, net accumulated gold, remaining grams, and
-        contribution availability.
+      description: "Retrieves paginated jewellery plan enrolments for the authenticated customer, showing target grams, net accumulated gold, remaining grams, and contribution availability."
       operationId: CustomerGetEnrolments
       parameters:
-      - name: page
-        in: query
-        description: 'Page number (1-based index, default: 1).'
-        required: true
-        style: form
-        schema:
-          type: integer
-          format: int32
-      - name: pageSize
-        in: query
-        description: 'Number of items per page (default: 20, max: 50).'
-        required: true
-        style: form
-        schema:
-          type: integer
-          format: int32
+        - name: page
+          in: query
+          description: "Page number (1-based index, default: 1)."
+          required: true
+          style: form
+          schema:
+            type: integer
+            format: int32
+        - name: pageSize
+          in: query
+          description: "Number of items per page (default: 20, max: 50)."
+          required: true
+          style: form
+          schema:
+            type: integer
+            format: int32
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerEnrolmentsPagedResponse'
-        '401':
+                $ref: "#/components/schemas/CustomerEnrolmentsPagedResponse"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
+                $ref: "#/components/schemas/ProblemDetails"
+        403:
           description: Forbidden
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
-  /api/v1/customer/jewellery-enrolments/{enrolmentId}:
+        - Bearer: []
+  "/api/v1/customer/jewellery-enrolments/{enrolmentId}":
     get:
       tags:
-      - Customer Jewellery Enrolments
+        - Customer Jewellery Enrolments
       summary: Get enrolment details
-      description: Retrieves full details and progress metrics for a specific enrolment
-        owned by the customer.
+      description: Retrieves full details and progress metrics for a specific enrolment owned by the customer.
       operationId: CustomerGetEnrolmentDetails
       parameters:
-      - name: enrolmentId
-        in: path
-        required: true
-        style: simple
-        schema:
-          type: string
-          format: uuid
+        - name: enrolmentId
+          in: path
+          required: true
+          style: simple
+          schema:
+            type: string
+            format: uuid
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerEnrolmentDto'
-        '401':
+                $ref: "#/components/schemas/CustomerEnrolmentDto"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
+                $ref: "#/components/schemas/ProblemDetails"
+        403:
           description: Forbidden
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
+                $ref: "#/components/schemas/ProblemDetails"
+        404:
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
-  /api/v1/customer/jewellery-enrolments/{enrolmentId}/payments:
+        - Bearer: []
+  "/api/v1/customer/jewellery-enrolments/{enrolmentId}/payments":
     get:
       tags:
-      - Customer Jewellery Enrolments
+        - Customer Jewellery Enrolments
       summary: List enrolment contribution history
-      description: Retrieves the confirmed contribution and payment ledger history
-        for this jewellery plan enrolment.
+      description: Retrieves the confirmed contribution and payment ledger history for this jewellery plan enrolment.
       operationId: CustomerGetEnrolmentPayments
       parameters:
-      - name: enrolmentId
-        in: path
-        required: true
-        style: simple
-        schema:
-          type: string
-          format: uuid
+        - name: enrolmentId
+          in: path
+          required: true
+          style: simple
+          schema:
+            type: string
+            format: uuid
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/CustomerEnrolmentPaymentDto'
-        '401':
+                  $ref: "#/components/schemas/CustomerEnrolmentPaymentDto"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
+                $ref: "#/components/schemas/ProblemDetails"
+        403:
           description: Forbidden
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
+                $ref: "#/components/schemas/ProblemDetails"
+        404:
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
+        - Bearer: []
+  /api/v1/customer/gold-rate:
+    get:
+      tags:
+        - Customer Jewellery Plans
+      summary: Get Current Gold Rates
+      description: Retrieves the authoritative current gold rates (24K and 22K in LKR) for customer display and quote estimation. Reflects active store manual overrides or live market feeds.
+      operationId: CustomerGetGoldRate
+      parameters:
+        - name: branchId
+          in: query
+          style: form
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerGoldRateResponse"
   /api/v1/customer/jewellery-categories:
     get:
       tags:
-      - Customer Jewellery Plans
+        - Customer Jewellery Plans
       summary: Browse active jewellery categories
-      description: Retrieves active jewellery categories for the customer's registered
-        branch, including counts of currently available plans.
+      description: "Retrieves active jewellery categories for the customer's registered branch, including counts of currently available plans."
       operationId: CustomerGetJewelleryCategories
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/CustomerJewelleryCategoryDto'
-        '401':
+                  $ref: "#/components/schemas/CustomerJewelleryCategoryDto"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
+                $ref: "#/components/schemas/ProblemDetails"
+        403:
           description: Forbidden
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
-  /api/v1/customer/jewellery-categories/{categoryId}/plans:
+        - Bearer: []
+  "/api/v1/customer/jewellery-categories/{categoryId}/plans":
     get:
       tags:
-      - Customer Jewellery Plans
+        - Customer Jewellery Plans
       summary: Browse available plans in category
-      description: Returns currently available jewellery plans for a specific category.
-        Plans whose admin start date is in the future are strictly excluded.
+      description: Returns currently available jewellery plans for a specific category. Plans whose admin start date is in the future are strictly excluded.
       operationId: CustomerGetPlansByCategory
       parameters:
-      - name: categoryId
-        in: path
-        required: true
-        style: simple
-        schema:
-          type: string
-          format: uuid
+        - name: categoryId
+          in: path
+          required: true
+          style: simple
+          schema:
+            type: string
+            format: uuid
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/CustomerJewelleryPlanDto'
-        '401':
+                  $ref: "#/components/schemas/CustomerJewelleryPlanDto"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
+                $ref: "#/components/schemas/ProblemDetails"
+        403:
           description: Forbidden
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
+        - Bearer: []
   /api/v1/customer/jewellery-plans:
     get:
       tags:
-      - Customer Jewellery Plans
+        - Customer Jewellery Plans
       summary: Browse available jewellery plans
-      description: Retrieves active, currently available jewellery plans for the customer's
-        branch, optionally filtered by category.
+      description: "Retrieves active, currently available jewellery plans for the customer's branch, optionally filtered by category."
       operationId: CustomerGetJewelleryPlans
       parameters:
-      - name: categoryId
-        in: query
-        description: Optional category filter. When provided, returns only active
-          plans belonging to this category.
-        style: form
-        schema:
-          type: string
-          format: uuid
+        - name: categoryId
+          in: query
+          description: "Optional category filter. When provided, returns only active plans belonging to this category."
+          style: form
+          schema:
+            type: string
+            format: uuid
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/CustomerJewelleryPlanDto'
-        '401':
+                  $ref: "#/components/schemas/CustomerJewelleryPlanDto"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
+                $ref: "#/components/schemas/ProblemDetails"
+        403:
           description: Forbidden
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
-  /api/v1/customer/jewellery-plans/{planId}:
+        - Bearer: []
+  "/api/v1/customer/jewellery-plans/{planId}":
     get:
       tags:
-      - Customer Jewellery Plans
+        - Customer Jewellery Plans
       summary: Get jewellery plan details
-      description: Retrieves details of an individual plan including target gold grams,
-        offered durations, and premium percentage.
+      description: "Retrieves details of an individual plan including target gold grams, offered durations, and premium percentage."
       operationId: CustomerGetPlanDetails
       parameters:
-      - name: planId
-        in: path
-        required: true
-        style: simple
-        schema:
-          type: string
-          format: uuid
+        - name: planId
+          in: path
+          required: true
+          style: simple
+          schema:
+            type: string
+            format: uuid
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerJewelleryPlanDto'
-        '400':
+                $ref: "#/components/schemas/CustomerJewelleryPlanDto"
+        400:
           description: Bad Request
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
+                $ref: "#/components/schemas/ProblemDetails"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
+                $ref: "#/components/schemas/ProblemDetails"
+        403:
           description: Forbidden
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
+                $ref: "#/components/schemas/ProblemDetails"
+        404:
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
-  /api/v1/customer/jewellery-enrolments/{enrolmentId}/preview:
+        - Bearer: []
+  "/api/v1/customer/jewellery-enrolments/{enrolmentId}/preview":
     post:
       tags:
-      - Customer Jewellery Quotes & Payments
+        - "Customer Jewellery Quotes & Payments"
       summary: Preview gold payment calculation breakdown
-      description: Calculates an informational calculation preview for Buy Gram or
-        Buy Amount mode without altering balances or creating a quote.
+      description: Calculates an informational calculation preview for Buy Gram or Buy Amount mode without altering balances or creating a quote.
       operationId: CustomerPreviewPaymentCalculation
       parameters:
-      - name: enrolmentId
-        in: path
-        required: true
-        style: simple
-        schema:
-          type: string
-          format: uuid
+        - name: enrolmentId
+          in: path
+          required: true
+          style: simple
+          schema:
+            type: string
+            format: uuid
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/JewelleryCalculationRequest'
+              $ref: "#/components/schemas/JewelleryCalculationRequest"
         required: true
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JewelleryCalculationPreviewResponse'
-        '400':
+                $ref: "#/components/schemas/JewelleryCalculationPreviewResponse"
+        400:
           description: Bad Request
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
+                $ref: "#/components/schemas/ProblemDetails"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
+                $ref: "#/components/schemas/ProblemDetails"
+        403:
           description: Forbidden
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
+                $ref: "#/components/schemas/ProblemDetails"
+        404:
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
+                $ref: "#/components/schemas/ProblemDetails"
+        409:
           description: Conflict
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '503':
+                $ref: "#/components/schemas/ProblemDetails"
+        503:
           description: Server Error
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
-  /api/v1/customer/jewellery-enrolments/{enrolmentId}/quotes:
+        - Bearer: []
+  "/api/v1/customer/jewellery-enrolments/{enrolmentId}/quotes":
     post:
       tags:
-      - Customer Jewellery Quotes & Payments
+        - "Customer Jewellery Quotes & Payments"
       summary: Lock time-limited payment quote (Pay Now)
-      description: Locks an authoritative payment quote for 5 minutes at the latest
-        applicable gold rate. Guarantees payable amount and credited grams during
-        validity.
+      description: Locks an authoritative payment quote for 5 minutes at the latest applicable gold rate. Guarantees payable amount and credited grams during validity.
       operationId: CustomerCreatePaymentQuote
       parameters:
-      - name: enrolmentId
-        in: path
-        required: true
-        style: simple
-        schema:
-          type: string
-          format: uuid
+        - name: enrolmentId
+          in: path
+          required: true
+          style: simple
+          schema:
+            type: string
+            format: uuid
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/JewelleryCalculationRequest'
+              $ref: "#/components/schemas/JewelleryCalculationRequest"
         required: true
       responses:
-        '201':
+        201:
           description: Created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerPaymentQuoteDto'
-        '400':
+                $ref: "#/components/schemas/CustomerPaymentQuoteDto"
+        400:
           description: Bad Request
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
+                $ref: "#/components/schemas/ProblemDetails"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
+                $ref: "#/components/schemas/ProblemDetails"
+        403:
           description: Forbidden
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
+                $ref: "#/components/schemas/ProblemDetails"
+        404:
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
+                $ref: "#/components/schemas/ProblemDetails"
+        409:
           description: Conflict
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '503':
+                $ref: "#/components/schemas/ProblemDetails"
+        503:
           description: Server Error
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
-  /api/v1/customer/jewellery-quotes/{quoteId}:
+        - Bearer: []
+  "/api/v1/customer/jewellery-quotes/{quoteId}":
     get:
       tags:
-      - Customer Jewellery Quotes & Payments
+        - "Customer Jewellery Quotes & Payments"
       summary: Get payment quote status
-      description: Retrieves the status, values, and expiry of a locked payment quote.
+      description: "Retrieves the status, values, and expiry of a locked payment quote."
       operationId: CustomerGetPaymentQuote
       parameters:
-      - name: quoteId
-        in: path
-        required: true
-        style: simple
-        schema:
-          type: string
-          format: uuid
+        - name: quoteId
+          in: path
+          required: true
+          style: simple
+          schema:
+            type: string
+            format: uuid
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerPaymentQuoteDto'
-        '401':
+                $ref: "#/components/schemas/CustomerPaymentQuoteDto"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
+                $ref: "#/components/schemas/ProblemDetails"
+        403:
           description: Forbidden
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
+                $ref: "#/components/schemas/ProblemDetails"
+        404:
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
-  /api/v1/customer/jewellery-quotes/{quoteId}/pay:
+        - Bearer: []
+  "/api/v1/customer/jewellery-quotes/{quoteId}/pay":
     post:
       tags:
-      - Customer Jewellery Quotes & Payments
+        - "Customer Jewellery Quotes & Payments"
       summary: Initiate payment for locked quote (Gateway Deferred)
-      description: Gateway integration is deferred. Returns PaymentProviderNotConfigured
-        (HTTP 501). No fake checkout URL is generated, and balances remain unchanged.
+      description: "Gateway integration is deferred. Returns PaymentProviderNotConfigured (HTTP 501). No fake checkout URL is generated, and balances remain unchanged."
       operationId: CustomerInitiatePayment
       parameters:
-      - name: quoteId
-        in: path
-        required: true
-        style: simple
-        schema:
-          type: string
-          format: uuid
+        - name: quoteId
+          in: path
+          required: true
+          style: simple
+          schema:
+            type: string
+            format: uuid
       responses:
-        '501':
+        501:
           description: Server Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaymentInitiationResponse'
-        '401':
+                $ref: "#/components/schemas/PaymentInitiationResponse"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
+                $ref: "#/components/schemas/ProblemDetails"
+        403:
           description: Forbidden
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
+                $ref: "#/components/schemas/ProblemDetails"
+        404:
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
+                $ref: "#/components/schemas/ProblemDetails"
+        409:
           description: Conflict
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
+        - Bearer: []
   /api/v1/customer/notifications:
     get:
       tags:
-      - Customer Notifications
+        - Customer Notifications
       summary: Get customer notifications
-      description: Retrieves paginated notifications for the customer (such as jewellery
-        plan activations and completions).
+      description: Retrieves paginated notifications for the customer (such as jewellery plan activations and completions).
       operationId: CustomerGetNotifications
       parameters:
-      - name: page
-        in: query
-        description: 'Page number (1-based index, default: 1).'
-        required: true
-        style: form
-        schema:
-          type: integer
-          format: int32
-      - name: pageSize
-        in: query
-        description: 'Number of items per page (default: 20, max: 50).'
-        required: true
-        style: form
-        schema:
-          type: integer
-          format: int32
+        - name: page
+          in: query
+          description: "Page number (1-based index, default: 1)."
+          required: true
+          style: form
+          schema:
+            type: integer
+            format: int32
+        - name: pageSize
+          in: query
+          description: "Number of items per page (default: 20, max: 50)."
+          required: true
+          style: form
+          schema:
+            type: integer
+            format: int32
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerNotificationsPagedResponse'
-        '401':
+                $ref: "#/components/schemas/CustomerNotificationsPagedResponse"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
-  /api/v1/customer/notifications/{notificationId}/read:
+        - Bearer: []
+  "/api/v1/customer/notifications/{notificationId}/read":
     post:
       tags:
-      - Customer Notifications
+        - Customer Notifications
       summary: Mark notification as read
       description: Marks an individual customer notification as read.
       operationId: CustomerMarkNotificationAsRead
       parameters:
-      - name: notificationId
-        in: path
-        required: true
-        style: simple
-        schema:
-          type: string
-          format: uuid
+        - name: notificationId
+          in: path
+          required: true
+          style: simple
+          schema:
+            type: string
+            format: uuid
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/NotificationActionResponse'
-        '401':
+                $ref: "#/components/schemas/NotificationActionResponse"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
+                $ref: "#/components/schemas/ProblemDetails"
+        404:
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
+        - Bearer: []
   /api/v1/customer/notifications/read-all:
     post:
       tags:
-      - Customer Notifications
+        - Customer Notifications
       summary: Mark all notifications as read
       description: Marks all unread notifications for the customer as read.
       operationId: CustomerMarkAllNotificationsAsRead
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/NotificationActionResponse'
-        '401':
+                $ref: "#/components/schemas/NotificationActionResponse"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
+        - Bearer: []
   /api/v1/customers/me:
     get:
       tags:
-      - Customer Profile & Contacts
+        - "Customer Profile & Contacts"
       summary: Get authenticated customer profile
-      description: Retrieves customer full name, date of birth, NIC, phone number,
-        email address, verification statuses, and primary branch.
+      description: "Retrieves customer full name, date of birth, NIC, phone number, email address, verification statuses, and primary branch."
       operationId: GetCurrentCustomerProfile
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerProfileDto'
-        '401':
+                $ref: "#/components/schemas/CustomerProfileDto"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
+                $ref: "#/components/schemas/ProblemDetails"
+        404:
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
+        - Bearer: []
   /api/v1/customers/me/contacts/otp/request:
     post:
       tags:
-      - Customer Profile & Contacts
-      summary: Request OTP to verify secondary profile contact (Email or Phone)
-      description: 'Sends a 6-digit OTP to the customer''s unverified secondary contact
-        (email or phone).
-
-
-        **Delivery Modes:**
-
-        • **Email Address**: Dispatched via real Gmail SMTP (`smtp.gmail.com:587`,
-        STARTTLS) from `w.sagee5@gmail.com`. Invalidates challenge and returns safe
-        400 error on delivery failure.
-
-        • **Phone Number**: Dispatched via real Text.lk SMS Gateway (`https://app.text.lk/api/v3/sms/send`,
-        Bearer auth) with sender ID `TextLKDemo`. Invalidates challenge and returns
-        safe 400 error on delivery failure.
-
-
-        **Outcomes & Error Responses:**
-
-        • `200 OK`: Verification code successfully dispatched.
-
-        • `400 Bad Request`: Delivery failure or invalid contact.
-
-        • `404 Not Found`: Customer or pending contact not found.
-
-        • `409 Conflict`: Contact already verified.'
+        - "Customer Profile & Contacts"
+      summary: Request secondary contact verification OTP via Phone (SMSlenz.lk) or Email (Gmail API / SMTP)
+      description: Dispatches a 6-digit OTP to verify a new secondary phone number (via SMSlenz.lk https://smslenz.lk/api/send-sms) or secondary email address (via Gmail API OAuth2 or SMTP). Enforces rate-limiting and 5-minute expiry.
       operationId: RequestSecondaryContactOtp
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RequestSecondaryContactOtpRequest'
+              $ref: "#/components/schemas/RequestSecondaryContactOtpRequest"
         required: true
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RequestOtpResponse'
-        '400':
+                $ref: "#/components/schemas/RequestOtpResponse"
+        400:
           description: Bad Request
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
+                $ref: "#/components/schemas/ProblemDetails"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
+                $ref: "#/components/schemas/ProblemDetails"
+        404:
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
+                $ref: "#/components/schemas/ProblemDetails"
+        409:
           description: Conflict
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
+        - Bearer: []
   /api/v1/customers/me/contacts/otp/verify:
     post:
       tags:
-      - Customer Profile & Contacts
+        - "Customer Profile & Contacts"
       summary: Verify and activate secondary contact for login
-      description: Submits the OTP for the additional contact. Once verified, this
-        contact is activated and can also be used for customer login.
+      description: "Submits the OTP for the additional contact. Once verified, this contact is activated and can also be used for customer login."
       operationId: VerifySecondaryContactOtp
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/VerifySecondaryContactOtpRequest'
+              $ref: "#/components/schemas/VerifySecondaryContactOtpRequest"
         required: true
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VerifySecondaryContactResponse'
-        '400':
+                $ref: "#/components/schemas/VerifySecondaryContactResponse"
+        400:
           description: Bad Request
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
+                $ref: "#/components/schemas/ProblemDetails"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
+                $ref: "#/components/schemas/ProblemDetails"
+        404:
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
+        - Bearer: []
   /api/v1/customers/me/account-closure/otp/request:
     post:
       tags:
-      - Customer Profile & Contacts
-      summary: Request OTP for customer self-service account closure
-      description: Initiates customer self-service account closure by dispatching
-        a fresh OTP to the customer's verified contact. The challenge is cryptographically
-        bound to the AccountClosure purpose and cannot be substituted with a login
-        OTP.
+        - "Customer Profile & Contacts"
+      summary: Request account closure authorization OTP via Phone (SMSlenz.lk) or Email (Gmail API / SMTP)
+      description: Dispatches a mandatory 6-digit security OTP to the customer's registered primary contact (via SMSlenz.lk SMS https://smslenz.lk/api/send-sms or Gmail API/SMTP) required to authorize permanent account closure.
       operationId: RequestAccountClosureOtp
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RequestClosureOtpResponse'
-        '400':
+                $ref: "#/components/schemas/RequestClosureOtpResponse"
+        400:
           description: Bad Request
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
+                $ref: "#/components/schemas/ProblemDetails"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
+                $ref: "#/components/schemas/ProblemDetails"
+        403:
           description: Forbidden
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
+                $ref: "#/components/schemas/ProblemDetails"
+        404:
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
+        - Bearer: []
   /api/v1/customers/me/account-closure/confirm:
     post:
       tags:
-      - Customer Profile & Contacts
+        - "Customer Profile & Contacts"
       summary: Confirm self-service account closure using OTP
-      description: Confirms soft closure of the customer account with fresh OTP verification.
-        Marks status as Inactive, records CustomerRequestedClosure timestamp, revokes
-        all active sessions/refresh tokens, and retains all financial, plan, and audit
-        histories for regulatory compliance.
+      description: "Confirms soft closure of the customer account with fresh OTP verification. Marks status as Inactive, records CustomerRequestedClosure timestamp, revokes all active sessions/refresh tokens, and retains all financial, plan, and audit histories for regulatory compliance."
       operationId: ConfirmAccountClosure
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ConfirmAccountClosureRequest'
+              $ref: "#/components/schemas/ConfirmAccountClosureRequest"
         required: true
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AccountClosureResponse'
-        '400':
+                $ref: "#/components/schemas/AccountClosureResponse"
+        400:
           description: Bad Request
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
+                $ref: "#/components/schemas/ProblemDetails"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
+                $ref: "#/components/schemas/ProblemDetails"
+        403:
           description: Forbidden
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
+                $ref: "#/components/schemas/ProblemDetails"
+        404:
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
+        - Bearer: []
   /api/v1/customer/payments:
     get:
       tags:
-      - Customer Unified Payments
+        - Customer Unified Payments
       summary: Unified customer payment history
-      description: Retrieves paginated unified financial transactions across both
-        Chitu and Jewellery plans with filtering by plan type, status, and dates.
+      description: "Retrieves paginated unified financial transactions across both Chitu and Jewellery plans with filtering by plan type, status, and dates."
       operationId: CustomerGetPaymentHistory
       parameters:
-      - name: planType
-        in: query
-        style: form
-        schema:
-          type: string
-      - name: planId
-        in: query
-        style: form
-        schema:
-          type: string
-          format: uuid
-      - name: status
-        in: query
-        style: form
-        schema:
-          type: string
-      - name: startDate
-        in: query
-        style: form
-        schema:
-          type: string
-          format: date-time
-      - name: endDate
-        in: query
-        style: form
-        schema:
-          type: string
-          format: date-time
-      - name: search
-        in: query
-        style: form
-        schema:
-          type: string
-      - name: page
-        in: query
-        description: 'Page number (1-based index, default: 1).'
-        style: form
-        schema:
-          type: integer
-          format: int32
-      - name: pageSize
-        in: query
-        description: 'Number of items per page (default: 20, max: 50).'
-        style: form
-        schema:
-          type: integer
-          format: int32
+        - name: planType
+          in: query
+          style: form
+          schema:
+            type: string
+        - name: planId
+          in: query
+          style: form
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          style: form
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          style: form
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          style: form
+          schema:
+            type: string
+            format: date-time
+        - name: search
+          in: query
+          style: form
+          schema:
+            type: string
+        - name: page
+          in: query
+          description: "Page number (1-based index, default: 1)."
+          style: form
+          schema:
+            type: integer
+            format: int32
+        - name: pageSize
+          in: query
+          description: "Number of items per page (default: 20, max: 50)."
+          style: form
+          schema:
+            type: integer
+            format: int32
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerPaymentsPagedResponse'
-        '401':
+                $ref: "#/components/schemas/CustomerPaymentsPagedResponse"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
+                $ref: "#/components/schemas/ProblemDetails"
+        403:
           description: Forbidden
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
-  /api/v1/customer/payments/{paymentId}:
+        - Bearer: []
+  "/api/v1/customer/payments/{paymentId}":
     get:
       tags:
-      - Customer Unified Payments
+        - Customer Unified Payments
       summary: Get payment transaction details
-      description: Retrieves single receipt details including slot breakdowns (for
-        Chitu) or gold grams and historical rate (for Jewellery).
+      description: Retrieves single receipt details including slot breakdowns (for Chitu) or gold grams and historical rate (for Jewellery).
       operationId: CustomerGetPaymentDetail
       parameters:
-      - name: paymentId
-        in: path
-        required: true
-        style: simple
-        schema:
-          type: string
-          format: uuid
+        - name: paymentId
+          in: path
+          required: true
+          style: simple
+          schema:
+            type: string
+            format: uuid
       responses:
-        '200':
+        200:
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerPaymentDetailDto'
-        '401':
+                $ref: "#/components/schemas/CustomerPaymentDetailDto"
+        401:
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
+                $ref: "#/components/schemas/ProblemDetails"
+        404:
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: "#/components/schemas/ProblemDetails"
       security:
-      - Bearer: []
+        - Bearer: []
   /api/v1/health:
     get:
       tags:
-      - System
+        - System
       summary: System and database health status
       operationId: HealthCheck
       responses:
-        '200':
+        200:
           description: Success
+  "/api/v1/customer/plan-alerts/{alertId}/acknowledge":
+    post:
+      tags:
+        - Customer Plan Alerts
+        - Customer Notifications
+      summary: Acknowledge and dismiss investment popup alert
+      description: "Records customer acknowledgement and dismissal of an investment popup alert (Chitu raffle winner or Jewellery plan completion). Subsequent investment queries will return shouldShowPopup=false while retaining the alert for permanent banner display. Safe and idempotent on repeat calls. Customer ownership is strictly verified."
+      operationId: CustomerAcknowledgePlanAlert
+      security:
+        - Bearer: []
+      parameters:
+        - name: alertId
+          in: path
+          required: true
+          description: Unique identifier (UUID) of the plan alert to acknowledge.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: "Alert successfully acknowledged. Returns the updated alert with shouldShowPopup=false."
+          content:
+            application/json:
+              schema:
+                : "#/components/schemas/AcknowledgePlanAlertResponse"
+        401:
+          description: Unauthorized. Missing or invalid Bearer access token.
+          content:
+            application/problem+json:
+              schema:
+                : "#/components/schemas/ProblemDetails"
+        403:
+          description: Forbidden. The requested alert belongs to another customer.
+          content:
+            application/problem+json:
+              schema:
+                : "#/components/schemas/ProblemDetails"
+        404:
+          description: Not Found. The specified alert ID does not exist.
+          content:
+            application/problem+json:
+              schema:
+                : "#/components/schemas/ProblemDetails"
 components:
   schemas:
     AccountClosureResponse:
@@ -1834,8 +1792,8 @@ components:
       additionalProperties: false
     BenefitStatus:
       enum:
-      - Unclaimed
-      - Claimed
+        - Unclaimed
+        - Claimed
       type: string
     BranchDto:
       type: object
@@ -1882,7 +1840,7 @@ components:
       additionalProperties: false
     CheckContactRequest:
       required:
-      - contact
+        - contact
       type: object
       properties:
         contact:
@@ -1900,7 +1858,7 @@ components:
           type: string
           nullable: true
         contactType:
-          $ref: '#/components/schemas/ContactType'
+          $ref: "#/components/schemas/ContactType"
         nextAction:
           type: string
           nullable: true
@@ -1910,21 +1868,21 @@ components:
       additionalProperties: false
     ChituRedemptionType:
       enum:
-      - Cash
-      - Gold
+        - Cash
+        - Gold
       type: string
     ChituSlotStatus:
       enum:
-      - PendingReservation
-      - Active
-      - Won
-      - Closed
-      - Cancelled
+        - PendingReservation
+        - Active
+        - Won
+        - Closed
+        - Cancelled
       type: string
     CompleteRegistrationRequest:
       required:
-      - dateOfBirth
-      - registrationToken
+        - dateOfBirth
+        - registrationToken
       type: object
       properties:
         registrationToken:
@@ -1953,7 +1911,7 @@ components:
       additionalProperties: false
     ConfirmAccountClosureRequest:
       required:
-      - code
+        - code
       type: object
       properties:
         code:
@@ -1966,13 +1924,13 @@ components:
       additionalProperties: false
     ContactType:
       enum:
-      - Phone
-      - Email
+        - Phone
+        - Email
       type: string
     CreateCustomerEnrolmentRequest:
       required:
-      - planId
-      - selectedDurationMonths
+        - planId
+        - selectedDurationMonths
       type: object
       properties:
         planId:
@@ -2030,7 +1988,7 @@ components:
           type: string
           nullable: true
         redemptionType:
-          $ref: '#/components/schemas/ChituRedemptionType'
+          $ref: "#/components/schemas/ChituRedemptionType"
         currency:
           type: string
           nullable: true
@@ -2055,7 +2013,7 @@ components:
           format: date
           nullable: true
         planStatus:
-          $ref: '#/components/schemas/PlanStatus'
+          $ref: "#/components/schemas/PlanStatus"
         totalOwnedSlotsCount:
           type: integer
           format: int32
@@ -2092,8 +2050,13 @@ components:
         slots:
           type: array
           items:
-            $ref: '#/components/schemas/CustomerChituSlotSummaryDto'
+            $ref: "#/components/schemas/CustomerChituSlotSummaryDto"
           nullable: true
+        alerts:
+          type: array
+          items:
+            : "#/components/schemas/CustomerPlanAlertDto"
+          description: All active alerts and banners for this Chitu investment plan.
       additionalProperties: false
     CustomerChituInvestmentsPagedResponse:
       type: object
@@ -2101,7 +2064,7 @@ components:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/CustomerChituInvestmentPlanDto'
+            $ref: "#/components/schemas/CustomerChituInvestmentPlanDto"
           nullable: true
         totalCount:
           type: integer
@@ -2119,7 +2082,7 @@ components:
       additionalProperties: false
     CustomerChituJoinPreviewRequest:
       required:
-      - quantity
+        - quantity
       type: object
       properties:
         quantity:
@@ -2199,8 +2162,8 @@ components:
       additionalProperties: false
     CustomerChituJoinRequest:
       required:
-      - idempotencyKey
-      - quantity
+        - idempotencyKey
+        - quantity
       type: object
       properties:
         quantity:
@@ -2248,7 +2211,7 @@ components:
         assignedSlots:
           type: array
           items:
-            $ref: '#/components/schemas/CustomerAssignedSlotDto'
+            $ref: "#/components/schemas/CustomerAssignedSlotDto"
           nullable: true
         message:
           type: string
@@ -2256,14 +2219,14 @@ components:
       additionalProperties: false
     CustomerChituPaymentConfirmRequest:
       required:
-      - idempotencyKey
-      - slotSelections
+        - idempotencyKey
+        - slotSelections
       type: object
       properties:
         slotSelections:
           type: array
           items:
-            $ref: '#/components/schemas/CustomerSlotPaymentSelectionDto'
+            $ref: "#/components/schemas/CustomerSlotPaymentSelectionDto"
         idempotencyKey:
           minLength: 1
           type: string
@@ -2307,7 +2270,7 @@ components:
         receipts:
           type: array
           items:
-            $ref: '#/components/schemas/CustomerSlotPaymentReceiptDto'
+            $ref: "#/components/schemas/CustomerSlotPaymentReceiptDto"
           nullable: true
         message:
           type: string
@@ -2333,18 +2296,18 @@ components:
         slotAllocations:
           type: array
           items:
-            $ref: '#/components/schemas/CustomerChituPaymentSlotAllocationDto'
+            $ref: "#/components/schemas/CustomerChituPaymentSlotAllocationDto"
           nullable: true
       additionalProperties: false
     CustomerChituPaymentPreviewRequest:
       required:
-      - slotSelections
+        - slotSelections
       type: object
       properties:
         slotSelections:
           type: array
           items:
-            $ref: '#/components/schemas/CustomerSlotPaymentSelectionDto'
+            $ref: "#/components/schemas/CustomerSlotPaymentSelectionDto"
       additionalProperties: false
     CustomerChituPaymentPreviewResponse:
       type: object
@@ -2370,7 +2333,7 @@ components:
         slots:
           type: array
           items:
-            $ref: '#/components/schemas/CustomerSlotPaymentPreviewItemDto'
+            $ref: "#/components/schemas/CustomerSlotPaymentPreviewItemDto"
           nullable: true
         previewReference:
           type: string
@@ -2428,7 +2391,7 @@ components:
           type: string
           nullable: true
         redemptionType:
-          $ref: '#/components/schemas/ChituRedemptionType'
+          $ref: "#/components/schemas/ChituRedemptionType"
         currency:
           type: string
           nullable: true
@@ -2481,7 +2444,7 @@ components:
         schedule:
           type: array
           items:
-            $ref: '#/components/schemas/CustomerChituRoundScheduleDto'
+            $ref: "#/components/schemas/CustomerChituRoundScheduleDto"
           nullable: true
         terms:
           type: array
@@ -2511,7 +2474,7 @@ components:
           type: string
           nullable: true
         redemptionType:
-          $ref: '#/components/schemas/ChituRedemptionType'
+          $ref: "#/components/schemas/ChituRedemptionType"
         currency:
           type: string
           nullable: true
@@ -2568,7 +2531,7 @@ components:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/CustomerChituPlanSummaryDto'
+            $ref: "#/components/schemas/CustomerChituPlanSummaryDto"
           nullable: true
         totalCount:
           type: integer
@@ -2644,7 +2607,7 @@ components:
           type: number
           format: double
         slotStatus:
-          $ref: '#/components/schemas/ChituSlotStatus'
+          $ref: "#/components/schemas/ChituSlotStatus"
         isWinner:
           type: boolean
         winningRoundIndex:
@@ -2681,10 +2644,14 @@ components:
         instalments:
           type: array
           items:
-            $ref: '#/components/schemas/CustomerChituSlotInstalmentDto'
+            $ref: "#/components/schemas/CustomerChituSlotInstalmentDto"
           nullable: true
         entitlementClaimInfo:
-          $ref: '#/components/schemas/CustomerWinnerBenefitDto'
+          $ref: "#/components/schemas/CustomerWinnerBenefitDto"
+        winnerAlert:
+          : "#/components/schemas/CustomerPlanAlertDto"
+          nullable: true
+          description: Raffle winner alert details if this slot won a round.
       additionalProperties: false
     CustomerChituSlotInstalmentDto:
       type: object
@@ -2702,7 +2669,7 @@ components:
           type: number
           format: double
         status:
-          $ref: '#/components/schemas/InstalmentStatus'
+          $ref: "#/components/schemas/InstalmentStatus"
         paidAtUtc:
           type: string
           format: date-time
@@ -2757,7 +2724,7 @@ components:
           type: number
           format: double
         slotStatus:
-          $ref: '#/components/schemas/ChituSlotStatus'
+          $ref: "#/components/schemas/ChituSlotStatus"
         isWinner:
           type: boolean
         winningRoundIndex:
@@ -2839,6 +2806,15 @@ components:
         createdAtUtc:
           type: string
           format: date-time
+        completionAlert:
+          : "#/components/schemas/CustomerPlanAlertDto"
+          nullable: true
+          description: Completion alert if target grams have been reached.
+        alerts:
+          type: array
+          items:
+            : "#/components/schemas/CustomerPlanAlertDto"
+          description: All active alerts and permanent banners associated with this enrolment.
       additionalProperties: false
     CustomerEnrolmentPaymentDto:
       type: object
@@ -2880,7 +2856,7 @@ components:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/CustomerEnrolmentDto'
+            $ref: "#/components/schemas/CustomerEnrolmentDto"
           nullable: true
         totalCount:
           type: integer
@@ -2895,6 +2871,34 @@ components:
           type: integer
           format: int32
           readOnly: true
+      additionalProperties: false
+    CustomerGoldRateResponse:
+      type: object
+      properties:
+        rate24kPerGram:
+          type: number
+          format: double
+        rate22kPerGram:
+          type: number
+          format: double
+        currency:
+          type: string
+          nullable: true
+        source:
+          type: string
+          nullable: true
+        isOverridden:
+          type: boolean
+        effectiveFromUtc:
+          type: string
+          format: date-time
+        branchId:
+          type: string
+          format: uuid
+          nullable: true
+        branchName:
+          type: string
+          nullable: true
       additionalProperties: false
     CustomerJewelleryCategoryDto:
       type: object
@@ -3003,6 +3007,20 @@ components:
         createdAtUtc:
           type: string
           format: date-time
+        referenceId:
+          type: string
+          format: uuid
+          nullable: true
+          description: "Associated entity ID (e.g. Plan ID, Enrolment ID, Slot ID)."
+        referenceType:
+          type: string
+          nullable: true
+          description: "Entity category ('ChituPlan', 'JewelleryPlan', 'ChituSlot', 'JewelleryEnrolment')."
+        planAlertId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Direct link to PlanAlert entity if spawned by an alertable event.
       additionalProperties: false
     CustomerNotificationsPagedResponse:
       type: object
@@ -3010,7 +3028,7 @@ components:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/CustomerNotificationDto'
+            $ref: "#/components/schemas/CustomerNotificationDto"
           nullable: true
         totalCount:
           type: integer
@@ -3042,7 +3060,7 @@ components:
           type: string
           nullable: true
         status:
-          $ref: '#/components/schemas/ChituSlotStatus'
+          $ref: "#/components/schemas/ChituSlotStatus"
         isEligibleForPayment:
           type: boolean
         ineligibilityReason:
@@ -3102,7 +3120,7 @@ components:
         slots:
           type: array
           items:
-            $ref: '#/components/schemas/CustomerPayableSlotItemDto'
+            $ref: "#/components/schemas/CustomerPayableSlotItemDto"
           nullable: true
       additionalProperties: false
     CustomerPaymentDetailDto:
@@ -3167,9 +3185,9 @@ components:
           type: string
           nullable: true
         chituDetails:
-          $ref: '#/components/schemas/CustomerChituPaymentDetailBreakdownDto'
+          $ref: "#/components/schemas/CustomerChituPaymentDetailBreakdownDto"
         jewelleryDetails:
-          $ref: '#/components/schemas/CustomerJewelleryPaymentDetailBreakdownDto'
+          $ref: "#/components/schemas/CustomerJewelleryPaymentDetailBreakdownDto"
       additionalProperties: false
     CustomerPaymentQuoteDto:
       type: object
@@ -3310,7 +3328,7 @@ components:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/CustomerPaymentSummaryDto'
+            $ref: "#/components/schemas/CustomerPaymentSummaryDto"
           nullable: true
         totalCount:
           type: integer
@@ -3431,8 +3449,8 @@ components:
       additionalProperties: false
     CustomerSlotPaymentSelectionDto:
       required:
-      - instalmentsToPayCount
-      - slotId
+        - instalmentsToPayCount
+        - slotId
       type: object
       properties:
         slotId:
@@ -3497,9 +3515,9 @@ components:
           type: number
           format: double
         redemptionType:
-          $ref: '#/components/schemas/ChituRedemptionType'
+          $ref: "#/components/schemas/ChituRedemptionType"
         status:
-          $ref: '#/components/schemas/BenefitStatus'
+          $ref: "#/components/schemas/BenefitStatus"
         claimedAtUtc:
           type: string
           format: date-time
@@ -3510,8 +3528,8 @@ components:
       additionalProperties: false
     EnrolmentPreviewRequest:
       required:
-      - planId
-      - selectedDurationMonths
+        - planId
+        - selectedDurationMonths
       type: object
       properties:
         planId:
@@ -3573,9 +3591,9 @@ components:
       additionalProperties: false
     InstalmentStatus:
       enum:
-      - Pending
-      - Paid
-      - Overdue
+        - Pending
+        - Paid
+        - Overdue
       type: string
     JewelleryCalculationPreviewResponse:
       type: object
@@ -3645,7 +3663,7 @@ components:
       additionalProperties: false
     JewelleryCalculationRequest:
       required:
-      - inputMode
+        - inputMode
       type: object
       properties:
         inputMode:
@@ -3662,7 +3680,7 @@ components:
       additionalProperties: false
     LogoutRequest:
       required:
-      - refreshToken
+        - refreshToken
       type: object
       properties:
         refreshToken:
@@ -3712,9 +3730,9 @@ components:
       additionalProperties: false
     PlanStatus:
       enum:
-      - Draft
-      - Active
-      - Closed
+        - Draft
+        - Active
+        - Closed
       type: string
     ProblemDetails:
       type: object
@@ -3738,7 +3756,7 @@ components:
       additionalProperties: {}
     RefreshTokenRequest:
       required:
-      - refreshToken
+        - refreshToken
       type: object
       properties:
         refreshToken:
@@ -3806,7 +3824,7 @@ components:
       additionalProperties: false
     RequestOtpRequest:
       required:
-      - contact
+        - contact
       type: object
       properties:
         contact:
@@ -3825,7 +3843,7 @@ components:
           type: string
           nullable: true
         contactType:
-          $ref: '#/components/schemas/ContactType'
+          $ref: "#/components/schemas/ContactType"
         expiresInSeconds:
           type: integer
           format: int32
@@ -3843,7 +3861,7 @@ components:
       additionalProperties: false
     RequestSecondaryContactOtpRequest:
       required:
-      - contact
+        - contact
       type: object
       properties:
         contact:
@@ -3852,8 +3870,8 @@ components:
       additionalProperties: false
     VerifyOtpRequest:
       required:
-      - code
-      - contact
+        - code
+        - contact
       type: object
       properties:
         contact:
@@ -3881,7 +3899,7 @@ components:
           format: int32
           nullable: true
         customer:
-          $ref: '#/components/schemas/CustomerSummaryDto'
+          $ref: "#/components/schemas/CustomerSummaryDto"
         registrationToken:
           type: string
           nullable: true
@@ -3893,15 +3911,15 @@ components:
           type: string
           nullable: true
         verifiedContactType:
-          $ref: '#/components/schemas/ContactType'
+          $ref: "#/components/schemas/ContactType"
         requiredAdditionalContactType:
           type: string
           nullable: true
       additionalProperties: false
     VerifySecondaryContactOtpRequest:
       required:
-      - code
-      - contact
+        - code
+        - contact
       type: object
       properties:
         contact:
@@ -3920,37 +3938,171 @@ components:
           type: string
           nullable: true
       additionalProperties: false
+    CustomerPlanAlertDto:
+      type: object
+      properties:
+        alertId:
+          type: string
+          format: uuid
+          description: Unique identifier of the plan alert.
+        eventType:
+          type: string
+          enum:
+            - ChituWinner
+            - JewelleryCompletion
+          description: Domain event type triggering the alert.
+        title:
+          type: string
+          description: Short headline for popup and banner headers.
+        message:
+          type: string
+          description: Full user-facing congratulatory message including slot/round or target grams and branch details.
+        planId:
+          type: string
+          format: uuid
+          description: ID of the associated plan.
+        planName:
+          type: string
+          description: Name of the associated savings or jewellery plan.
+        referenceId:
+          type: string
+          format: uuid
+          description: "Primary investment entity ID (PlanId for Chitu investment view, EnrolmentId for Jewellery enrolment view)."
+        slotId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Specific Chitu slot ID that won the raffle (null for Jewellery).
+        slotNumber:
+          type: integer
+          format: int32
+          nullable: true
+          description: Physical slot number (e.g. 1..100) (null for Jewellery).
+        slotDisplayCode:
+          type: string
+          nullable: true
+          description: Formatted slot display code (e.g. "SLOT-004") (null for Jewellery).
+        roundIndex:
+          type: integer
+          format: int32
+          nullable: true
+          description: Scheduled raffle round number won (null for Jewellery).
+        scheduledMonthYear:
+          type: string
+          nullable: true
+          description: Scheduled draw period (e.g. "November 2026") derived from schedule rather than admin draw entry date.
+        redemptionType:
+          type: string
+          nullable: true
+          description: "Prize redemption modality: \"Gold\" or \"Cash\" (null for Jewellery)."
+        prizeAmount:
+          type: number
+          format: double
+          nullable: true
+          description: Authoritative prize money or gold value if specified on the round record.
+        enrolmentId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Specific Jewellery enrolment ID completed (null for Chitu).
+        targetGrams:
+          type: number
+          format: double
+          nullable: true
+          description: Target gold grams achieved upon completion (null for Chitu).
+        branchId:
+          type: string
+          format: uuid
+          description: Collection branch location ID.
+        branchName:
+          type: string
+          description: Branch name where physical prize or jewellery can be collected.
+        outletAddress:
+          type: string
+          nullable: true
+          description: Physical address of the collection outlet.
+        outletPhone:
+          type: string
+          nullable: true
+          description: Contact phone of the collection outlet.
+        eventTimestampUtc:
+          type: string
+          format: date-time
+          description: UTC timestamp when the winning round or jewellery completion was recorded.
+        acknowledgedAtUtc:
+          type: string
+          format: date-time
+          nullable: true
+          description: UTC timestamp when customer acknowledged/dismissed the popup.
+        isAcknowledged:
+          type: boolean
+          description: Whether customer has dismissed the popup alert.
+        shouldShowPopup:
+          type: boolean
+          description: "Indicates if the mobile client should trigger an immediate popup dialog (!IsAcknowledged)."
+        navigationTarget:
+          type: string
+          description: In-app route target (e.g. "chitu_slot_detail" or "jewellery_enrolment_detail").
+        collectionInstruction:
+          type: string
+          description: Direct guidance on collecting the prize/jewellery in store.
+      required:
+        - alertId
+        - eventType
+        - title
+        - message
+        - planId
+        - planName
+        - referenceId
+        - branchId
+        - branchName
+        - eventTimestampUtc
+        - isAcknowledged
+        - shouldShowPopup
+        - navigationTarget
+        - collectionInstruction
+    AcknowledgePlanAlertResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Indicates whether the acknowledgement succeeded.
+        message:
+          type: string
+          description: Informational message confirming acknowledgement status.
+        alert:
+          : "#/components/schemas/CustomerPlanAlertDto"
+          description: "Updated alert entity showing IsAcknowledged = true and ShouldShowPopup = false."
+      required:
+        - success
+        - message
+        - alert
   securitySchemes:
     Bearer:
       type: http
-      description: Enter your JWT Bearer token (e.g., Bearer eyJhbGci...)
+      description: "Enter your JWT Bearer token (e.g., Bearer eyJhbGci...)"
       scheme: Bearer
       bearerFormat: JWT
 tags:
-- name: Branches
-  description: Active store locations for customer registration and branch lookups.
-- name: Customer Authentication
-  description: Customer onboarding, phone & email verification, profile completion,
-    session management, and logout.
-- name: Customer Chitu Plans
-  description: Browse active and available Chitu plans, preview join requirements,
-    purchase slots, view My Plans portfolio, and pay for existing slots.
-- name: Customer Jewellery Enrolments
-  description: Preview and confirm jewellery plan enrolments (My Investments), and
-    view contribution history.
-- name: Customer Jewellery Plans
-  description: Browse active jewellery plan categories and plans available for the
-    customer's branch.
-- name: Customer Jewellery Quotes & Payments
-  description: Gold rate calculation previews, locked payment quotes (Pay Now), and
-    deferred payment initiation.
-- name: Customer Notifications
-  description: Customer notification feed, read receipts, and bulk mark-as-read.
-- name: Customer Profile & Contacts
-  description: Authenticated customer profile, secondary contact verification, and
-    self-service account closure.
-- name: Customer Unified Payments
-  description: Unified financial transaction history and receipts across both Chitu
-    savings plans and Jewellery gold accumulation plans.
-- name: System
-  description: Health check and database connectivity verification.
+  - name: Branches
+    description: Active store locations for customer registration and branch lookups.
+  - name: Customer Authentication
+    description: "Customer onboarding, phone & email verification, profile completion, session management, and logout."
+  - name: Customer Chitu Plans
+    description: "Browse active and available Chitu plans, preview join requirements, purchase slots, view My Plans portfolio, and pay for existing slots."
+  - name: Customer Jewellery Enrolments
+    description: "Preview and confirm jewellery plan enrolments (My Investments), and view contribution history."
+  - name: Customer Jewellery Plans
+    description: Browse active jewellery plan categories and plans available for the customer's branch.
+  - name: "Customer Jewellery Quotes & Payments"
+    description: "Gold rate calculation previews, locked payment quotes (Pay Now), and deferred payment initiation."
+  - name: Customer Notifications
+    description: "Customer notification feed, read receipts, and bulk mark-as-read."
+  - name: "Customer Profile & Contacts"
+    description: "Authenticated customer profile, secondary contact verification, and self-service account closure."
+  - name: Customer Unified Payments
+    description: Unified financial transaction history and receipts across both Chitu savings plans and Jewellery gold accumulation plans.
+  - name: System
+    description: Health check and database connectivity verification.
+  - name: Customer Plan Alerts
+    description: "Persistent investment popup alerts and permanent banners for Chitu raffle winners and Jewellery Plan completions, with customer acknowledgement."

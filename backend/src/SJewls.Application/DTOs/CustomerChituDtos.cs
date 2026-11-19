@@ -188,6 +188,7 @@ public class CustomerChituInvestmentPlanDto
     public bool CanPayExistingSlots { get; set; }
     public bool IsSimulated { get; set; }
     public List<CustomerChituSlotSummaryDto> Slots { get; set; } = new();
+    public List<CustomerPlanAlertDto> Alerts { get; set; } = new();
 }
 
 public class CustomerChituSlotInstalmentDto
@@ -223,6 +224,7 @@ public class CustomerChituSlotDetailDto : CustomerChituSlotSummaryDto
     public string Currency { get; set; } = "LKR";
     public List<CustomerChituSlotInstalmentDto> Instalments { get; set; } = new();
     public CustomerWinnerBenefitDto? EntitlementClaimInfo { get; set; }
+    public CustomerPlanAlertDto? WinnerAlert { get; set; }
 }
 
 public class CustomerChituInvestmentsPagedResponse

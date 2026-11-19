@@ -656,12 +656,45 @@ public class AdminJewelleryEnrolmentService : IAdminJewelleryEnrolmentService
             var paymentReference = $"CASH-{enrolment.Id.ToString()[..8].ToUpperInvariant()}-{nowUtc.ToUnixTimeMilliseconds()}";
 
             var executionStrategy = _db.Database.CreateExecutionStrategy();
+            var attempt = 0;
             return await executionStrategy.ExecuteAsync(async () =>
             {
+                attempt++;
+                if (attempt > 1)
+                {
+                    _db.ChangeTracker.Clear();
+                }
                 var isRelational = _db.Database.IsRelational();
                 await using var transaction = isRelational ? await _db.Database.BeginTransactionAsync(ct) : null;
                 try
                 {
+                    if (isRelational)
+                    {
+                        await _db.Database.ExecuteSqlRawAsync(
+                            "SELECT 1 FROM \"JewelleryEnrolments\" WHERE \"Id\" = {0} FOR NO KEY UPDATE",
+                            new object[] { enrolmentId }, ct);
+                    }
+
+                    var freshEnrolment = await _db.JewelleryEnrolments
+                        .Include(e => e.Branch)
+                        .Include(e => e.Customer)
+                        .FirstOrDefaultAsync(e => e.Id == enrolmentId, ct)
+                        ?? throw new KeyNotFoundException($"Enrolment '{enrolmentId}' not found.");
+                    enrolment = freshEnrolment;
+
+                    if (enrolment.Status == JewelleryEnrolmentStatus.Completed ||
+                        enrolment.TotalSavedGrams >= enrolment.TargetProductWeightGrams)
+                    {
+                        throw new InvalidOperationException("Enrolment has already reached its target and is completed.");
+                    }
+
+                    var lockedRemainingGrams = Math.Max(0m, enrolment.TargetProductWeightGrams - enrolment.TotalSavedGrams);
+                    if (calcResult.TotalGoldCredit > lockedRemainingGrams)
+                    {
+                        throw new InvalidOperationException(
+                            $"Payment would credit {calcResult.TotalGoldCredit:F4}g, which exceeds the current remaining target of {lockedRemainingGrams:F4}g. Overpayments are not allowed.");
+                    }
+
                     var payment = new Payment
                     {
                         BranchId = enrolment.BranchId,
@@ -710,20 +743,92 @@ public class AdminJewelleryEnrolmentService : IAdminJewelleryEnrolmentService
                     {
                         enrolment.Status = JewelleryEnrolmentStatus.Completed;
                         planCompleted = true;
+                    }
 
-                        // Trigger completion notification once
-                        await _notificationService.CreateNotificationAsync(
-                            enrolment.CustomerId,
-                            "Jewellery Plan Completed!",
-                            $"Congratulations! You have reached your gold target of {enrolment.TargetProductWeightGrams}g for {enrolment.PlanNameSnapshot}.",
-                            "completion",
-                            ct);
+                    // 1. Persist financial records first
+                    await _db.SaveChangesAsync(ct);
+
+                    // 2. Persist completion alert and notification if plan completed
+                    if (planCompleted)
+                    {
+                        var branchName = enrolment.Branch?.Name ?? "our branch";
+                        var completionTitle = "Jewellery Plan Completed!";
+                        var completionMessage = $"Congratulations! You have completed {enrolment.PlanNameSnapshot} and reached your target of {enrolment.TargetProductWeightGrams:0.##} g. Visit {branchName} to collect your jewellery.";
+
+                        var existingAlert = await _db.PlanAlerts
+                            .FirstOrDefaultAsync(a => a.JewelleryEnrolmentId == enrolment.Id && (a.EventType == "JewelleryCompletion" || a.EventType == "JewelleryPlanCompletion"), ct);
+
+                        if (existingAlert == null)
+                        {
+                            var savepointName = "BeforeCompletionAlert";
+                            var hasSavepoint = false;
+
+                            if (transaction != null && _db.Database.IsRelational())
+                            {
+                                await transaction.CreateSavepointAsync(savepointName, ct);
+                                hasSavepoint = true;
+                            }
+
+                            var notification = new Notification
+                            {
+                                CustomerId = enrolment.CustomerId,
+                                Title = completionTitle,
+                                Message = completionMessage,
+                                Type = "completion",
+                                IsRead = false,
+                                ReferenceId = enrolment.Id,
+                                ReferenceType = "JewelleryEnrolment",
+                                CreatedAtUtc = DateTimeOffset.UtcNow
+                            };
+                            _db.Notifications.Add(notification);
+
+                            var alert = new PlanAlert
+                            {
+                                CustomerId = enrolment.CustomerId,
+                                EventType = "JewelleryCompletion",
+                                Module = BusinessModule.Jewellery,
+                                Title = completionTitle,
+                                Message = completionMessage,
+                                PlanId = enrolment.JewelleryPlanId,
+                                PlanNameSnapshot = enrolment.PlanNameSnapshot,
+                                ReferenceId = enrolment.Id,
+                                JewelleryEnrolmentId = enrolment.Id,
+                                TargetGrams = enrolment.TargetProductWeightGrams,
+                                BranchId = enrolment.BranchId,
+                                BranchName = branchName,
+                                BranchAddress = enrolment.Branch?.Address,
+                                BranchPhone = null,
+                                NotificationId = notification.Id,
+                                IsAcknowledged = false,
+                                NavigationTarget = $"jewellery-enrolments/{enrolment.Id}",
+                                CollectionInstruction = $"Visit {branchName} to collect your jewellery.",
+                                CreatedAtUtc = DateTimeOffset.UtcNow
+                            };
+                            _db.PlanAlerts.Add(alert);
+                            notification.PlanAlertId = alert.Id;
+
+                            try
+                            {
+                                await _db.SaveChangesAsync(ct);
+                            }
+                            catch (DbUpdateException dbEx) when (dbEx.InnerException is Npgsql.PostgresException pgEx &&
+                                                                 pgEx.SqlState == Npgsql.PostgresErrorCodes.UniqueViolation &&
+                                                                 string.Equals(pgEx.ConstraintName, "IX_PlanAlerts_JewelleryEnrolmentId_EventType", StringComparison.OrdinalIgnoreCase))
+                            {
+                                _logger.LogInformation("Concurrent transaction already created alert for enrolment {EnrolmentId}. Rolling back to savepoint.", enrolment.Id);
+                                if (hasSavepoint)
+                                {
+                                    await transaction.RollbackToSavepointAsync(savepointName, ct);
+                                }
+                                _db.Entry(alert).State = EntityState.Detached;
+                                _db.Entry(notification).State = EntityState.Detached;
+                            }
+                        }
 
                         _logger.LogInformation("Enrolment {EnrolmentId} reached target {Target}g and marked Completed",
                             enrolment.Id, enrolment.TargetProductWeightGrams);
                     }
 
-                    await _db.SaveChangesAsync(ct);
                     if (transaction != null) await transaction.CommitAsync(ct);
 
                     // Audit log
@@ -778,6 +883,7 @@ public class AdminJewelleryEnrolmentService : IAdminJewelleryEnrolmentService
                 catch
                 {
                     if (transaction != null) await transaction.RollbackAsync(ct);
+                    _db.ChangeTracker.Clear();
                     throw;
                 }
             });

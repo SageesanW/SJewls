@@ -89,7 +89,8 @@ public enum PaymentStatus
     Failed = 3,
     Cancelled = 4,
     PartiallyRefunded = 5,
-    Refunded = 6
+    Refunded = 6,
+    RequiresReconciliation = 7
 }
 
 public enum RequestStatus

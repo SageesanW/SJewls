@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 using SJewls.Application.DTOs;
 using SJewls.Application.Exceptions;
 using SJewls.Application.Interfaces;
@@ -628,8 +629,14 @@ public class ChituService : IChituService
         }
 
         var executionStrategy = _db.Database.CreateExecutionStrategy();
+        var attempt = 0;
         return await executionStrategy.ExecuteAsync(async () =>
         {
+            attempt++;
+            if (attempt > 1)
+            {
+                _db.ChangeTracker.Clear();
+            }
             var isRelational = _db.Database.IsRelational();
             await using var transaction = isRelational ? await _db.Database.BeginTransactionAsync(ct) : null;
             try
@@ -1058,8 +1065,14 @@ public class ChituService : IChituService
         }
 
         var executionStrategy = _db.Database.CreateExecutionStrategy();
+        var attempt = 0;
         return await executionStrategy.ExecuteAsync(async () =>
         {
+            attempt++;
+            if (attempt > 1)
+            {
+                _db.ChangeTracker.Clear();
+            }
             var isRelational = _db.Database.IsRelational();
             await using var transaction = isRelational ? await _db.Database.BeginTransactionAsync(ct) : null;
             try
@@ -1372,8 +1385,14 @@ public class ChituService : IChituService
         var (caller, isSuperAdmin, permittedBranchIds) = await VerifyStaffAccessAsync(currentStaffId, ct);
 
         var executionStrategy = _db.Database.CreateExecutionStrategy();
+        var attempt = 0;
         return await executionStrategy.ExecuteAsync(async () =>
         {
+            attempt++;
+            if (attempt > 1)
+            {
+                _db.ChangeTracker.Clear();
+            }
             var isRelational = _db.Database.IsRelational();
             await using var transaction = isRelational ? await _db.Database.BeginTransactionAsync(ct) : null;
             try
@@ -1391,6 +1410,7 @@ public class ChituService : IChituService
                 }
 
                 var plan = await _db.ChituPlans
+                    .Include(p => p.Branch)
                     .FirstOrDefaultAsync(p => p.Id == planId, ct)
                     ?? throw new KeyNotFoundException($"Chitu plan '{planId}' was not found.");
 
@@ -1526,6 +1546,58 @@ public class ChituService : IChituService
                 plan.Status = PlanStatus.Closed;
             }
 
+            // Winner Notification and Plan Alert (Atomic with winner record)
+            var scheduledMonthYear = scheduledDate.ToString("MMMM yyyy");
+            var prizeTypeName = plan.RedemptionType == ChituRedemptionType.Gold ? "gold" : "cash";
+            var branchName = plan.Branch?.Name ?? "our branch";
+            var winnerTitle = "Chitu Raffle Winner!";
+            var winnerMessage = $"Congratulations! Your slot {winningSlot.SlotNumber} in {plan.Name} has won Round {roundIndex} for {scheduledMonthYear}. Visit {branchName} to collect your {prizeTypeName} prize.";
+
+            var notification = new Notification
+            {
+                CustomerId = winningSlot.CustomerId,
+                Title = winnerTitle,
+                Message = winnerMessage,
+                Type = "chitu_winner",
+                IsRead = false,
+                ReferenceId = plan.Id,
+                ReferenceType = "ChituInvestment",
+                CreatedAtUtc = DateTimeOffset.UtcNow
+            };
+            _db.Notifications.Add(notification);
+
+            var alert = new PlanAlert
+            {
+                CustomerId = winningSlot.CustomerId,
+                EventType = "ChituWinner",
+                Module = BusinessModule.Chitu,
+                Title = winnerTitle,
+                Message = winnerMessage,
+                PlanId = plan.Id,
+                PlanNameSnapshot = plan.Name,
+                ReferenceId = plan.Id,
+                ChituDrawId = draw.Id,
+                ChituSlotId = winningSlot.Id,
+                ChituSlotNumber = winningSlot.SlotNumber,
+                ChituSlotDisplayCode = winningSlot.SlotDisplayCode,
+                ChituRoundIndex = roundIndex,
+                ChituRoundScheduledDate = scheduledDate,
+                ChituRoundScheduledMonthYear = scheduledMonthYear,
+                RedemptionType = plan.RedemptionType,
+                PrizeAmount = entitlementValue,
+                BranchId = plan.BranchId,
+                BranchName = branchName,
+                BranchAddress = plan.Branch?.Address,
+                BranchPhone = null,
+                NotificationId = notification.Id,
+                IsAcknowledged = false,
+                NavigationTarget = $"chitu-investments/{plan.Id}",
+                CollectionInstruction = $"Visit {branchName} to collect your {prizeTypeName} prize.",
+                CreatedAtUtc = DateTimeOffset.UtcNow
+            };
+            _db.PlanAlerts.Add(alert);
+            notification.PlanAlertId = alert.Id;
+
             await _db.SaveChangesAsync(ct);
             if (transaction != null) await transaction.CommitAsync(ct);
 
@@ -1569,7 +1641,10 @@ public class ChituService : IChituService
             {
                 if (transaction != null) await transaction.RollbackAsync(ct);
                 _db.ChangeTracker.Clear();
-                if (ex is DbUpdateException dbEx && (dbEx.InnerException?.Message.Contains("23505") == true || dbEx.InnerException?.Message.Contains("ChituDraw") == true))
+                if (ex is DbUpdateException dbEx &&
+                    (dbEx.InnerException is PostgresException pgEx && pgEx.SqlState == PostgresErrorCodes.UniqueViolation ||
+                     dbEx.InnerException?.Message.Contains("23505") == true ||
+                     dbEx.InnerException?.Message.Contains("ChituDraw") == true))
                 {
                     throw new InvalidOperationException($"A raffle draw result has already been recorded for Round {roundIndex}.");
                 }

@@ -43,6 +43,7 @@ public class SJewlsDbContext : DbContext
     public DbSet<ExtensionRequest> ExtensionRequests => Set<ExtensionRequest>();
     public DbSet<ClosureRequest> ClosureRequests => Set<ClosureRequest>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<PlanAlert> PlanAlerts => Set<PlanAlert>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -282,6 +283,54 @@ public class SJewlsDbContext : DbContext
                   .WithMany(p => p.Allocations)
                   .HasForeignKey(a => a.PaymentId)
                   .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // PlanAlert configuration
+        modelBuilder.Entity<PlanAlert>(entity =>
+        {
+            entity.HasIndex(a => a.CustomerId);
+            entity.HasIndex(a => new { a.CustomerId, a.PlanId });
+            entity.HasIndex(a => a.JewelleryEnrolmentId);
+            entity.HasIndex(a => a.ChituSlotId);
+
+            // Uniqueness to prevent duplicate alerts from retries or concurrent events
+            entity.HasIndex(a => new { a.ChituSlotId, a.ChituRoundIndex })
+                  .IsUnique()
+                  .HasFilter("\"ChituSlotId\" IS NOT NULL AND \"ChituRoundIndex\" IS NOT NULL");
+
+            entity.HasIndex(a => new { a.JewelleryEnrolmentId, a.EventType })
+                  .IsUnique()
+                  .HasFilter("\"JewelleryEnrolmentId\" IS NOT NULL AND \"EventType\" = 'JewelleryCompletion'");
+
+            entity.HasOne(a => a.Customer)
+                  .WithMany()
+                  .HasForeignKey(a => a.CustomerId)
+                  .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(a => a.Branch)
+                  .WithMany()
+                  .HasForeignKey(a => a.BranchId)
+                  .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(a => a.ChituDraw)
+                  .WithMany()
+                  .HasForeignKey(a => a.ChituDrawId)
+                  .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(a => a.ChituSlot)
+                  .WithMany()
+                  .HasForeignKey(a => a.ChituSlotId)
+                  .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(a => a.JewelleryEnrolment)
+                  .WithMany()
+                  .HasForeignKey(a => a.JewelleryEnrolmentId)
+                  .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(a => a.Notification)
+                  .WithMany()
+                  .HasForeignKey(a => a.NotificationId)
+                  .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

@@ -545,6 +545,45 @@ namespace SJewls.Infrastructure.Migrations
                     b.ToTable("GoldRates");
                 });
 
+            modelBuilder.Entity("SJewls.Domain.Entities.GoldRateOverride", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BranchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("Rate22k")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<decimal>("Rate24k")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedByStaffId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("UpdatedByStaffId");
+
+                    b.ToTable("GoldRateOverrides");
+                });
+
             modelBuilder.Entity("SJewls.Domain.Entities.JewelleryContribution", b =>
                 {
                     b.Property<Guid>("Id")
@@ -908,8 +947,17 @@ namespace SJewls.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("PlanAlertId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset?>("ReadAtUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ReferenceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ReferenceType")
+                        .HasColumnType("text");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -1163,6 +1211,136 @@ namespace SJewls.Infrastructure.Migrations
                     b.HasIndex("HandedOverByStaffId");
 
                     b.ToTable("PhysicalClaims");
+                });
+
+            modelBuilder.Entity("SJewls.Domain.Entities.PlanAlert", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("AcknowledgedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("BranchAddress")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BranchName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("BranchPhone")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("ChituDrawId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("ChituRoundIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("ChituRoundScheduledDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("ChituRoundScheduledMonthYear")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ChituSlotDisplayCode")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("ChituSlotId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("ChituSlotNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CollectionInstruction")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsAcknowledged")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("JewelleryEnrolmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Module")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("NavigationTarget")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("NotificationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PlanNameSnapshot")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal?>("PrizeAmount")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<int?>("RedemptionType")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ReferenceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("TargetGrams")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("ChituDrawId");
+
+                    b.HasIndex("ChituSlotId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("JewelleryEnrolmentId");
+
+                    b.HasIndex("NotificationId");
+
+                    b.HasIndex("ChituSlotId", "ChituRoundIndex")
+                        .IsUnique()
+                        .HasFilter("\"ChituSlotId\" IS NOT NULL AND \"ChituRoundIndex\" IS NOT NULL");
+
+                    b.HasIndex("CustomerId", "PlanId");
+
+                    b.HasIndex("JewelleryEnrolmentId", "EventType")
+                        .IsUnique()
+                        .HasFilter("\"JewelleryEnrolmentId\" IS NOT NULL AND \"EventType\" = 'JewelleryCompletion'");
+
+                    b.ToTable("PlanAlerts");
                 });
 
             modelBuilder.Entity("SJewls.Domain.Entities.RefreshToken", b =>
@@ -1653,6 +1831,21 @@ namespace SJewls.Infrastructure.Migrations
                     b.Navigation("RecordedByStaff");
                 });
 
+            modelBuilder.Entity("SJewls.Domain.Entities.GoldRateOverride", b =>
+                {
+                    b.HasOne("SJewls.Domain.Entities.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId");
+
+                    b.HasOne("SJewls.Domain.Entities.Staff", "UpdatedByStaff")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByStaffId");
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("UpdatedByStaff");
+                });
+
             modelBuilder.Entity("SJewls.Domain.Entities.JewelleryContribution", b =>
                 {
                     b.HasOne("SJewls.Domain.Entities.JewelleryEnrolment", "JewelleryEnrolment")
@@ -1840,6 +2033,53 @@ namespace SJewls.Infrastructure.Migrations
                     b.Navigation("Customer");
 
                     b.Navigation("HandedOverByStaff");
+                });
+
+            modelBuilder.Entity("SJewls.Domain.Entities.PlanAlert", b =>
+                {
+                    b.HasOne("SJewls.Domain.Entities.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SJewls.Domain.Entities.ChituDraw", "ChituDraw")
+                        .WithMany()
+                        .HasForeignKey("ChituDrawId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("SJewls.Domain.Entities.ChituSlot", "ChituSlot")
+                        .WithMany()
+                        .HasForeignKey("ChituSlotId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("SJewls.Domain.Entities.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SJewls.Domain.Entities.JewelleryEnrolment", "JewelleryEnrolment")
+                        .WithMany()
+                        .HasForeignKey("JewelleryEnrolmentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("SJewls.Domain.Entities.Notification", "Notification")
+                        .WithMany()
+                        .HasForeignKey("NotificationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("ChituDraw");
+
+                    b.Navigation("ChituSlot");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("JewelleryEnrolment");
+
+                    b.Navigation("Notification");
                 });
 
             modelBuilder.Entity("SJewls.Domain.Entities.RefreshToken", b =>

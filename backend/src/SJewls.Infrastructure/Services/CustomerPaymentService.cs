@@ -117,6 +117,22 @@ public class CustomerPaymentService : ICustomerPaymentService
             .Where(c => paymentIds.Contains(c.PaymentId))
             .ToListAsync(ct);
 
+        var allocatedEnrolmentIds = payments
+            .Where(p => p.Module == BusinessModule.Jewellery && !jewelleryContributions.Any(c => c.PaymentId == p.Id))
+            .SelectMany(p => p.Allocations)
+            .Where(a => a.AllocationType == "JewelleryContribution")
+            .Select(a => a.TargetEntityId)
+            .Distinct()
+            .ToList();
+
+        var allocatedEnrolments = allocatedEnrolmentIds.Any()
+            ? await _db.JewelleryEnrolments
+                .AsNoTracking()
+                .Include(e => e.JewelleryPlan)
+                .Where(e => allocatedEnrolmentIds.Contains(e.Id))
+                .ToDictionaryAsync(e => e.Id, ct)
+            : new Dictionary<Guid, JewelleryEnrolment>();
+
         var summaryItems = new List<CustomerPaymentSummaryDto>();
 
         foreach (var p in payments)
@@ -151,13 +167,29 @@ public class CustomerPaymentService : ICustomerPaymentService
                 var relatedContrib = jewelleryContributions.FirstOrDefault(c => c.PaymentId == p.Id);
                 var enrolment = relatedContrib?.JewelleryEnrolment;
 
+                if (enrolment == null)
+                {
+                    var alloc = p.Allocations.FirstOrDefault(a => a.AllocationType == "JewelleryContribution");
+                    if (alloc != null && allocatedEnrolments.TryGetValue(alloc.TargetEntityId, out var allocEnr))
+                    {
+                        enrolment = allocEnr;
+                    }
+                }
+
                 resolvedPlanId = enrolment?.JewelleryPlanId;
                 resolvedPlanName = enrolment?.PlanNameSnapshot ?? enrolment?.JewelleryPlan?.Name ?? "Jewellery Plan";
                 resolvedPlanCode = enrolment != null ? $"ENR-{enrolment.Id.ToString("N")[..8].ToUpperInvariant()}" : string.Empty;
 
-                summaryDesc = relatedContrib != null
-                    ? $"Jewellery contribution: {relatedContrib.GoldGrams:F3}g credited"
-                    : $"Jewellery payment: {resolvedPlanName}";
+                if (p.Status == PaymentStatus.RequiresReconciliation)
+                {
+                    summaryDesc = $"Payment collected ({p.Currency} {p.Amount:N2}): Exceeds target, flagged for store reconciliation";
+                }
+                else
+                {
+                    summaryDesc = relatedContrib != null
+                        ? $"Jewellery contribution: {relatedContrib.GoldGrams:F3}g credited"
+                        : $"Jewellery payment: {resolvedPlanName}";
+                }
             }
 
             // If user supplied planId filter, apply it now
@@ -290,27 +322,59 @@ public class CustomerPaymentService : ICustomerPaymentService
                 .FirstOrDefaultAsync(c => c.PaymentId == payment.Id, ct);
 
             var enrolment = contribution?.JewelleryEnrolment;
+            if (enrolment == null)
+            {
+                var alloc = payment.Allocations.FirstOrDefault(a => a.AllocationType == "JewelleryContribution");
+                if (alloc != null)
+                {
+                    enrolment = await _db.JewelleryEnrolments
+                        .AsNoTracking()
+                        .Include(e => e.JewelleryPlan)
+                        .FirstOrDefaultAsync(e => e.Id == alloc.TargetEntityId, ct);
+                }
+            }
+
             planId = enrolment?.JewelleryPlanId;
             planName = enrolment?.PlanNameSnapshot ?? enrolment?.JewelleryPlan?.Name ?? "Jewellery Plan";
             var enrDisplayNumber = enrolment != null ? $"ENR-{enrolment.Id.ToString("N")[..8].ToUpperInvariant()}" : string.Empty;
             planCode = enrDisplayNumber;
 
-            summaryDesc = contribution != null
-                ? $"Jewellery contribution: {contribution.GoldGrams:F3}g credited"
-                : $"Jewellery payment: {planName}";
-
-            if (contribution != null && enrolment != null)
+            if (payment.Status == PaymentStatus.RequiresReconciliation)
             {
-                jewelleryDetails = new CustomerJewelleryPaymentDetailBreakdownDto
+                summaryDesc = $"Payment collected ({payment.Currency} {payment.Amount:N2}): Exceeds target, flagged for store reconciliation";
+                if (enrolment != null)
                 {
-                    EnrolmentId = enrolment.Id,
-                    EnrolmentDisplayNumber = enrDisplayNumber,
-                    AppliedGoldRatePerGram = contribution.AppliedRatePerGram,
-                    AppliedPremiumPercentage = enrolment.PremiumPercentage,
-                    CreditedGrams = contribution.GoldGrams,
-                    InstalmentMonthIndex = null,
-                    PaymentType = "JewelleryContribution"
-                };
+                    jewelleryDetails = new CustomerJewelleryPaymentDetailBreakdownDto
+                    {
+                        EnrolmentId = enrolment.Id,
+                        EnrolmentDisplayNumber = enrDisplayNumber,
+                        AppliedGoldRatePerGram = 0m,
+                        AppliedPremiumPercentage = enrolment.PremiumPercentage,
+                        CreditedGrams = 0m,
+                        InstalmentMonthIndex = null,
+                        PaymentType = "RequiresReconciliation"
+                    };
+                }
+            }
+            else
+            {
+                summaryDesc = contribution != null
+                    ? $"Jewellery contribution: {contribution.GoldGrams:F3}g credited"
+                    : $"Jewellery payment: {planName}";
+
+                if (contribution != null && enrolment != null)
+                {
+                    jewelleryDetails = new CustomerJewelleryPaymentDetailBreakdownDto
+                    {
+                        EnrolmentId = enrolment.Id,
+                        EnrolmentDisplayNumber = enrDisplayNumber,
+                        AppliedGoldRatePerGram = contribution.AppliedRatePerGram,
+                        AppliedPremiumPercentage = enrolment.PremiumPercentage,
+                        CreditedGrams = contribution.GoldGrams,
+                        InstalmentMonthIndex = null,
+                        PaymentType = "JewelleryContribution"
+                    };
+                }
             }
         }
 

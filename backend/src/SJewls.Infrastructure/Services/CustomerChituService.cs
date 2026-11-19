@@ -612,6 +612,52 @@ public class CustomerChituService : ICustomerChituService
             .Take(pageSize)
             .ToList();
 
+        if (pagedItems.Any())
+        {
+            var planIds = pagedItems.Select(p => p.PlanId).ToList();
+            var alerts = await _db.PlanAlerts
+                .AsNoTracking()
+                .Where(a => a.CustomerId == customerId && planIds.Contains(a.PlanId) && a.Module == BusinessModule.Chitu)
+                .OrderByDescending(a => a.CreatedAtUtc)
+                .ThenBy(a => a.ChituRoundIndex)
+                .ToListAsync(ct);
+
+            if (alerts.Any())
+            {
+                var alertsByPlan = alerts.ToLookup(a => a.PlanId);
+                foreach (var planDto in pagedItems)
+                {
+                    planDto.Alerts = alertsByPlan[planDto.PlanId].Select(a => new CustomerPlanAlertDto
+                    {
+                        AlertId = a.Id,
+                        EventType = a.EventType,
+                        Title = a.Title,
+                        Message = a.Message,
+                        PlanId = a.PlanId,
+                        PlanName = a.PlanNameSnapshot,
+                        ReferenceId = a.ReferenceId,
+                        SlotId = a.ChituSlotId,
+                        SlotNumber = a.ChituSlotNumber,
+                        SlotDisplayCode = a.ChituSlotNumber.HasValue ? $"SLOT-{a.ChituSlotNumber:D3}" : null,
+                        RoundIndex = a.ChituRoundIndex,
+                        ScheduledMonthYear = a.ChituRoundScheduledMonthYear,
+                        RedemptionType = a.RedemptionType?.ToString(),
+                        PrizeAmount = a.PrizeAmount,
+                        BranchId = a.BranchId,
+                        BranchName = a.BranchName,
+                        OutletAddress = a.BranchAddress,
+                        OutletPhone = a.BranchPhone,
+                        EventTimestampUtc = a.CreatedAtUtc,
+                        AcknowledgedAtUtc = a.AcknowledgedAtUtc,
+                        IsAcknowledged = a.IsAcknowledged,
+                        ShouldShowPopup = !a.IsAcknowledged,
+                        NavigationTarget = a.NavigationTarget,
+                        CollectionInstruction = a.CollectionInstruction
+                    }).ToList();
+                }
+            }
+        }
+
         return new CustomerChituInvestmentsPagedResponse
         {
             Items = pagedItems,
@@ -649,7 +695,46 @@ public class CustomerChituService : ICustomerChituService
             throw new KeyNotFoundException($"No slots owned in plan '{planId}'.");
         }
 
-        return MapToInvestmentPlanDto(plan, planSlots, branchToday);
+        var dto = MapToInvestmentPlanDto(plan, planSlots, branchToday);
+
+        var alerts = await _db.PlanAlerts
+            .AsNoTracking()
+            .Where(a => a.CustomerId == customerId && a.PlanId == planId && a.Module == BusinessModule.Chitu)
+            .OrderByDescending(a => a.CreatedAtUtc)
+            .ThenBy(a => a.ChituRoundIndex)
+            .ToListAsync(ct);
+
+        dto.Alerts = alerts.Select(a => new CustomerPlanAlertDto
+        {
+            AlertId = a.Id,
+            EventType = a.EventType,
+            Title = a.Title,
+            Message = a.Message,
+            PlanId = a.PlanId,
+            PlanName = a.PlanNameSnapshot,
+            ReferenceId = a.ReferenceId,
+            SlotId = a.ChituSlotId,
+            SlotNumber = a.ChituSlotNumber,
+            SlotDisplayCode = a.ChituSlotDisplayCode,
+            RoundIndex = a.ChituRoundIndex,
+            ScheduledMonthYear = a.ChituRoundScheduledMonthYear,
+            RedemptionType = a.RedemptionType?.ToString(),
+            PrizeAmount = a.PrizeAmount,
+            EnrolmentId = a.JewelleryEnrolmentId,
+            TargetGrams = a.TargetGrams,
+            BranchId = a.BranchId,
+            BranchName = a.BranchName,
+            OutletAddress = a.BranchAddress,
+            OutletPhone = a.BranchPhone,
+            EventTimestampUtc = a.CreatedAtUtc,
+            AcknowledgedAtUtc = a.AcknowledgedAtUtc,
+            IsAcknowledged = a.IsAcknowledged,
+            ShouldShowPopup = !a.IsAcknowledged,
+            NavigationTarget = a.NavigationTarget,
+            CollectionInstruction = a.CollectionInstruction
+        }).ToList();
+
+        return dto;
     }
 
     public async Task<CustomerChituSlotDetailDto> GetSlotDetailsAsync(
@@ -709,6 +794,49 @@ public class CustomerChituService : ICustomerChituService
             };
         }
 
+        CustomerPlanAlertDto? winnerAlertDto = null;
+        if (summary.IsWinner)
+        {
+            var alert = await _db.PlanAlerts
+                .AsNoTracking()
+                .Where(a => a.CustomerId == customerId && a.ChituSlotId == slotId && a.EventType == "ChituWinner")
+                .OrderByDescending(a => a.CreatedAtUtc)
+                .FirstOrDefaultAsync(ct);
+
+            if (alert != null)
+            {
+                winnerAlertDto = new CustomerPlanAlertDto
+                {
+                    AlertId = alert.Id,
+                    EventType = alert.EventType,
+                    Title = alert.Title,
+                    Message = alert.Message,
+                    PlanId = alert.PlanId,
+                    PlanName = alert.PlanNameSnapshot,
+                    ReferenceId = alert.ReferenceId,
+                    SlotId = alert.ChituSlotId,
+                    SlotNumber = alert.ChituSlotNumber,
+                    SlotDisplayCode = alert.ChituSlotDisplayCode,
+                    RoundIndex = alert.ChituRoundIndex,
+                    ScheduledMonthYear = alert.ChituRoundScheduledMonthYear,
+                    RedemptionType = alert.RedemptionType?.ToString(),
+                    PrizeAmount = alert.PrizeAmount,
+                    EnrolmentId = alert.JewelleryEnrolmentId,
+                    TargetGrams = alert.TargetGrams,
+                    BranchId = alert.BranchId,
+                    BranchName = alert.BranchName,
+                    OutletAddress = alert.BranchAddress,
+                    OutletPhone = alert.BranchPhone,
+                    EventTimestampUtc = alert.CreatedAtUtc,
+                    AcknowledgedAtUtc = alert.AcknowledgedAtUtc,
+                    IsAcknowledged = alert.IsAcknowledged,
+                    ShouldShowPopup = !alert.IsAcknowledged,
+                    NavigationTarget = alert.NavigationTarget,
+                    CollectionInstruction = alert.CollectionInstruction
+                };
+            }
+        }
+
         return new CustomerChituSlotDetailDto
         {
             SlotId = summary.SlotId,
@@ -738,7 +866,8 @@ public class CustomerChituService : ICustomerChituService
             PlanCode = plan.Code,
             Currency = "LKR",
             Instalments = instalmentDtos,
-            EntitlementClaimInfo = winnerBenefitDto
+            EntitlementClaimInfo = winnerBenefitDto,
+            WinnerAlert = winnerAlertDto
         };
     }
 

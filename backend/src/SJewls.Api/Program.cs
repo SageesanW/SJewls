@@ -296,6 +296,7 @@ builder.Services.AddScoped<IJewelleryPlanService, JewelleryPlanService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient<IGoldRateService, GoldRateService>();
 builder.Services.AddScoped<ICustomerNotificationService, CustomerNotificationService>();
+builder.Services.AddScoped<IPlanAlertService, PlanAlertService>();
 builder.Services.AddScoped<ICustomerJewelleryPlanService, CustomerJewelleryPlanService>();
 builder.Services.AddScoped<IJewelleryPaymentFinalizationService, JewelleryPaymentFinalizationService>();
 builder.Services.AddScoped<IAdminJewelleryEnrolmentService, AdminJewelleryEnrolmentService>();
@@ -545,6 +546,7 @@ app.MapAuthEndpoints();
 app.MapCustomerEndpoints();
 app.MapCustomerJewelleryPlanEndpoints();
 app.MapCustomerChituEndpoints();
+app.MapCustomerPlanAlertEndpoints();
 app.MapCustomerPaymentEndpoints();
 
 // Map Admin Authentication, User, Customer, Branch & Jewellery Category Management Endpoints

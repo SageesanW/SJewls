@@ -46,6 +46,22 @@ public class CustomerChituTests
             SentNotifications.Add((customerId, title, message, type));
             return Task.CompletedTask;
         }
+
+        public Task<Notification> CreateNotificationAsync(Guid customerId, string title, string message, string type, Guid? referenceId, string? referenceType, Guid? planAlertId, CancellationToken ct = default)
+        {
+            SentNotifications.Add((customerId, title, message, type));
+            return Task.FromResult(new Notification
+            {
+                CustomerId = customerId,
+                Title = title,
+                Message = message,
+                Type = type,
+                ReferenceId = referenceId,
+                ReferenceType = referenceType,
+                PlanAlertId = planAlertId,
+                CreatedAtUtc = DateTimeOffset.UtcNow
+            });
+        }
     }
 
     private class MockAuditLogService : SJewls.Application.Interfaces.IAuditLogService

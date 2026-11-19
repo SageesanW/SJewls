@@ -429,6 +429,55 @@ public class CustomerJewelleryPlanService : ICustomerJewelleryPlanService
 
         var dtos = items.Select(e => MapToEnrolmentDto(e, customer, branchToday)).ToList();
 
+        if (items.Any())
+        {
+            var enrolmentIds = items.Select(e => e.Id).ToList();
+            var completionAlerts = await _db.PlanAlerts
+                .AsNoTracking()
+                .Where(a => a.CustomerId == customerId &&
+                            a.JewelleryEnrolmentId.HasValue &&
+                            enrolmentIds.Contains(a.JewelleryEnrolmentId.Value) &&
+                            (a.EventType == "JewelleryCompletion" || a.EventType == "JewelleryPlanCompletion"))
+                .ToListAsync(ct);
+
+            if (completionAlerts.Any())
+            {
+                var alertsByEnrolment = completionAlerts.ToLookup(a => a.JewelleryEnrolmentId!.Value);
+                foreach (var dto in dtos)
+                {
+                    var enrAlerts = alertsByEnrolment[dto.EnrolmentId].ToList();
+                    if (enrAlerts.Any())
+                    {
+                        var latest = enrAlerts.OrderByDescending(a => a.CreatedAtUtc).First();
+                        var alertDto = new CustomerPlanAlertDto
+                        {
+                            AlertId = latest.Id,
+                            EventType = latest.EventType,
+                            Title = latest.Title,
+                            Message = latest.Message,
+                            PlanId = latest.PlanId,
+                            PlanName = latest.PlanNameSnapshot,
+                            ReferenceId = latest.ReferenceId,
+                            EnrolmentId = latest.JewelleryEnrolmentId,
+                            TargetGrams = latest.TargetGrams,
+                            BranchId = latest.BranchId,
+                            BranchName = latest.BranchName,
+                            OutletAddress = latest.BranchAddress,
+                            OutletPhone = latest.BranchPhone,
+                            EventTimestampUtc = latest.CreatedAtUtc,
+                            AcknowledgedAtUtc = latest.AcknowledgedAtUtc,
+                            IsAcknowledged = latest.IsAcknowledged,
+                            ShouldShowPopup = !latest.IsAcknowledged,
+                            NavigationTarget = latest.NavigationTarget,
+                            CollectionInstruction = latest.CollectionInstruction
+                        };
+                        dto.CompletionAlert = alertDto;
+                        dto.Alerts.Add(alertDto);
+                    }
+                }
+            }
+        }
+
         return new CustomerEnrolmentsPagedResponse
         {
             Items = dtos,
@@ -458,7 +507,46 @@ public class CustomerJewelleryPlanService : ICustomerJewelleryPlanService
             throw new UnauthorizedAccessException("You are not authorized to access this enrolment.");
         }
 
-        return MapToEnrolmentDto(enrolment, customer, branchToday);
+        var dto = MapToEnrolmentDto(enrolment, customer, branchToday);
+
+        var completionAlert = await _db.PlanAlerts
+            .AsNoTracking()
+            .Where(a => a.CustomerId == customerId &&
+                        a.JewelleryEnrolmentId == enrolmentId &&
+                        (a.EventType == "JewelleryCompletion" || a.EventType == "JewelleryPlanCompletion"))
+            .OrderByDescending(a => a.CreatedAtUtc)
+            .FirstOrDefaultAsync(ct);
+
+        if (completionAlert != null)
+        {
+            var alertDto = new CustomerPlanAlertDto
+            {
+                AlertId = completionAlert.Id,
+                EventType = completionAlert.EventType,
+                Title = completionAlert.Title,
+                Message = completionAlert.Message,
+                PlanId = completionAlert.PlanId,
+                PlanName = completionAlert.PlanNameSnapshot,
+                ReferenceId = completionAlert.ReferenceId,
+                EnrolmentId = completionAlert.JewelleryEnrolmentId,
+                TargetGrams = completionAlert.TargetGrams,
+                BranchId = completionAlert.BranchId,
+                BranchName = completionAlert.BranchName,
+                OutletAddress = completionAlert.BranchAddress,
+                OutletPhone = completionAlert.BranchPhone,
+                EventTimestampUtc = completionAlert.CreatedAtUtc,
+                AcknowledgedAtUtc = completionAlert.AcknowledgedAtUtc,
+                IsAcknowledged = completionAlert.IsAcknowledged,
+                ShouldShowPopup = !completionAlert.IsAcknowledged,
+                NavigationTarget = completionAlert.NavigationTarget,
+                CollectionInstruction = completionAlert.CollectionInstruction
+            };
+
+            dto.CompletionAlert = alertDto;
+            dto.Alerts.Add(alertDto);
+        }
+
+        return dto;
     }
 
     public async Task<List<CustomerEnrolmentPaymentDto>> GetEnrolmentPaymentsAsync(
@@ -485,7 +573,7 @@ public class CustomerJewelleryPlanService : ICustomerJewelleryPlanService
             .AsNoTracking()
             .ToListAsync(ct);
 
-        return contributions.Select(c => new CustomerEnrolmentPaymentDto
+        var dtos = contributions.Select(c => new CustomerEnrolmentPaymentDto
         {
             PaymentId = c.PaymentId,
             ContributionId = c.Id,
@@ -498,6 +586,36 @@ public class CustomerJewelleryPlanService : ICustomerJewelleryPlanService
             PaymentMethod = c.Payment?.Method.ToString() ?? "Online",
             PaymentReference = c.Payment?.ProviderReference ?? string.Empty
         }).ToList();
+
+        // Include payments allocated to this enrolment that do not have a contribution (e.g. RequiresReconciliation)
+        var existingPaymentIds = contributions.Select(c => c.PaymentId).ToHashSet();
+        var reconciliationPayments = await _db.Payments
+            .Where(p => p.CustomerId == customerId &&
+                        p.Status == PaymentStatus.RequiresReconciliation &&
+                        p.Allocations.Any(a => a.TargetEntityId == enrolmentId) &&
+                        !existingPaymentIds.Contains(p.Id))
+            .OrderByDescending(p => p.CompletedAtUtc ?? p.CreatedAtUtc)
+            .AsNoTracking()
+            .ToListAsync(ct);
+
+        foreach (var rp in reconciliationPayments)
+        {
+            dtos.Add(new CustomerEnrolmentPaymentDto
+            {
+                PaymentId = rp.Id,
+                ContributionId = Guid.Empty,
+                CurrencyAmount = rp.Amount,
+                Currency = rp.Currency,
+                GoldGramsCredited = 0m,
+                AppliedRatePerGram = 0m,
+                ConfirmedAtUtc = rp.CompletedAtUtc ?? rp.CreatedAtUtc,
+                Status = rp.Status.ToString(),
+                PaymentMethod = rp.Method.ToString(),
+                PaymentReference = rp.ProviderReference
+            });
+        }
+
+        return dtos.OrderByDescending(d => d.ConfirmedAtUtc).ToList();
     }
 
     #endregion

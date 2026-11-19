@@ -131,6 +131,9 @@ public class CustomerEnrolmentDto
     public bool IsContributionAllowed { get; set; }
     public string? ContributionBlockedReason { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; }
+
+    public CustomerPlanAlertDto? CompletionAlert { get; set; }
+    public List<CustomerPlanAlertDto> Alerts { get; set; } = new();
 }
 
 public class CustomerEnrolmentsPagedResponse
@@ -263,6 +266,9 @@ public class PaymentFinalizationResult
     public decimal GoldGramsCredited { get; set; }
     public decimal NewTotalSavedGrams { get; set; }
     public bool PlanCompleted { get; set; }
+    public bool RequiresReconciliation { get; set; }
+    public decimal? QuotedGoldGrams { get; set; }
+    public decimal? AmountCollected { get; set; }
 }
 
 #endregion
@@ -278,6 +284,9 @@ public class CustomerNotificationDto
     public bool IsRead { get; set; }
     public DateTimeOffset? ReadAtUtc { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; }
+    public Guid? ReferenceId { get; set; }
+    public string? ReferenceType { get; set; }
+    public Guid? PlanAlertId { get; set; }
 }
 
 public class CustomerNotificationsPagedResponse
@@ -295,6 +304,59 @@ public class NotificationActionResponse
     public bool Success { get; set; } = true;
     public string Message { get; set; } = string.Empty;
     public int? MarkedCount { get; set; }
+}
+
+#endregion
+
+#region Plan Alert DTOs
+
+public class CustomerPlanAlertDto
+{
+    public Guid AlertId { get; set; }
+    public string EventType { get; set; } = string.Empty; // "ChituWinner", "JewelleryCompletion", "JewelleryPlanCompletion"
+    public string Title { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+
+    public Guid PlanId { get; set; }
+    public string PlanName { get; set; } = string.Empty;
+
+    public Guid ReferenceId { get; set; } // PlanId for Chitu, EnrolmentId for Jewellery
+
+    // Chitu specific
+    public Guid? SlotId { get; set; }
+    public int? SlotNumber { get; set; }
+    public string? SlotDisplayCode { get; set; }
+    public int? RoundIndex { get; set; }
+    public string? ScheduledMonthYear { get; set; }
+    public string? RedemptionType { get; set; }
+    public decimal? PrizeAmount { get; set; }
+
+    // Jewellery specific
+    public Guid? EnrolmentId { get; set; }
+    public decimal? TargetGrams { get; set; }
+
+    // Branch / Outlet details
+    public Guid BranchId { get; set; }
+    public string BranchName { get; set; } = string.Empty;
+    public string? OutletAddress { get; set; }
+    public string? OutletPhone { get; set; }
+
+    // Timestamps and state
+    public DateTimeOffset EventTimestampUtc { get; set; }
+    public DateTimeOffset? AcknowledgedAtUtc { get; set; }
+    public bool IsAcknowledged { get; set; }
+    public bool ShouldShowPopup { get; set; }
+
+    // Navigation and Action
+    public string NavigationTarget { get; set; } = string.Empty;
+    public string CollectionInstruction { get; set; } = string.Empty;
+}
+
+public class AcknowledgePlanAlertResponse
+{
+    public bool Success { get; set; } = true;
+    public string Message { get; set; } = "Plan alert acknowledged successfully.";
+    public CustomerPlanAlertDto Alert { get; set; } = default!;
 }
 
 #endregion

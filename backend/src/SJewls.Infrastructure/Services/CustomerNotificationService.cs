@@ -47,7 +47,10 @@ public class CustomerNotificationService : ICustomerNotificationService
             Type = n.Type,
             IsRead = n.IsRead,
             ReadAtUtc = n.ReadAtUtc,
-            CreatedAtUtc = n.CreatedAtUtc
+            CreatedAtUtc = n.CreatedAtUtc,
+            ReferenceId = n.ReferenceId,
+            ReferenceType = n.ReferenceType,
+            PlanAlertId = n.PlanAlertId
         }).ToList();
 
         return new CustomerNotificationsPagedResponse
@@ -103,18 +106,31 @@ public class CustomerNotificationService : ICustomerNotificationService
         string type,
         CancellationToken ct = default)
     {
+        await CreateNotificationAsync(customerId, title, message, type, null, null, null, ct);
+    }
+
+    public async Task<Notification> CreateNotificationAsync(
+        Guid customerId,
+        string title,
+        string message,
+        string type,
+        Guid? referenceId,
+        string? referenceType,
+        Guid? planAlertId,
+        CancellationToken ct = default)
+    {
         // Deduplication window: avoid duplicate notifications created within the last 10 minutes
         var recentCutoff = DateTimeOffset.UtcNow.AddMinutes(-10);
-        var isDuplicate = await _db.Notifications
-            .AnyAsync(n => n.CustomerId == customerId &&
-                           n.Title == title &&
-                           n.Message == message &&
-                           n.CreatedAtUtc >= recentCutoff, ct);
+        var existing = await _db.Notifications
+            .FirstOrDefaultAsync(n => n.CustomerId == customerId &&
+                                      n.Title == title &&
+                                      n.Message == message &&
+                                      n.CreatedAtUtc >= recentCutoff, ct);
 
-        if (isDuplicate)
+        if (existing != null)
         {
             _logger.LogInformation("Duplicate notification prevented for customer {CustomerId}: {Title}", customerId, title);
-            return;
+            return existing;
         }
 
         var notification = new Notification
@@ -124,10 +140,14 @@ public class CustomerNotificationService : ICustomerNotificationService
             Message = message,
             Type = type,
             IsRead = false,
+            ReferenceId = referenceId,
+            ReferenceType = referenceType,
+            PlanAlertId = planAlertId,
             CreatedAtUtc = DateTimeOffset.UtcNow
         };
 
         _db.Notifications.Add(notification);
         await _db.SaveChangesAsync(ct);
+        return notification;
     }
 }
